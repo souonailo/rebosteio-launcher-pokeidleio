@@ -158,6 +158,43 @@ function baixaUserScript(url, saltos = 0) {
   });
 }
 ipcMain.handle('userscript:fetch', (_e, url) => baixaUserScript(url));
+// GM_xmlhttpRequest das extensoes: MESMO recinto de baixaUserScript (so https, so github.com e
+// raw.githubusercontent.com, redirect revalidado pela mesma funcao, no maximo 3 saltos, 2 MB e
+// 12 s) mas devolve status e corpo sem exigir terminacao .js nem rejeitar '<' - o script pede um
+// arquivo do proprio GitHub, que pode ser json/md. Nenhum host novo entra na lista.
+function pedeParaExtensao(url, saltos = 0) {
+  return new Promise((resolve) => {
+    let u;
+    try { u = urlRaw(new URL(String(url))); } catch { resolve({ ok: false, error: 'Link invalido.' }); return; }
+    if (u.protocol !== 'https:' || !US_HOSTS.has(u.hostname)) { resolve({ ok: false, error: 'So https do GitHub (github.com ou raw.githubusercontent.com).' }); return; }
+    const req = https.get(u, { headers: { 'User-Agent': 'PokeGrid/' + app.getVersion(), Accept: '*/*' } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if (saltos >= 3) { resolve({ ok: false, error: 'Redirecionamentos demais.' }); return; }
+        let prox; try { prox = new URL(res.headers.location, u).toString(); } catch { resolve({ ok: false, error: 'Redirecionamento invalido.' }); return; }
+        pedeParaExtensao(prox, saltos + 1).then(resolve); return;
+      }
+      const status = res.statusCode;
+      let tam = 0, corpo = '', parou = false;
+      res.setEncoding('utf8');
+      res.on('data', (c) => {
+        if (parou) return;
+        tam += Buffer.byteLength(c);
+        if (tam > 2 * 1024 * 1024) { parou = true; req.destroy(); resolve({ ok: false, error: 'A resposta passa de 2 MB.' }); }
+        else corpo += c;
+      });
+      res.on('end', () => {
+        if (parou) return;
+        if (status === 200) resolve({ ok: true, status, url: u.toString(), code: corpo });
+        else { res.resume(); resolve({ ok: false, status, url: u.toString(), error: 'GitHub respondeu HTTP ' + status }); }
+      });
+      res.on('error', () => { if (!parou) { parou = true; resolve({ ok: false, error: 'Falha ao ler a resposta.' }); } });
+    });
+    req.setTimeout(12000, () => req.destroy(new Error('timeout')));
+    req.on('error', () => resolve({ ok: false, error: 'Nao foi possivel acessar o GitHub.' }));
+  });
+}
+ipcMain.handle('userscript:request', (_e, url) => pedeParaExtensao(url));
 // Instancia unica: abrir o app de novo so foca a janela ja aberta.
 // segunda instancia: fecha e o 'second-instance' da primeira mostra a janela dela. Fica no relatorio, pra separar
 // 'nem rodou' (antivirus, Controle inteligente de aplicativos) de 'ja tinha um aberto' quando alguem diz que nada abre

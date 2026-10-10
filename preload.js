@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld('pokeAPI', {
   saveBackup: (nome, conteudo, cabecalho) => ipcRenderer.invoke('backup:save', nome, conteudo, cabecalho),
   clearAccount: (i) => ipcRenderer.invoke('conta:limpar', i),
   fetchUserScript: (url) => ipcRenderer.invoke('userscript:fetch', url),
+  // GM_xmlhttpRequest das extensoes: mesmo recinto do download de userscript, outro canal porque
+  // devolve status/corpo e nao exige terminacao .js
+  fetchExtension: (url) => ipcRenderer.invoke('userscript:request', url),
   camoufoxLogin: (accountData) => ipcRenderer.invoke('auth:camoufox-login', accountData),
   cancelLogin: (index) => ipcRenderer.invoke('auth:cancel-login', index),
   camoufoxCheck: () => ipcRenderer.invoke('auth:camoufox-check'),

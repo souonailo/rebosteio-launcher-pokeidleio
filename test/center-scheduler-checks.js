@@ -63,14 +63,47 @@ module.exports = async function ({ guest, read, pause, output, guestUrl }) {
   await reset(); await arm();
   await guest(0, 'document.getElementById("hud-hunt").textContent="Ancient Pupitar · nível 150";centerFixture.unlock()'); await pause(140);
   assert.equal((await state()).clicks, 0, 'changing hunt cancels before a newly enabled button can send');
-  for (const mode of ['modo-economia', 'modo-imersivo']) {
-    await reset(); await arm();
-    await guest(0, 'document.documentElement.classList.add(' + JSON.stringify(mode) + ');centerFixture.unlock()'); await pause(140);
-    assert.equal((await state()).clicks, 0, mode + ' cancels scheduling');
-    assert.equal((await state()).phase, 'idle');
-    await guest(0, 'document.documentElement.classList.remove(' + JSON.stringify(mode) + ')'); await pause(120);
-    assert.equal((await state()).clicks, 0, 'returning to the scene does not resurrect scheduling');
-  }
+
+  // ----- Modo Economia: o MESMO agendamento, pintado pelo botao do painel de economia -----
+  await reset();
+  await guest(0, 'document.documentElement.classList.add("modo-economia");centerFixture.hit()'); await pause(160);
+  assert.equal(await guest(0, 'document.getElementById("rb-center-schedule").parentElement.className'), 'eco-lugar', 'clock is mounted inside the eco exit row');
+  assert.equal(await guest(0, 'document.getElementById("rb-center-schedule").className'), 'eco-saida-bt', 'clock adopts the eco panel button class');
+  assert.equal(await guest(0, 'document.getElementById("rb-center-schedule").disabled'), false, 'scheduling stays enabled inside Modo Economia');
+  const ecoImage = await webContents.fromId(await read('webviews[0].getWebContentsId()')).capturePage();
+  fs.writeFileSync(path.join(output, 'center-schedule-eco.png'), ecoImage.toPNG());
+  await arm();
+  assert.equal((await state()).phase, 'waiting', 'a locked eco exit still accepts scheduling');
+  await guest(0, 'centerFixture.unlock()');
+  await until('centerFixture.ecoClicks===1', 'the unlocked eco exit triggers the scheduled leave');
+  await pause(1250);
+  assert.deepEqual(await state(), {clicks:1,phase:'sending',pressed:'true'}, 'exactly one leave, through the eco button');
+  assert.equal(await guest(0, 'centerFixture.original.disabled'), true, 'the scene button is never touched from Eco');
+
+  // Turning Eco on while already scheduled: the mode change must keep the pending leave.
+  await guest(0, 'centerFixture.arrive()');
+  await until('document.querySelector("#rb-center-schedule").dataset.phase==="idle"', 'arrival is confirmed inside Eco');
+  await reset(); await arm();
+  assert.equal((await state()).phase, 'waiting');
+  await guest(0, 'document.documentElement.classList.add("modo-economia")'); await pause(160);
+  assert.equal((await state()).phase, 'waiting', 'switching to Modo Economia preserves the schedule');
+  assert.equal((await state()).pressed, 'true');
+  assert.equal(await guest(0, 'document.getElementById("rb-center-schedule").parentElement.className'), 'eco-lugar', 'the clock follows the new button');
+  await guest(0, 'centerFixture.unlock()');
+  await until('centerFixture.ecoClicks===1', 'the preserved schedule leaves through the eco button');
+  await pause(1250);
+  assert.equal((await state()).clicks, 1, 'still a single leave');
+  assert.equal(await guest(0, 'centerFixture.original.disabled'), true, 'the scene button stays untouched after the swap');
+
+  // modo-imersivo is the user's clean interface, not an economy mode: scheduling still cancels there.
+  await guest(0, 'centerFixture.arrive()');
+  await until('document.querySelector("#rb-center-schedule").dataset.phase==="idle"');
+  await reset(); await arm();
+  await guest(0, 'document.documentElement.classList.add("modo-imersivo");centerFixture.unlock()'); await pause(140);
+  assert.equal((await state()).clicks, 0, 'modo-imersivo cancels scheduling');
+  assert.equal((await state()).phase, 'idle');
+  await guest(0, 'document.documentElement.classList.remove("modo-imersivo")'); await pause(120);
+  assert.equal((await state()).clicks, 0, 'returning to the scene does not resurrect scheduling');
   await reset(); await arm();
   await guest(0, 'document.getElementById("hunt-saida").classList.add("hidden");centerFixture.unlock()'); await pause(140);
   assert.equal((await state()).clicks, 0, 'leaving the hunt/entering an arena cancels');
@@ -99,5 +132,5 @@ module.exports = async function ({ guest, read, pause, output, guestUrl }) {
   await until('!!window.centerFixture && !!document.querySelector("#rb-center-schedule") && centerFixture.original.isConnected', 'reload installs a fresh scheduler');
   assert.equal((await state()).phase, 'idle', 'no pending action survives reload');
   await read('webviews[0].loadURL(' + JSON.stringify(guestUrl) + ')');
-  console.log('PASS: hunt center scheduling, unlocks, confirmation, cancellation, mode changes, disconnects, manual exit, native replacement and reload.');
+  console.log('PASS: hunt center scheduling, unlocks, confirmation, cancellation, Modo Eco (same schedule through the eco exit button), modo-imersivo cancellation, disconnects, manual exit, native replacement and reload.');
 };

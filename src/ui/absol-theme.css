@@ -211,7 +211,7 @@ html,body {background:#081224!important;color:var(--leaf-text)!important}
 @media(max-width:1100px) {
   :root {--leaf-rail:35px;--leaf-sidebar:230px;--leaf-bottom:64px;--leaf-top:60px}
   .leaf-brand-title {font-size:15px;letter-spacing:1.4px}.leaf-brand-sub {font-size:6px}
-  .leaf-top-center {padding:0 7px}.leaf-chip {padding:0 7px}.leaf-chip .txt-hide-sm {display:none}
+  .leaf-top-center {padding:0 7px}.leaf-chip {padding:0 7px}.leaf-chip .txt-hide-sm,.leaf-segment .txt-hide-sm {display:none}
   .leaf-sidebar {padding:7px}.leaf-account {min-height:140px;padding:7px}
   .leaf-account-name {font-size:11px}.leaf-pokemon-line {font-size:9px}.leaf-metric .mk {font-size:8px}
   .leaf-side-motto {display:none}.leaf-landscape-footer span {bottom:15px}

@@ -3,7 +3,7 @@
   function install() {
     const key = '__rebosteioCenterScheduler';
     if (window[key]?.version === 1) return true;
-    if (!document.getElementById('hunt-saida') || !document.getElementById('ir-centro')) return false;
+    if (!pickTarget()) return false;
 
     const style = document.createElement('style');
     style.id = 'rb-center-scheduler-style';
@@ -26,6 +26,7 @@
     const cancelIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m8 8 8 8m0-8-8 8"/></svg>';
     let native = null;
     let holder = null;
+    let ancora = null;
     let label = null;
     let pending = null;
     let timer = null;
@@ -42,10 +43,27 @@
       // This class is painted from the server's noCentro flag, not from a click.
       return !hidden(document.getElementById('centro-curar'));
     }
+    // O jogo pinta um botao de ir ao Centro para cada modo: a cena usa #ir-centro dentro de
+    // #hunt-saida, o Modo Economia usa #eco-ir-centro dentro da .eco-lugar. O mesmo agendamento
+    // serve para os dois, entao o alvo e escolhido pelo modo ativo (e o que estiver renderizado).
+    function pickTarget() {
+      const cena = document.getElementById('ir-centro');
+      const eco = document.getElementById('eco-ir-centro');
+      const noEco = document.documentElement.classList.contains('modo-economia');
+      return (noEco ? (eco || cena) : (cena || eco)) || null;
+    }
+    // O nome da hunt tambem muda de lugar: a cena usa #hud-hunt, o painel de economia #eco-onde
+    // (mesmo par que o coletor do app ja resolve em index.html:8408).
+    function pickLabel() {
+      const cena = document.getElementById('hud-hunt');
+      const eco = document.getElementById('eco-onde');
+      const noEco = document.documentElement.classList.contains('modo-economia');
+      return (noEco ? (eco || cena) : (cena || eco)) || null;
+    }
     function eligible() {
       const classes = document.documentElement.classList;
       return native?.isConnected && holder?.isConnected && !hidden(holder) && isRendered(holder) && isRendered(native) &&
-        !classes.contains('modo-economia') && !classes.contains('modo-imersivo') &&
+        !classes.contains('modo-imersivo') &&
         !document.getElementById('pg-clean') && !inCenter() && !!huntName() && connected();
     }
     function paint() {
@@ -79,19 +97,30 @@
       }
     }
     function bind() {
-      const next = document.getElementById('ir-centro');
-      const container = document.getElementById('hunt-saida');
-      const hunt = document.getElementById('hud-hunt');
-      if (next === native && container === holder && hunt === label) return;
-      if (pending) stop('Ida cancelada: a tela da hunt mudou.');
+      const next = pickTarget();
+      const acoes = next ? next.closest('.hunt-saida-acoes') : null;
+      const novaAncora = acoes && acoes.parentElement ? acoes : next;
+      const container = novaAncora ? novaAncora.parentElement : null;
+      const hunt = pickLabel();
+      if (next === native && container === holder && novaAncora === ancora && hunt === label) return;
+      // CENA <-> MODO ECONOMIA e a MESMA ida ao Centro: so muda onde o jogo a pinta, entao o
+      // agendamento sobrevive a troca. Trocar de botao DENTRO do mesmo modo (o jogo re-renderiza
+      // a tela) continua cancelando, como sempre.
+      const trocaDeModo = !!next && !!native && next !== native &&
+        (native.id === 'eco-ir-centro' || next.id === 'eco-ir-centro');
+      if (pending && !trocaDeModo) stop('Ida cancelada: a tela da hunt mudou.');
+      const mantinha = !!(pending && trocaDeModo);
       native = next;
       holder = container;
+      ancora = novaAncora;
       label = hunt;
       button.remove();
       status.remove();
-      if (!native || !holder) return;
+      if (!native || !holder || !ancora) return;
+      if (mantinha) pending.hunt = huntName(); // #eco-onde pode formatar o nome de outro jeito
+      button.className = document.documentElement.classList.contains('modo-economia') ? 'eco-saida-bt' : 'ir-centro';
       // Like the native rope/popup buttons: same row, no reparenting of game controls.
-      holder.insertBefore(button, native.closest('.hunt-saida-acoes') || native);
+      holder.insertBefore(button, ancora);
       holder.appendChild(status);
       watchNodes();
     }
@@ -131,7 +160,7 @@
       refresh();
     };
     function onNativeClick(event) {
-      if (event.target.closest?.('#ir-centro, #desistir-combate, #escape-rope') && event.isTrusted && pending) stop('Agendamento encerrado: saída manual.');
+      if (event.target.closest?.('#ir-centro, #eco-ir-centro, #desistir-combate, #escape-rope') && event.isTrusted && pending) stop('Agendamento encerrado: saída manual.');
     }
     function destroy() {
       destroyed = true;

@@ -117,6 +117,52 @@ app.whenReady().then(async () => {
   assert.equal(await read('featureSplit.classList.contains("show")'), true);
   await read('cardsOn=true;applyCards()'); await settle();
   assert.equal(await read('featureSplit.classList.contains("show")'), false);
+
+  // A coluna "Melhor catch": Potencia, IV, Qualidade e Nota numa linha so, sem quebrar a tabela.
+  const melhorCatch = async (...capturas) => {
+    // Sem `force`: com ele o refreshCards rele o painel e sobrescreveria o stCache sintetico.
+    await read('(async()=>{stCache[0]={t:Date.now(),d:{ok:true,live:true,name:"Conta",a:{},team:[],catchLog:'
+      + JSON.stringify(capturas) + '}};cdHtmlAnt="";await refreshCards();})()');
+    await settle();
+    return read('(document.querySelector("#cards td.cd-best")||{}).textContent||""');
+  };
+  const completo = await melhorCatch({ n: 'Annihilape', sid: 979, iv: 94, q: 1.52, sh: false, pot: 3, nt: 3.14, t: Date.now() });
+  assert.match(completo, /Annihilape/, 'o nome do pokemon continua na celula');
+  assert.match(completo, /P3/, 'mostra a potencia');
+  assert.match(completo, /94\/192/, 'mostra o IV');
+  assert.match(completo, /×1\.52/, 'mostra a qualidade');
+  assert.match(completo, /N3,1/, 'mostra a nota com virgula, como o jogo escreve');
+  assert.equal(await read('getComputedStyle(document.querySelector("#cards td.cd-best")).whiteSpace'), 'nowrap',
+    'a celula nao quebra linha');
+  assert.equal(await read('document.querySelectorAll("#cards td.cd-best .cd-ivs-pills").length'), 0,
+    'os pills de IV sairam da celula (ficaram no title)');
+  const semPot = await melhorCatch({ n: 'Annihilape', sid: 979, iv: 94, q: 1.52, sh: false, t: Date.now() });
+  assert.match(semPot, /94\/192/, 'sem potencia, IV e qualidade continuam');
+  assert.doesNotMatch(semPot, /N\d/, 'sem potencia nao inventa nota');
+  assert.doesNotMatch(semPot, /P\d/, 'sem potencia nao inventa o selo P');
+
+  // O filtro "Melhor catch:" — a Nota entrou na lista e e o padrao.
+  assert.deepEqual(
+    await read('[...document.querySelectorAll("#cdBestCrit option")].map(o=>o.value)'),
+    ['nota', 'ivq', 'iv', 'q'], 'o filtro oferece a Nota, em primeiro');
+  assert.equal(await read('bestCrit'), 'nota', 'a Nota e o criterio padrao');
+
+  // Um P5 de IV baixo nasce mais forte que um IV alto comum: so a Nota sabe disso, porque e a
+  // unica que enxerga a potencia. O criterio precisa mudar a captura escolhida, nao so a ordem.
+  const fraco = { n: 'Primeape', sid: 57, iv: 170, q: 1.5, sh: false, pot: 1, nt: 4.2, t: Date.now() };
+  const forte = { n: 'Annihilape', sid: 979, iv: 90, q: 1.2, sh: false, pot: 5, nt: 6.8, t: Date.now() };
+  assert.match(await melhorCatch(fraco, forte), /Annihilape/, 'por Nota, o P5 e o melhor catch');
+  await read('bestCrit="ivq";lsSet("bestCrit",bestCrit)');
+  assert.match(await melhorCatch(fraco, forte), /Primeape/, 'por IV × qualidade, o IV alto volta a ganhar');
+
+  // Captura sem nota nao pode sumir do ranking por causa do criterio novo.
+  await read('bestCrit="nota";lsSet("bestCrit",bestCrit)');
+  const semNota = { n: 'Primeape', sid: 57, iv: 180, q: 1.7, sh: false, t: Date.now() };
+  const comNota = { n: 'Annihilape', sid: 979, iv: 20, q: 0.9, sh: false, pot: 1, nt: 0.4, t: Date.now() };
+  assert.match(await melhorCatch(semNota, comNota), /Primeape/,
+    'sem nota ainda, a captura concorre por IV × qualidade em vez de ser tratada como a pior');
+
+  await read('stCache.length=0;cdHtmlAnt=""');
   await read('cardsOn=false;applyCards();toggleFeature(2)');
   assert.deepEqual(await read('webviews.map(w => w.getWebContentsId())'), ids, 'feature, list, simple and expansion preserve all guests');
   await checkLayout(3, 2);

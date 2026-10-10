@@ -6,10 +6,17 @@
   #hud-hunt { position:absolute; top:10px; left:10px; padding:6px; background:#291e2e; }
   .hunt-saida { position:absolute; top:10px; right:10px; display:flex; align-items:flex-start; gap:6px; }
   .hunt-saida-acoes { display:flex; flex-direction:column; gap:4px; }
-  .ir-centro,.desistir-combate,.escape-rope { display:flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 14px; border:1px solid #302335; border-radius:5px; color:#ffe3c0; font:700 11.5px Tahoma; background:linear-gradient(#8f5964,#543037); cursor:pointer; }
-  .ir-centro:disabled { opacity:.5; cursor:default; }
+  .ir-centro,.desistir-combate,.escape-rope,.eco-saida-bt { display:flex; align-items:center; justify-content:center; gap:7px; height:34px; padding:0 14px; border:1px solid #302335; border-radius:5px; color:#ffe3c0; font:700 11.5px Tahoma; background:linear-gradient(#8f5964,#543037); cursor:pointer; }
+  .ir-centro:disabled,.eco-saida-bt:disabled { opacity:.5; cursor:default; }
   #centro-curar { position:absolute; bottom:20px; left:20px; }
-  html.modo-economia #hunt-saida, html.modo-imersivo #hunt-saida { display:none!important; }
+  /* O Modo Economia substitui a cena pelo painel de economia, que traz o SEU proprio botao de
+     ir ao Centro (#eco-ir-centro). A cena sai de cena; ela nao e a via de saida do Eco. */
+  html.modo-imersivo #hunt-saida { display:none!important; }
+  html.modo-economia #hunt-saida { display:none!important; }
+  #eco-painel { display:none; position:absolute; top:10px; left:10px; right:10px; flex-direction:column; gap:8px; padding:10px; background:#2b1e2c; border:1px solid #3a2a40; }
+  html.modo-economia #eco-painel { display:flex; }
+  #eco-onde { padding:5px 8px; background:#33233a; }
+  .eco-lugar { display:flex; align-items:center; gap:6px; }
 </style>
 <div id="palco"><span id="hud-hunt">Larvitar · nível 30</span>
   <div class="hunt-saida" id="hunt-saida">
@@ -19,32 +26,54 @@
       <button class="desistir-combate" id="desistir-combate" type="button">Desistir do Combate</button>
     </div>
   </div>
+  <div class="eco-painel" id="eco-painel">
+    <span id="eco-onde">Larvitar · nível 30</span>
+    <div class="eco-lugar">
+      <button type="button" class="eco-saida-bt eco-ir-centro" id="eco-ir-centro" title="Ir para o Centro Pokémon" disabled>Ir para o Centro Pokémon <span id="eco-ir-centro-conta">3.0s</span></button>
+    </div>
+  </div>
   <button id="centro-curar" class="hidden">Curar equipe</button>
 </div>
 <script>
   // Local DOM/server-response simulation, never a real game request.
   window.centerFixture = {
-    clicks:0, behavior:'hold', original:document.getElementById('ir-centro'),
-    unlock() { this.original.disabled=false; document.getElementById('ir-centro-conta').textContent=''; },
-    hit() { this.original.disabled=true; document.getElementById('ir-centro-conta').textContent='3.0s'; },
+    clicks:0, ecoClicks:0, behavior:'hold',
+    original:document.getElementById('ir-centro'),
+    ecoBtn:document.getElementById('eco-ir-centro'),
+    // O botao de cada modo e o alvo: o agendamento so enxerga o do modo ativo.
+    ativo() { return document.documentElement.classList.contains('modo-economia') ? this.ecoBtn : this.original; },
+    aoClicar(eco) {
+      this.clicks++;
+      if (eco) this.ecoClicks++;
+      if (this.behavior==='success') setTimeout(()=>this.arrive(),100);
+      if (this.behavior==='relock') this.hit();
+    },
+    unlock() { this.ativo().disabled=false; this.ativo().querySelector('span').textContent=''; },
+    hit() { this.ativo().disabled=true; this.ativo().querySelector('span').textContent='3.0s'; },
     arrive() {
       document.getElementById('centro-curar').classList.remove('hidden');
       document.getElementById('palco').classList.add('centro-ativo');
       document.getElementById('hunt-saida').classList.add('hidden');
+      document.getElementById('eco-painel').classList.add('hidden');
     },
     reset() {
-      this.clicks=0; this.behavior='hold';
+      this.clicks=0; this.ecoClicks=0; this.behavior='hold';
       document.documentElement.classList.remove('modo-economia','modo-imersivo');
       document.getElementById('centro-curar').classList.add('hidden');
       document.getElementById('palco').classList.remove('centro-ativo');
       document.getElementById('hunt-saida').classList.remove('hidden');
+      document.getElementById('eco-painel').classList.remove('hidden');
       document.getElementById('hud-hunt').textContent='Larvitar · nível 30';
-      this.hit();
+      document.getElementById('eco-onde').textContent='Larvitar · nível 30';
+      // Mantem o PUSH_STATE do app quieto: com cfg-economia="1" ele so tentaria #hunt-eco, que
+      // nao existe aqui, e nunca clicaria no painel nem removeria a classe no meio do teste.
+      try { localStorage.setItem('cfg-economia','1'); } catch (e) {}
+      this.original.disabled=true;
+      document.getElementById('ir-centro-conta').textContent='3.0s';
+      this.ecoBtn.disabled=true;
+      document.getElementById('eco-ir-centro-conta').textContent='3.0s';
     }
   };
-  centerFixture.original.onclick=()=> {
-    centerFixture.clicks++;
-    if (centerFixture.behavior==='success') setTimeout(()=>centerFixture.arrive(),100);
-    if (centerFixture.behavior==='relock') centerFixture.hit();
-  };
+  centerFixture.original.onclick=()=>centerFixture.aoClicar(false);
+  centerFixture.ecoBtn.onclick=()=>centerFixture.aoClicar(true);
 </script></html>

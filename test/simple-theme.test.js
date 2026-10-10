@@ -65,7 +65,8 @@ app.whenReady().then(async () => {
    fs.writeFileSync(path.join(output,id+'-'+width+'.png'),(await win.webContents.capturePage(undefined, { stayHidden: true, stayAwake: true })).toPNG());
   }
  }
- await read('document.getElementById("leafSimple").click()');assert.equal(await read('document.body.classList.contains("cards-on")'),false);
+ // Simples e uma aba do grupo exclusivo Janelas/Lista/Simples: sai dele escolhendo outra vista.
+ await read('document.querySelector(\'#leafViewTabs [data-view="windows"]\').click()');assert.equal(await read('document.body.classList.contains("cards-on")'),false);
  fs.writeFileSync(path.join(output,'theme-results.json'),JSON.stringify(results,null,2));
  console.log(JSON.stringify({output,themes:results.length,checks:'palette, live theme switch, simple toggle, preserved guests',screenshots:12}));win.destroy();app.exit(0);
 }).catch(e=>{console.error(e);app.exit(1)});

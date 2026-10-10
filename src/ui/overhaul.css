@@ -208,7 +208,7 @@ button {touch-action:manipulation;-webkit-tap-highlight-color:transparent}
   :root {--leaf-rail:66px;--leaf-sidebar:270px;--leaf-top:62px;--leaf-bottom:58px}
   .leaf-brand {padding-left:16px}.leaf-logo-mark {font-size:43px;width:32px}
   .leaf-brand-title {font-size:16px}.leaf-brand-sub {font-size:6px;letter-spacing:.7px}
-  .leaf-top-center {gap:5px}.leaf-chip {padding:0 7px!important}.leaf-chip .txt-hide-sm {display:none}
+  .leaf-top-center {gap:5px}.leaf-chip {padding:0 7px!important}.leaf-chip .txt-hide-sm,.leaf-segment .txt-hide-sm {display:none}
   .leaf-account {min-height:148px;padding:7px}.leaf-account-top {grid-template-columns:12px 34px minmax(0,1fr) auto;gap:0 4px}
   .leaf-poke-avatar {width:33px;height:34px}.leaf-poke-avatar img {width:39px;height:39px}
   .leaf-account-name {font-size:11px}.leaf-metric .mk {font-size:7px}.leaf-metric .mv {font-size:10px}

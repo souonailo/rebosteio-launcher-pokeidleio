@@ -72,11 +72,11 @@
         <div class="leaf-segment" id="leafViewTabs">
           <button data-view="windows" class="is-active" aria-pressed="true"><span style="width:13px;height:13px">${ico('grid')}</span>Janelas</button>
           <button data-view="list" aria-pressed="false"><span style="width:13px;height:13px">${ico('list')}</span>Lista</button>
+          <button data-view="simple" id="leafSimple" aria-pressed="false"><span style="width:13px;height:13px">${ico('simple')}</span><span class="txt-hide-sm">Simples</span></button>
         </div>
         <button class="leaf-chip" id="leafEco" aria-pressed="false"><span style="width:13px;height:13px">${ico('moon')}</span><span>Modo Eco</span><span class="switch" aria-hidden="true"></span></button>
         <button class="leaf-chip" id="leafHuntOnly"><span style="width:13px;height:13px">${ico('hunt')}</span><span class="txt-hide-sm">Só a caça</span></button>
         <button class="leaf-chip" id="leafMap" aria-pressed="false"><span class="leaf-map-icon" style="width:13px;height:13px">${ico('chart')}</span><span class="txt-hide-sm">Painel</span></button>
-        <button class="leaf-chip" id="leafSimple"><span style="width:13px;height:13px">${ico('simple')}</span><span class="txt-hide-sm">Simples</span></button>
         <button class="leaf-chip" id="leafAlerts" title="Alternar alertas e todos os sons do jogo"><span style="width:13px;height:13px">${ico('bell')}</span><span class="txt-hide-sm">Alertas</span></button>
       </div>
       <div class="leaf-top-right">
@@ -157,6 +157,7 @@
     <button class="leaf-tool-item" data-old="autoSellBtn"><span class="ico">💰</span><span>Venda Automática</span><span class="leaf-tool-badge" id="leafAutoSellBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSupplyBtn"><span class="ico">📦</span><span>Auto Supply</span><span class="leaf-tool-badge" id="leafAutoSupplyBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="dispatchHuntBtn"><span class="ico">🎯</span><span>Despachar Contas</span></button>
+    <button class="leaf-tool-item" data-old="scriptsBtn"><span class="ico">🧩</span><span>Scripts & Extensões</span></button>
     <button class="leaf-tool-item" data-old="twitchBonusBtn" id="leafTwitchBonusBtn"><span class="ico">🟣</span><span>Bônus Twitch</span><span class="leaf-tool-badge" id="leafTwitchBonusBadge">OFF</span></button>`;
   document.body.appendChild(tools);
   tools.inert = true;
@@ -264,7 +265,6 @@
   $('#leafEco').onclick = () => clickOld('eco');
   $('#leafHuntOnly').onclick = () => clickOld('cleanHud');
   $('#leafMap').onclick = () => clickOld('statsBtn');
-  $('#leafSimple').onclick = () => clickOld('cardsBtn');
   $('#leafAlerts').onclick = () => clickOld('alerts');
   const triggerLoginAll = () => clickOld('loginAll');
   $('#leafLoginAll').onclick = triggerLoginAll;
@@ -387,11 +387,30 @@
   document.addEventListener('click', e => { if (!tools.contains(e.target) && e.target !== $('#leafToolsBtn') && document.body.classList.contains('leaf-tools-open')) closeSurfaces(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSurfaces(true); });
 
-  function setView(view, animate = false) {
-    const wasVisible = !$('#leafListView').hidden;
+  const lsPick = (k) => { try { return localStorage.getItem(k); } catch { return null; } };
+  const lsPut = (k, v) => { try { localStorage.setItem(k, v); } catch { } };
+  let lastPlainView = lsPick('leafViewLast') === 'list' ? 'list' : 'windows';
+  let currentView = 'windows';
+  // Simples é uma vista, então o estado real é cardsOn (index.html), não só a classe do botão.
+  const simpleIsOn = () => oldOn('cardsBtn') || (typeof cardsOn !== 'undefined' && !!cardsOn);
+
+  function paintTabs(view) {
+    currentView = view;
     $$('#leafViewTabs button').forEach(b => { const selected = b.dataset.view === view; b.classList.toggle('is-active', selected); b.setAttribute('aria-pressed', String(selected)); });
-    $('#leafWindowView').hidden = view !== 'windows';
+    $('#leafWindowView').hidden = view === 'list';
     $('#leafListView').hidden = view !== 'list';
+  }
+
+  function setView(view, animate = false) {
+    const plain = view === 'windows' || view === 'list';
+    // Grupo exclusivo Janelas/Lista/Simples: entrar no Simples liga o cardsOn (o index força o Eco),
+    // sair dele (para qualquer vista normal) desliga o cardsOn e mantém o Eco como estava.
+    if (view === 'simple') { if (!simpleIsOn()) clickOld('cardsBtn'); }
+    else if (simpleIsOn()) clickOld('cardsBtn');
+    const wasVisible = !$('#leafListView').hidden;
+    paintTabs(view);
+    if (plain && view !== lastPlainView) { lastPlainView = view; lsPut('leafViewLast', view); }
+    lsPut('leafView', view);
     document.dispatchEvent(new CustomEvent('piw-view-changed', { detail: { view } }));
     if (view === 'list') {
       renderList();
@@ -400,6 +419,8 @@
     }
   }
   $$('#leafViewTabs button').forEach(b => b.onclick = e => setView(b.dataset.view, e.detail !== 0));
+  // index.html (clique em linha dos cards) usa isto pra abrir a vista Janelas ao expandir um painel.
+  window.PIWView = { set: (view) => setView(view), current: () => currentView };
 
   const states = new Map();
   function baseState(i) {
@@ -623,6 +644,16 @@
     pairs.forEach(([a,b])=>{const x=$('#'+a);if(x){const active=oldOn(b);x.classList.toggle('is-active',active);RebosteioPerformance.setAttribute(x,'aria-pressed',active);}});
     const stats = document.body.classList.contains('stats-open'); $('#leafMap')?.classList.toggle('is-active',stats); RebosteioPerformance.setAttribute($('#leafMap'),'aria-pressed',stats);
     $$('#leafSettingsDrawer [data-old]').forEach(b=>b.classList.toggle('is-on',oldOn(b.dataset.old)));
+    // Vista exclusiva: mudanças de cardsOn fora do setView (atalho, clique na linha, Caça) repintam as abas.
+    const simpleOn = simpleIsOn();
+    if (simpleOn && currentView !== 'simple') setView('simple');
+    else if (!simpleOn && currentView === 'simple') setView(lastPlainView);
+    // Com o Simples ativo o Eco é obrigatório, então o chip não pode ser desligado.
+    const ecoChip = $('#leafEco');
+    if (ecoChip) {
+      RebosteioPerformance.setAttribute(ecoChip, 'aria-disabled', String(simpleOn));
+      ecoChip.title = simpleOn ? 'O Simples mantém o Modo Eco ligado. Desligue o Simples para alterar.' : '';
+    }
   }
 
   const av = document.getElementById('appVer'); if(av) $('#leafVersion').textContent='PokeGrid '+av.textContent;
@@ -656,4 +687,9 @@
   if (window.PIWThemeManager) {
     window.PIWThemeManager.setTheme(window.PIWThemeManager.getCurrentTheme().id, false);
   }
+  // Restaura a vista persistida (Janelas/Lista/Simples). O cardsOn do index é a fonte de verdade
+  // do Simples; se ele estiver ligado a vista é Simples, senão vale a última vista normal salva.
+  const wantSimple = simpleIsOn();
+  if (wantSimple && !oldOn('cardsBtn') && typeof applyCards === 'function') { try { applyCards(); } catch { } }
+  setView(wantSimple ? 'simple' : (lsPick('leafView') === 'list' ? 'list' : 'windows'));
 })();
