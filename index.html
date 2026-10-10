@@ -3714,6 +3714,7 @@
           }
           if (autoSellLootOn) wv.executeJavaScript(autoSellScript(true)).catch(() => { });
           wv.executeJavaScript(PUSH_STATE()).catch(() => { }); // painel Simples le daqui sem perguntar
+          wv.executeJavaScript(TURNSTILE_GC).catch(() => { }); // solta o captcha do login depois de entrar (ver TURNSTILE_GC)
           // jogo congelado com pagina viva: WebGL perdeu o contexto e nao restaurou em 4s -> recarrega (ignora se estiver em ultra leve)
           wv.executeJavaScript("(()=>{if(window.__pgGlWd)return;window.__pgGlWd=1;let tm;document.addEventListener('webglcontextlost',()=>{if(window.__pgUltraActive)return;clearTimeout(tm);tm=setTimeout(()=>location.reload(),4000);},true);document.addEventListener('webglcontextrestored',()=>clearTimeout(tm),true);})()").catch(() => { });
           wv.executeJavaScript(POPUP_SCRIPT).catch(() => { });
@@ -4462,6 +4463,24 @@
     // publica a propria leitura (a mesma do READ_STATE) periodicamente e o app so escuta (__PGST__).
     // funcao, nao constante: o READ_STATE so e declarado mais abaixo; no dom-ready ja existe
     const PUSH_STATE = () => '(()=>{if(window.__pgPush)return;window.__pgPush=1;setInterval(()=>{try{if(localStorage.getItem("cfg-economia")==="1"&&!document.documentElement.classList.contains("modo-economia")){const eb=document.getElementById("hunt-eco");if(eb){try{localStorage.setItem("cfg-economia","0");}catch(x){}eb.click();try{localStorage.setItem("cfg-economia","1");}catch(x){}}}else if(localStorage.getItem("cfg-economia")==="0"&&document.documentElement.classList.contains("modo-economia")){const eb=document.getElementById("eco-sair")||document.querySelector(".eco-sair,#eco-painel button,.eco-painel button,[data-eco-sair],.btn-eco-sair");if(eb)eb.click();else{const he=document.getElementById("hunt-eco");if(he)he.click();document.documentElement.classList.remove("modo-economia");}try{if(window.PIXI&&window.PIXI.Ticker&&window.PIXI.Ticker.shared&&!window.PIXI.Ticker.shared.started)window.PIXI.Ticker.shared.start();}catch(x){}}}catch(x){}try{const d=' + READ_FAST + ';if(d&&d.ok){console.clear();console.log("__PGST__"+JSON.stringify(d))}}catch(x){}},4000)})()'; // clear: o console do painel guardava cada push (ate 10 MB)
+    // Captcha do login (Cloudflare Turnstile): o widget e um iframe de outra origem, entao o Chromium
+    // da a ele um processo renderer proprio (site isolation). Depois do login ninguem o usa, mas ele
+    // segue vivo e crescendo: 200-370 MB POR CONTA, ~1,2 GB com 4 contas, mais da metade da RAM do
+    // app (MEMORY-CASE-STUDY.md). Logado e com o socket do jogo aberto, remove os widgets; o
+    // processo do iframe morre junto. O jogo guarda os ids num modulo (turnstileIds), que daqui nao
+    // da pra zerar: se ele voltar pra tela de login sem recarregar, recarrega a pagina e o widget
+    // nasce de novo (o auto-login do app cuida do resto).
+    const TURNSTILE_GC = `(()=>{if(window.__pgTsGc)return;window.__pgTsGc=1;let removeu=false;const tick=()=>{try{
+      const app=document.getElementById('app'),portal=document.getElementById('portal');
+      const logado=app&&!app.classList.contains('hidden')&&!(portal&&!portal.classList.contains('hidden'));
+      if(removeu&&!logado){const w=document.getElementById('turnstile-entrar');if(w&&!w.querySelector('iframe')&&w.offsetParent!==null){location.reload();return;}}
+      const P=window.__poke;if(!logado||!(P&&P.sock&&P.sock.readyState===1)||!window.turnstile)return;
+      removeu=true; // o iframe mora num shadow root fechado: querySelector nao o enxerga, entao remove sempre
+      if(window.__pgTsFeito)return;window.__pgTsFeito=1;
+      ['entrar','criar','esqueci'].forEach(f=>{const el=document.getElementById('turnstile-'+f);if(!el)return;
+        try{window.turnstile.remove(el)}catch(e){}
+        try{el.replaceChildren()}catch(e){}});
+    }catch(e){}};setTimeout(tick,20000);setInterval(tick,15000);})()`;
     const stCache = {};
     // Share only overlapping reads. The next request still gets a fresh sample.
     const stateReads = RebosteioPerformance.createReadCoordinator(w => w.executeJavaScript(READ_STATE));

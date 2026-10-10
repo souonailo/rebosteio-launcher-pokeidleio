@@ -3,6 +3,10 @@ const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
 const { coalesceScriptLoading, blockMetaPixel } = require('./src/main/guest-runtime');
+const { createMemoryProbe, parseArgs: parseMemArgs, parseExperiments } = require('./src/main/memory-probe');
+const memOpts = parseMemArgs(process.argv, process.env);
+// estudo de RAM (MEMORY-CASE-STUDY.md): --exp=E2 desliga a aceleracao de GPU (opcional, -100 MB)
+const EXP = parseExperiments(process.argv, process.env);
 
 // Isola este launcher do Absol Launcher original para poderem rodar simultaneamente sem conflito
 app.name = 'pionailo';
@@ -22,6 +26,10 @@ app.commandLine.appendSwitch('log-level', '3');
 // Otimização de memória RAM para multi-contas: limita heap por processo renderer para evitar acúmulo de lixo
 try {
   app.commandLine.appendSwitch('js-flags', '--max-old-space-size=256 --optimize_for_size');
+  // E2 (opcional, MEMORY-CASE-STUDY.md): sem aceleracao de GPU, ~100 MB a menos no processo GPU
+  if (EXP.has('E2')) app.disableHardwareAcceleration();
+  // telemetria: performance.memory sem quantizacao (so quando medindo)
+  if (memOpts.enabled) app.commandLine.appendSwitch('enable-precise-memory-info');
   app.commandLine.appendSwitch('disable-background-networking');
   app.commandLine.appendSwitch('disable-breakpad');
   app.commandLine.appendSwitch('disable-component-update');
@@ -217,6 +225,8 @@ const abreFora = (url) => {
   shell.openExternal(url);
 };
 app.on('web-contents-created', (_e, contents) => {
+  // corretor ortografico: dicionario (.bdic) e servico por sessao; ninguem digita texto longo aqui
+  try { contents.session.setSpellCheckerEnabled(false); } catch {}
   if (contents.getType() !== 'webview') return;
   coalesceScriptLoading(contents);
   blockMetaPixel(contents.session);
@@ -692,8 +702,20 @@ app.whenReady().then(() => {
       frame: false,
       thickFrame: true
     } : {}),
-    webPreferences: { webviewTag: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false }
+    webPreferences: { webviewTag: true, preload: path.join(__dirname, 'preload.js'), backgroundThrottling: false, spellcheck: false }
   });
+  // Telemetria de RAM (so com --mem-probe). --mem-tray-after=N esconde a janela apos N s;
+  // --mem-duration=N fecha o app apos N s. Cenario padrao do estudo: 4 contas, 300 s visivel, depois bandeja.
+  const probe = createMemoryProbe({
+    app, webContents: require('electron').webContents, opts: memOpts, experiments: EXP,
+    getState: () => ({ vis: !win.isDestroyed() && win.isVisible() && !win.isMinimized() ? 1 : 0 }),
+    onTrayAfter: () => { try { if (!win.isDestroyed()) win.hide(); } catch {} },
+    onShowAfter: () => { try { if (!win.isDestroyed()) { win.show(); win.maximize(); } } catch {} },
+    onDuration: () => app.quit()
+  });
+  const memFile = probe.start();
+  if (memFile) logErro('mem', 'telemetria de memoria em ' + memFile + ' · exp=' + ([...EXP].join(',') || 'base'));
+  win.on('closed', () => probe.stop());
   ipcMain.handle('window:control', (event, action) => {
     if (event.sender !== win.webContents || win.isDestroyed()) return null;
     if (action === 'minimize') win.minimize();

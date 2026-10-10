@@ -15,7 +15,11 @@
     "test:sync": "node test/upstream-sync.test.js",
     "test:capture-value": "electron test/capture-value.test.js",
     "test:catch-nota": "electron test/catch-nota.test.js",
-    "test:userscripts": "electron test/userscripts.test.js"
+    "test:userscripts": "electron test/userscripts.test.js",
+    "test:memory-probe": "node test/memory-probe.test.js",
+    "mem:run": "electron . --mem-probe --mem-tray-after=300 --mem-show-after=2100 --mem-duration=2160",
+    "mem:bench": "node tools/mem-bench.js",
+    "mem:report": "node tools/mem-report.js"
   },
   "keywords": [
     "electron",
