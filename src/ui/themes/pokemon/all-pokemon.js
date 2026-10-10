@@ -31083,37 +31083,51 @@ window.PIW_ALL_POKEMON_THEMES = [
     "tone": "dark",
     "toneLabel": "Escuro",
     "category": "pokemon",
-    "glyph": "✦",
+    "glyph": "👻",
     "brandTitle": "MIMIKYU <span>LAUNCHER</span>",
-    "brandSub": "O GUARDIÃO DE GHOST / FAIRY",
-    "quote": "O guardião elemental de GHOST que acompanha sua jornada.",
+    "brandSub": "O DISFARCE DE QUEM SÓ QUER AMOR",
+    "quote": "Por baixo do tecido antigo,<br>um coração que só busca um amigo.",
     "swatches": [
-      "#12091f",
-      "#25173c",
+      "#0f091a",
+      "#231436",
       "#c084fc"
     ],
     "colors": {
       "tone": "dark",
-      "bgBase": "#12091f",
-      "bgElevated": "#1a0f2b",
-      "surface1": "#25173c",
-      "surface2": "#33204f",
-      "surfaceHover": "#442d68",
-      "surfaceSelected": "#3c255e",
-      "textPrimary": "#faf5ff",
-      "textSecondary": "#e9d5ff",
-      "textMuted": "#c084fc",
+      "bgBase": "#0f091a",
+      "bgElevated": "#180e26",
+      "surface1": "#231436",
+      "surface2": "#301b4a",
+      "surfaceHover": "#432668",
+      "surfaceSelected": "#3a205b",
+      "textPrimary": "#fbf7ff",
+      "textSecondary": "#e5d4f7",
+      "textMuted": "#b799db",
       "accent": "#c084fc",
       "accentSoft": "rgba(192, 132, 252, 0.18)",
-      "actionPrimary": "#9333ea",
-      "actionPrimaryHover": "#7e22ce",
-      "borderSubtle": "#3d2561",
-      "borderStrong": "#6d42ad"
+      "actionPrimary": "#8b5cf6",
+      "actionPrimaryHover": "#7c3aed",
+      "borderSubtle": "#3c2459",
+      "borderStrong": "#6d429a"
     },
     "assets": {
-      "panorama": "src/ui/themes/biomes/ghost.jpg",
-      "cutout": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/778.png"
-    }
+      "panorama": "src/ui/themes/pokemon/mimikyu/panorama-exclusive.png",
+      "cutout": "src/ui/themes/pokemon/mimikyu/cutout-exclusive.png"
+    },
+    "exclusive": true,
+    "schemaVersion": 1,
+    "sideQuote": "Não olhe por baixo.\nApenas caminhe comigo.",
+    "sideKicker": "O MISTÉRIO DO DISFARCE",
+    "footerQuote": "TODO CORAÇÃO ENCONTRA SEU LUGAR SOB A LUA.",
+    "family": [
+      "mimikyu"
+    ],
+    "artworkProvenance": {
+      "cutout": "Built-in image generation & BiRefNet transparent background extraction (runic pedestal candidate; alt crate saved as cutout-crate-alt.png)",
+      "panorama": "Built-in image generation (enchanted moonlit fairy forest with wisteria & gothic ruins)"
+    },
+    "productionStatus": "integrated-local-review",
+    "missingAssets": []
   },
   {
     "id": "pkmn-bruxish",

@@ -15,7 +15,8 @@
     'pkmn-banette': '<path d="M6 10L4 4l8 4 6-5 2 6 5 3-2 10-8 4-10-6Z"/><path d="M8 13l4 2m8-2-4 2M8 20h12m-10-2v4m3-4v4m3-4v4m3-4v4"/><path d="M21 20l3 3-2 3-3-3Z"/>',
     'pkmn-gengar': '<path d="M5 12L3 4l8 4 3-5 3 5 8-4-2 8c7 14-24 18-18 0Z"/><path d="M7 13l5 3m9-3-5 3M7 19c4 6 11 6 15-1-5 2-10 3-15 1Zm4 2v3m4-3v3m4-4v3"/>',
     'pkmn-mewtwo': '<path d="M8 11L6 4l5 3h6l5-3-2 7c6 8-2 13-6 13S2 19 8 11Z"/><path d="M8 15l4 2m8-2-4 2M11 22c-7 1-8-5-7-8m16 8c7 0 8-8 3-10"/>',
-    'pkmn-flareon': true
+    'pkmn-flareon': true,
+    'pkmn-mimikyu': true
   };
   function getLockedPokemonId() {
     try { return localStorage.getItem(POKEMON_LOCK_KEY) || ''; } catch { return ''; }

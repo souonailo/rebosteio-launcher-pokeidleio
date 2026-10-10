@@ -1828,3 +1828,50 @@ body[data-pokemon="pkmn-flareon"] .leaf-epilogue-line {
   body[data-pokemon="pkmn-flareon"] .leaf-account-top > * { min-width: 0; }
 }
 
+/* Mimikyu: floresta lunar das fadas, disfarce carinhoso e névoa espectral. */
+body[data-theme="pkmn-mimikyu"] {
+  --theme-shell-overlay: linear-gradient(180deg, rgba(15, 9, 26, 0.12), rgba(15, 9, 26, 0.28));
+  --theme-cutout-opacity: 1;
+}
+body[data-theme="pkmn-mimikyu"] .leaf-sidebar {
+  background: linear-gradient(180deg, rgba(15, 9, 26, 0.88), rgba(24, 14, 38, 0.82) 64%, rgba(18, 10, 30, 0.70)) !important;
+}
+body[data-pokemon="pkmn-mimikyu"] .leaf-sidebar {
+  overflow: visible; z-index: 2;
+}
+body[data-pokemon="pkmn-mimikyu"] #leafShell:after { display: none; }
+body[data-pokemon="pkmn-mimikyu"] #leafAccountList { flex: 0 1 auto; max-height: calc(100vh - 460px); }
+body[data-pokemon="pkmn-mimikyu"] .leaf-side-footer { margin-top: auto; }
+body[data-pokemon="pkmn-mimikyu"] .leaf-sidebar:before {
+  top: auto; right: auto; left: -24px; bottom: -10px; width: 280px; height: 380px;
+  background-size: contain; background-position: center bottom;
+  mask-image: none; opacity: 1; z-index: 2; pointer-events: none;
+}
+body[data-pokemon="pkmn-mimikyu"] .leaf-aside-epilogue {
+  position: absolute; left: 16px; right: auto; bottom: 315px; padding: 0;
+  max-width: 220px; align-items: flex-start; text-align: left; z-index: 3; pointer-events: none;
+}
+body[data-pokemon="pkmn-mimikyu"] .leaf-aside-epilogue strong {
+  white-space: pre-line; color: #e9d5ff; font-size: 16px; line-height: 1.35;
+}
+body[data-pokemon="pkmn-mimikyu"] .leaf-epilogue-kicker {
+  color: #c084fc; font-size: 6px; letter-spacing: 1px;
+}
+body[data-pokemon="pkmn-mimikyu"] .leaf-epilogue-line {
+  width: 80px; align-self: flex-start; background: linear-gradient(90deg, #c084fc, transparent);
+}
+@media (min-height: 1000px) {
+  body[data-pokemon="pkmn-mimikyu"] .leaf-sidebar:before { width: 310px; height: 420px; left: -28px; bottom: -14px; }
+  body[data-pokemon="pkmn-mimikyu"] .leaf-aside-epilogue { bottom: 355px; }
+}
+@media (max-height: 920px) {
+  body[data-pokemon="pkmn-mimikyu"] #leafAccountList { flex: 1 1 auto; max-height: none; }
+  body[data-pokemon="pkmn-mimikyu"] .leaf-sidebar:before { width: 200px; height: 275px; left: -16px; bottom: 0; }
+  body[data-pokemon="pkmn-mimikyu"] .leaf-aside-epilogue { display: none; }
+}
+@media (max-width: 850px) {
+  body[data-pokemon="pkmn-mimikyu"] .leaf-account-top { grid-template-columns: 26px minmax(0, 1fr); }
+  body[data-pokemon="pkmn-mimikyu"] .leaf-account-top > * { min-width: 0; }
+}
+
+
