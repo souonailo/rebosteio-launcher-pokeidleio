@@ -87,6 +87,8 @@ docs/
 tools/*
 !tools/turnstile_solver.py
 !tools/ensure-electron.js
+!tools/mem-report.js
+!tools/mem-bench.js
 src/ui/themes/pokemon/**/*.json
 src/ui/themes/pokemon/**/*.md
 pokeidle_maps/
