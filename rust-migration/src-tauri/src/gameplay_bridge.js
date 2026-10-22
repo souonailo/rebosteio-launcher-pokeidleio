@@ -39,7 +39,7 @@
     const result = pick(value, playerKeys);
     for (const platform of ['twitch', 'kick']) {
       if (Object.hasOwn(value ?? {}, platform)) {
-        result[platform] = value[platform] === null ? null : pick(value[platform], ['login','vinculado','assistindo','pctAtual','emLives','pontos','pontosPorCanal','bonusExp','bonusCatch','bonusLure','bonusTime','bonusQty','bonusExpiresAt']);
+        result[platform] = value[platform] === null ? null : pick(value[platform], ['login','vinculado','assistindo','pctAtual','emLives','pontos','pontosPorCanal','bonusExp','bonusCatch','bonusLure','bonusTime','bonusQty','bonusExpiresAt','bonus','pct']);
         if (result[platform]) {
           for (const key of ['lives','oficiais','offline']) if (Array.isArray(value[platform]?.[key])) result[platform][key] = value[platform][key].slice(0,40).map(c => typeof c === 'string' ? c : pick(c,['login','slug','aoVivo','ativo','bonus','espectadores']));
           if (Array.isArray(value[platform]?.assistindoEm)) result[platform].assistindoEm = value[platform].assistindoEm.slice(0,20);

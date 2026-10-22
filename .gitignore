@@ -108,3 +108,6 @@ pokeidle_maps/
 !tools/build-installer.ps1
 !tools/prepare-login-runtime.py
 !tools/installer-hooks.nsh
+
+# PIO: dados locais do fork (notas, extrações, logs e configurações por conta). Nunca versionar.
+claude/

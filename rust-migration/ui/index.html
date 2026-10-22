@@ -3848,7 +3848,7 @@
               wv.executeJavaScript('window.__pokeSeed=' + j).catch(() => { });
             }
           } catch { }
-          wv.executeJavaScript(`(()=>{const nL=v=>{const m=String(v==null?'':v).match(/[0-9]+([.,][0-9]+)?/);return m?+m[0].replace(',','.'):0};const nIvs=v=>{if(!v||typeof v!=='object')return null;const h=nL(v.hp),a=nL(v.atk),d=nL(v.def),sa=nL(v.spAtk!=null?v.spAtk:v.spa),sd=nL(v.spDef!=null?v.spDef:v.spd),sp=nL(v.speed!=null?v.speed:(v.spe!=null?v.spe:v.vel));return(h||a||d||sa||sd||sp)?{hp:h,atk:a,def:d,spAtk:sa,spDef:sd,speed:sp}:null;};const getActId=o=>(o&&(o.activeId!=null?o.activeId:(o.activePokemonId!=null?o.activePokemonId:(o.active_id!=null?o.active_id:null))))??null;const mk=()=>({start:Date.now(),kills:0,xp:0,balls:0,captures:0,drops:{},shinyN:0,shinySeen:{},shinyCapN:0,faintN:0,sellG:0,supGold:0,supN:0,gold:0,slug:'',hp:{}});const P=window.__poke||(window.__poke={ws:{},api:{},sess:mk(),prev:null,knownPokes:{},pokesBaselined:false,pokemonsMap:{},creaturesMap:{}});try{const sd=window.__pokeSeed;delete window.__pokeSeed;if(sd&&sd.s&&sd.s.start&&Date.now()-(sd.t||0)<600e3){P.sess=sd.s;if(sd.slug)P.lastSlug=sd.slug;if(sd.cl&&sd.cl.length)P.catchLog=sd.cl;if(sd.sl&&sd.sl.length)P.shinyLog=sd.sl;if(sd.ab&&typeof sd.ab==='object')P.anBase=sd.ab;}}catch(x){}let auth=null;const syncAutoHeal=()=>{try{if(!P.sock||P.sock.readyState!==1||typeof P.sock.send!=='function')return;const eu=(window.estado&&(window.estado.eu||window.estado))||P.estado||{};const items=eu.items||(P.ws.inventory&&P.ws.inventory.items?Object.fromEntries(P.ws.inventory.items.map(it=>[it.itemId,it.quantity])):{})||{};const aut=eu.automation||P.automation||{};const potIds=[200,201,202,203,204],revIds=[205,206];const hasPot=potIds.some(id=>(Number(items[id])||0)>0),hasRev=revIds.some(id=>(Number(items[id])||0)>0);if(!hasPot&&!hasRev)return;let chg=false;const patch={};if(hasPot){if(!aut.autoPotion){patch.autoPotion=true;chg=true;}const pList=Array.isArray(aut.potionIds)?aut.potionIds:[];if(!pList.length){const ow=potIds.filter(id=>(Number(items[id])||0)>0);patch.potionIds=ow.length?ow:potIds;chg=true;}const lim=aut.hpLimiar!=null?Number(aut.hpLimiar):0;if(lim<=0.35){patch.hpLimiar=0.6;chg=true;}}if(hasRev){if(!aut.autoRevive){patch.autoRevive=true;chg=true;}const rList=Array.isArray(aut.reviveIds)?aut.reviveIds:[];if(!rList.length){const owR=revIds.filter(id=>(Number(items[id])||0)>0);patch.reviveIds=owR.length?owR:revIds;chg=true;}}if((hasPot||hasRev)&&aut.autoVoltarHunt===false){patch.autoVoltarHunt=true;chg=true;}if(chg){const now=Date.now();if(!P._lastAutoHealSync||now-P._lastAutoHealSync>20000){P._lastAutoHealSync=now;const full=Object.assign({},aut,patch);P.automation=Object.assign(P.automation||{},full);P.sock.send(JSON.stringify(Object.assign({t:'auto.set'},full)));}}}catch(x){}};const onMsg=e=>{try{if(typeof e.data==='string'){const raw=JSON.parse(e.data);if(!raw)return;const m=raw.data&&typeof raw.data==='object'?Object.assign({},raw,raw.data):raw;const S=P.sess;if(m.t){P.ws[m.t]=m;if(m.t==='welcome'){const est=m.estado||m.data||{};P.estado=est;const act=getActId(est)||getActId(m);if(act!=null)P.activeId=act;P.trainerLevel=est.level||0;if(est.pokemons&&Array.isArray(est.pokemons)){est.pokemons.forEach(pk=>{if(pk&&pk.id)P.pokemonsMap[pk.id]=pk;});}if(est.automation&&typeof est.automation==='object'){P.automation=Object.assign(P.automation||{},est.automation);if(Array.isArray(est.automation.ballIds))P.autoBallIds=est.automation.ballIds;}if(m.hunts&&Array.isArray(m.hunts))P.hunts=m.hunts;P.cid=est.id||'';P.nick=est.nick||'';P.level=est.level||0;P.gold=est.gold||0;P.diamonds=est.diamonds||0;P.isVip=!!(est.loja&&est.loja.vip);P.clan=(est.guild&&(est.guild.nome||est.guild.name))||null;P.api['/api/characters/me']={character:{id:P.cid,name:P.nick,level:P.level,gold:P.gold,diamonds:P.diamonds,isVip:P.isVip,clan:P.clan}};if(m.catalogoBolas&&Array.isArray(m.catalogoBolas)){P.ws.balls=P.ws.balls||{counts:{},catalog:[]};P.ws.balls.catalog=m.catalogoBolas.map(b=>({id:b.id,name:b.nome||b.name,priceGold:b.priceGold||0,p:b.priceGold||0,infinite:!!(b.infinite||b.infinito),catchRate:b.catchRate||1}));}if(est.balls&&typeof est.balls==='object'){P.ws.balls=P.ws.balls||{counts:{},catalog:[]};P.ws.balls.counts=est.balls;}if(est.items&&typeof est.items==='object'){P.ws.inventory={items:Object.keys(est.items).map(k=>({itemId:+k,quantity:est.items[k]}))};}if(est.pokemons&&Array.isArray(est.pokemons)){const H2={};P.ws.pokes={list:est.pokemons.map(pk=>{if(pk.slot!=null)H2[pk.id]=pk.hp;P.knownPokes[pk.id]=1;const ivs=nIvs(pk.ivs);return{id:pk.id,speciesId:pk.speciesId,name:pk.nome||pk.name,level:pk.level,shiny:!!pk.shiny,quality:pk.quality,team:pk.slot!=null,slot:pk.slot,hp:pk.hp,maxHp:pk.maxHp,ivs:ivs,ivTotal:ivs?(ivs.hp+ivs.atk+ivs.def+ivs.spAtk+ivs.spDef+ivs.speed):null};})};S.hp=H2;P.pokesBaselined=true;if(P.catchLog&&P.catchLog.length){P.catchLog.forEach(c=>{if(!c.iv||c.iv===0||!c.ivs){const match=P.ws.pokes.list.find(x=>(c.id!=null&&x.id===c.id)||(x.name===c.n&&Math.abs(nL(x.quality)-nL(c.q))<0.02&&(x.ivTotal||x.ivs)));if(match){if(match.ivTotal&&(!c.iv||c.iv===0))c.iv=match.ivTotal;if(match.ivs&&!c.ivs)c.ivs=match.ivs;if(match.id&&!c.id)c.id=match.id;}}});}}if(est.huntSlug){P.lastSlug=est.huntSlug;P.ws['field-init']={slug:est.huntSlug,name:est.huntSlug};}syncAutoHeal();}else if(m.t==='campo.init'){const sl=m.slug||'';P.ws['campo.init']=m;P.ws['field-init']={slug:sl,name:sl};P.fiT=Date.now();if(sl&&sl!=='centro'&&!['cerulean','pewter','viridian','cassino','arena_pvp'].includes(sl)){if(P.lastSlug!==sl){P.prev=P.sess;P.prev.end=Date.now();P.sess=mk();P.sess.slug=sl;P.lastSlug=sl;}}}else if(m.t==='batalha'){(m.ev||[]).forEach(ev=>{if(ev.k==='troca'||ev.k==='heroi'||ev.k==='active'||ev.k==='team.active'){const act=getActId(ev)||(ev.pokemonId!=null?ev.pokemonId:(ev.id!=null?ev.id:null));if(act!=null)P.activeId=act;}else if(ev.k==='spawn'){if(ev.shiny){S.shinyN=(S.shinyN||0)+1;S.shOpen=(S.shOpen||0)+1;S.shOpenT=Date.now();const SL=P.shinyLog=P.shinyLog||[];SL.push({n:ev.nome||'',sid:ev.speciesId||0,def:0,t:Date.now()});if(SL.length>30)SL.shift();}}else if(ev.k==='morte'){if(ev.quem==='selvagem'){S.kills++;S.lastKillT=Date.now();S.xp+=(ev.xp||ev.xpTreinador||0);S.gold=(S.gold||0)+(ev.ouro||0)+(ev.ouroVendaAuto||0);(ev.drops||[]).forEach(l=>{const k=l.itemId||l.nome;const d=S.drops[k]||(S.drops[k]={name:l.nome,qty:0});d.qty+=(l.qtd||l.qty||0);});if(ev.shiny){S.shinyN=(S.shinyN||0)+1;const SL=P.shinyLog=P.shinyLog||[];SL.push({n:ev.nome||'',sid:ev.speciesId||0,def:1,t:Date.now()});if(SL.length>30)SL.shift();}}else if(ev.quem==='jogador'){S.faintN=(S.faintN||0)+1;}}else if(ev.k==='bossMorto'){S.xp+=(ev.xp||ev.xpTreinador||0);S.gold=(S.gold||0)+(ev.valor||0);(ev.drops||[]).forEach(l=>{const k=l.itemId||l.nome;const d=S.drops[k]||(S.drops[k]={name:l.nome,qty:0});d.qty+=(l.qtd||l.qty||0);});}else if(ev.k==='cura'){S.supN=(S.supN||0)+1;const pId=ev.itemId;const pPrice=pId===200?50:pId===201?150:pId===202?400:pId===203?800:pId===204?1500:0;S.supGold=(S.supGold||0)+pPrice;}else if(ev.k==='revive'){S.supN=(S.supN||0)+1;const rId=ev.itemId;const rPrice=rId===205?600:rId===206?2500:0;S.supGold=(S.supGold||0)+rPrice;}else if(ev.k==='bola'){S.balls++;S.sinceCatch=(S.sinceCatch||0)+1;if(ev.ballId)P.lastBallId=ev.ballId;const bPrice=ev.ballId===1?5:ev.ballId===2?20:ev.ballId===3?50:130;S.supGold=(S.supGold||0)+bPrice;}else if(ev.k==='capturado'){if(P.captureValue)P.captureValue(ev.pokemon);S.captures++;S.lastCatchT=Date.now();S.sinceCatch=0;const pk=ev.pokemon||{};if(pk.shiny){S.shinyCapN=(S.shinyCapN||0)+1;if(S.shOpen>0&&Date.now()-S.shOpenT<60e3)S.shOpen--;else S.shinyN=(S.shinyN||0)+1;const SL=P.shinyLog=P.shinyLog||[];SL.push({n:pk.nome||'',sid:pk.speciesId||0,cap:1,t:Date.now()});if(SL.length>30)SL.shift();}let iv=0;let ivs=nIvs(pk.ivs);if(ivs)iv=ivs.hp+ivs.atk+ivs.def+ivs.spAtk+ivs.spDef+ivs.speed;else if(pk.ivTotal!=null)iv=nL(pk.ivTotal);else if(pk.iv!=null)iv=nL(pk.iv);else if(pk.id!=null){const f=(P.ws.pokes&&P.ws.pokes.list||[]).find(x=>x.id===pk.id);if(f){if(f.ivTotal!=null)iv=nL(f.ivTotal);if(f.ivs&&!ivs)ivs=f.ivs;}}const sd=pk.speciesId||pk.pokeId||0;const UL=P.usedList||[];const CL=P.catchLog=P.catchLog||[];CL.push({id:pk.id||null,n:pk.nome||pk.name||'?',sid:sd,iv:iv||0,ivs:ivs||null,q:nL(pk.quality),potencia:pk.potencia!=null?Number(pk.potencia):null,sh:!!pk.shiny,fx:!!(sd&&UL.length&&!UL.some(u=>u.sid===sd&&u.caught)),t:Date.now()});if(CL.length>50)CL.shift();}});}else if(m.t==='estado'){const est=m.estado||m.data||m||{};if(est.twitch&&typeof est.twitch==='object'){P.estado=P.estado||{};P.estado.twitch=est.twitch;}if(est.kick&&typeof est.kick==='object'){P.estado=P.estado||{};P.estado.kick=est.kick;}const act=getActId(est)||getActId(m);if(act!=null)P.activeId=act;if(est.level!=null){P.level=est.level;P.trainerLevel=est.level;}if(est.automation&&typeof est.automation==='object'){P.automation=Object.assign(P.automation||{},est.automation);if(Array.isArray(est.automation.ballIds))P.autoBallIds=est.automation.ballIds;}if(est.gold!=null){P.gold=est.gold;if(P.api['/api/characters/me']&&P.api['/api/characters/me'].character)P.api['/api/characters/me'].character.gold=est.gold;}if(est.level!=null){P.level=est.level;if(P.api['/api/characters/me']&&P.api['/api/characters/me'].character)P.api['/api/characters/me'].character.level=est.level;}if(est.xp!=null)P.xp=est.xp;if(est.items&&typeof est.items==='object'){P.ws.inventory={items:Object.keys(est.items).map(k=>({itemId:+k,quantity:est.items[k]}))};}if(est.balls&&typeof est.balls==='object'){P.ws.balls=P.ws.balls||{counts:{},catalog:[]};P.ws.balls.counts=est.balls;}if(est.huntSlug){P.lastSlug=est.huntSlug;P.ws['field-init']={slug:est.huntSlug,name:est.huntSlug};}if(est.centroMotivo==='morte'){S.faintN=(S.faintN||0)+1;}if(est.pkMud&&Array.isArray(est.pkMud)){P.ws.pokes=P.ws.pokes||{list:[]};est.pkMud.forEach(pk=>{if(pk&&pk.id){if(P.pokemonsMap[pk.id])Object.assign(P.pokemonsMap[pk.id],pk);else P.pokemonsMap[pk.id]=pk;}const ix=P.ws.pokes.list.findIndex(x=>x.id===pk.id);const was=S.hp[pk.id];if(pk.slot!=null&&pk.hp===0&&was>0)S.faintN=(S.faintN||0)+1;if(pk.slot!=null)S.hp[pk.id]=pk.hp;const ivs=nIvs(pk.ivs);const ivT=ivs?(ivs.hp+ivs.atk+ivs.def+ivs.spAtk+ivs.spDef+ivs.speed):(pk.ivTotal!=null?nL(pk.ivTotal):(pk.iv!=null?nL(pk.iv):null));const obj={id:pk.id,speciesId:pk.speciesId,name:pk.nome||pk.name,level:pk.level,shiny:!!pk.shiny,quality:pk.quality,team:pk.slot!=null,slot:pk.slot,hp:pk.hp,maxHp:pk.maxHp,ivTotal:ivT,ivs:ivs};if(ix>=0)Object.assign(P.ws.pokes.list[ix],obj);else P.ws.pokes.list.push(obj);const isNew=P.pokesBaselined&&!P.knownPokes[pk.id];if(isNew){P.knownPokes[pk.id]=1;if(P.captureValue)P.captureValue(pk);else if(pk.sellValue)S.sellG=(S.sellG||0)+(pk.sellValue||0);}const CL=P.catchLog=P.catchLog||[];const pkNome=pk.nome||pk.name||'';const sd=pk.speciesId||pk.pokeId||0;const UL=P.usedList||[];const cEntry=CL.slice().reverse().find(c=>(c.id!=null&&pk.id!=null&&c.id===pk.id)||(((!c.iv||c.iv===0)||!c.ivs)&&(c.n===pkNome||c.n==='?')&&(Date.now()-(c.t||0)<60000)));if(cEntry){if(pk.potencia!=null)cEntry.potencia=Number(pk.potencia);if(ivT!=null&&(!cEntry.iv||cEntry.iv===0))cEntry.iv=ivT;if(ivs&&!cEntry.ivs)cEntry.ivs=ivs;if(pk.id&&!cEntry.id)cEntry.id=pk.id;if(cEntry.n==='?'&&pkNome)cEntry.n=pkNome;if(!cEntry.q&&pk.quality!=null)cEntry.q=nL(pk.quality);if(!cEntry.sid&&sd)cEntry.sid=sd;}else if(isNew){CL.push({id:pk.id,n:pkNome||'?',sid:sd,iv:ivT||0,ivs:ivs||null,q:nL(pk.quality),potencia:pk.potencia!=null?Number(pk.potencia):null,sh:!!pk.shiny,fx:!!(sd&&UL.length&&!UL.some(u=>u.sid===sd&&u.caught)),t:Date.now()});if(CL.length>50)CL.shift();};});}syncAutoHeal();}}if(m.type){P.ws[m.type]=m;if(m.type==='field-init'){const sl=m.slug||'';P.fiT=Date.now();if(P.lastSlug!==sl){P.prev=P.sess;P.prev.end=Date.now();P.sess=mk();P.sess.slug=sl;P.lastSlug=sl;P.ws.analyzer=null;P.anBase=null;try{if(P.sock&&P.sock.readyState===1)P.sock.send(JSON.stringify({type:'analyzer-get'}))}catch(x){}}}else if(m.type==='field-none'||m.type==='field-teleport-city'){P.ws['field-init']=null;}else if(m.type==='field-kill'){S.kills++;S.lastKillT=Date.now();S.xp+=m.xpGained||0;(m.loot||[]).forEach(l=>{const d=S.drops[l.itemId]||(S.drops[l.itemId]={name:l.name,qty:0});d.qty+=l.qty||0;});if(m.shiny){S.shinyN=(S.shinyN||0)+1;S.shOpen=(S.shOpen||0)+1;S.shOpenT=Date.now();const SL=P.shinyLog=P.shinyLog||[];SL.push({n:m.speciesName||m.name||'',sid:m.speciesId||m.pokeId||0,def:1,t:Date.now()});if(SL.length>30)SL.shift();}}else if(m.type==='catch-result'){S.balls++;S.sinceCatch=(S.sinceCatch||0)+1;if(m.ballId)P.lastBallId=m.ballId;const bbc=((P.ws.balls&&P.ws.balls.catalog)||[]).find(x=>x.id===m.ballId);if(bbc&&!bbc.infinite)S.supGold=(S.supGold||0)+(+bbc.priceGold||0);if(m.success){S.captures++;S.lastCatchT=Date.now();S.sinceCatch=0;}}else if(m.type==='field'){if(m.mobs&&m.mobs.length){for(const mb of m.mobs){if(mb&&+mb.maxHp>0)(S.slotHp=S.slotHp||{})[mb.slot]=+mb.maxHp;}}if(m.hits&&m.hits.length){const bm={};for(const h of m.hits){if(!(h&&h.slot>=0&&+h.amount>0))continue;const k=String(h.move||'?').slice(0,24);const c=bm[k]||(bm[k]={n:0,sl:{},p:0,pn:0});c.n++;c.sl[h.slot]=1;const mh=S.slotHp&&S.slotHp[h.slot];if(mh>0&&!h.crit&&!h.blocked){c.p+=(+h.amount)/mh;c.pn++;}}S.mv=S.mv||{};const ag=Date.now();for(const k in bm){const c=bm[k],ns=Object.keys(c.sl).length;let T=S.mv[k];if(!T){const ks=Object.keys(S.mv);if(ks.length>=12){const v=ks.sort((p,q)=>(S.mv[p].t||0)-(S.mv[q].t||0))[0],X=S.mvX=S.mvX||{n:0,s:0,a:0};X.n+=S.mv[v].n;X.s+=S.mv[v].s;X.a+=S.mv[v].a;delete S.mv[v];}T=S.mv[k]={n:0,s:0,a:0,p:0,pn:0,t:ag};}T.t=ag;T.n+=c.n;T.p+=c.p;T.pn+=c.pn;if(ns>=2){T.s++;T.a+=ns;}}}}else if(m.type==='poke-delta'){const pk=m.poke;if(pk){const LP=P.ws.pokes&&P.ws.pokes.list;if(LP){const ix=LP.findIndex(x=>x.id===pk.id);if(ix>=0)Object.assign(LP[ix],pk);else LP.push(pk);}const was=S.hp[pk.id];if(pk.team&&pk.hp===0&&was>0)S.faintN++;if(pk.team)S.hp[pk.id]=pk.hp;else delete S.hp[pk.id];if(P.pokesBaselined&&!P.knownPokes[pk.id]){if(P.captureValue)P.captureValue(pk);else S.sellG=(S.sellG||0)+(pk.sellValue||0);if(pk.shiny){S.shinyCapN++;if(S.shOpen>0&&Date.now()-S.shOpenT<60e3)S.shOpen--;else S.shinyN=(S.shinyN||0)+1;const SL=P.shinyLog=P.shinyLog||[];SL.push({n:pk.name||'',sid:pk.speciesId||pk.pokeId||0,cap:1,t:Date.now()});if(SL.length>30)SL.shift();}const CL=P.catchLog=P.catchLog||[];const sd=pk.speciesId||pk.pokeId||0;const UL=P.usedList||[];CL.push({n:pk.name||'?',iv:nL(pk.ivTotal),q:nL(pk.quality),potencia:pk.potencia!=null?Number(pk.potencia):null,sh:!!pk.shiny,fx:!!(sd&&UL.length&&!UL.some(u=>u.sid===sd&&u.caught)),t:Date.now()});if(CL.length>50)CL.shift()}P.knownPokes[pk.id]=1;}}else if(m.type==='pokes'){const H2={};(m.list||[]).forEach(pk=>{const was=S.hp[pk.id];if(pk.team&&pk.hp===0&&was>0)S.faintN++;if(pk.team)H2[pk.id]=pk.hp;if(P.pokesBaselined&&!P.knownPokes[pk.id]){if(P.captureValue)P.captureValue(pk);else S.sellG=(S.sellG||0)+(pk.sellValue||0);if(pk.shiny){S.shinyCapN++;if(S.shOpen>0&&Date.now()-S.shOpenT<60e3)S.shOpen--;else S.shinyN=(S.shinyN||0)+1;const SL=P.shinyLog=P.shinyLog||[];SL.push({n:pk.name||'',sid:pk.speciesId||pk.pokeId||0,cap:1,t:Date.now()});if(SL.length>30)SL.shift();}const CL=P.catchLog=P.catchLog||[];const sd=pk.speciesId||pk.pokeId||0;const UL=P.usedList||[];CL.push({n:pk.name||'?',iv:nL(pk.ivTotal),q:nL(pk.quality),potencia:pk.potencia!=null?Number(pk.potencia):null,sh:!!pk.shiny,fx:!!(sd&&UL.length&&!UL.some(u=>u.sid===sd&&u.caught)),t:Date.now()});if(CL.length>50)CL.shift()}P.knownPokes[pk.id]=1;});S.hp=H2;if(!P.pokesBaselined)P.pokesBaselined=true;}else if(m.type==='inventory'){let now=0;const doc0=P.api['/game/items.json']||P.api['/assets/items.json'];const cat0={};if(doc0&&doc0.items)doc0.items.forEach(it=>cat0[it.id]=it);const cur={};(m.items||[]).forEach(it=>{if(it.itemId===59195)now=it.quantity||0;const c=(cat0[it.itemId]||{}).category;if(c==='heal'||c==='potion'||c==='revive')cur[it.itemId]=it.quantity||0;});if(S.supBase){for(const id in S.supBase){const antes=S.supBase[id]||0,agora=(cur[id]!=null?cur[id]:0),d=antes-agora;if(d>0){const it=cat0[id]||{};S.supGold=(S.supGold||0)+d*(it.priceGold||it.npcPrice||0);S.supN=(S.supN||0)+d;}}}S.supBase=cur;if(S.picBase==null){S.picBase=now;}else{if(now>S.picBase){const doc=P.api['/game/items.json']||P.api['/assets/items.json'];const it=doc&&doc.items&&doc.items.find(x=>x.id===59195);const d=S.drops[59195]||(S.drops[59195]={name:(it&&it.name)||'Rare Pokémon Picture',qty:0});d.qty+=(now-S.picBase);}S.picBase=now;}}else if(m.type==='chat'||m.type==='history'){const chS=(mm)=>{try{if(!mm||!mm.body)return;const re=/\[poke!([A-Za-z0-9_-]+)\]/g;let mt;while((mt=re.exec(mm.body))){try{const j=JSON.parse(atob(mt[1].replace(/-/g,'+').replace(/_/g,'/')));if(j&&j.k==='poke'){const CS=P.chatShares=P.chatShares||[];const N=(v)=>{v=Number(v);return isFinite(v)?v:0;};const cn=String(j.n||'?').slice(0,40),cf=String(mm.fromName||'').slice(0,40);if(!CS.some(c=>c.n===cn&&c.iv===N(j.iv)&&c.lv===N(j.lv)&&c.fr===cf)){CS.push({fr:cf,n:cn,sh:!!j.sh,lv:N(j.lv),q:N(j.q),iv:N(j.iv),pw:N(j.pw),t:Date.now()});if(CS.length>15)CS.shift();}}}catch(x){}}}catch(x){}};if(m.type==='chat')chS(m.msg);else['world','trade','help'].forEach(c2=>(m[c2]||[]).forEach(chS));}}}}catch(x){}};const hookSocket=s=>{if(!s||s.__pokeHooked)return;s.__pokeHooked=true;P.sock=s;const origSend=s.send;s.send=function(data){try{if(typeof data==='string'){const sent=JSON.parse(data);if(sent&&sent.t==='hello'){P.nick=sent.nick;P.token=sent.token;}else if(sent&&sent.t==='auto.set'){P.automation=Object.assign(P.automation||{},sent);if(Array.isArray(sent.ballIds))P.autoBallIds=sent.ballIds;}else if(sent&&sent.t==='ball.throw'&&sent.ballId){P.lastBallId=sent.ballId;}else if(sent&&(sent.t==='team.active'||sent.t==='team.troca')&&(sent.pokemonId||sent.id)){P.activeId=sent.pokemonId||sent.id;}}}catch(x){}return origSend.apply(this,arguments);};s.addEventListener('message',onMsg);};const OW=window.WebSocket;window.WebSocket=function(...ar){const s=Reflect.construct(OW,ar);hookSocket(s);return s;};window.WebSocket.prototype=OW.prototype;const origProtoSend=OW.prototype.send;OW.prototype.send=function(...args){try{hookSocket(this);}catch(x){}return origProtoSend.apply(this,args);};['CONNECTING','OPEN','CLOSING','CLOSED'].forEach(k=>{try{window.WebSocket[k]=OW[k]}catch(x){}});try{if(window.ws)hookSocket(window.ws);if(window.__ws)hookSocket(window.__ws);if(window.estado&&window.estado.ws)hookSocket(window.estado.ws);}catch(x){}try{const est=(window.estado&&(window.estado.eu||window.estado))||{};if(est&&(est.id||est.nick||est.pokemons)){P.estado=P.estado||est;const actInit=getActId(est)||getActId(window.estado);if(actInit!=null)P.activeId=actInit;if(est.id)P.cid=est.id;if(est.nick)P.nick=est.nick;if(est.level!=null)P.level=est.level;if(est.gold!=null)P.gold=est.gold;if(est.diamonds!=null)P.diamonds=est.diamonds;if(est.huntSlug){P.lastSlug=est.huntSlug;P.ws['field-init']={slug:est.huntSlug,name:est.huntSlug};}if(est.pokemons&&Array.isArray(est.pokemons)){est.pokemons.forEach(pk=>{if(pk&&pk.id)P.pokemonsMap[pk.id]=pk;});if(!P.ws.pokes){const H2={};P.ws.pokes={list:est.pokemons.map(pk=>{if(pk.slot!=null)H2[pk.id]=pk.hp;P.knownPokes[pk.id]=1;const ivs=nIvs(pk.ivs);return{id:pk.id,speciesId:pk.speciesId,name:pk.nome||pk.name,level:pk.level,shiny:!!pk.shiny,quality:pk.quality,team:pk.slot!=null,slot:pk.slot,hp:pk.hp,maxHp:pk.maxHp,ivs:ivs,ivTotal:ivs?(ivs.hp+ivs.atk+ivs.def+ivs.spAtk+ivs.spDef+ivs.speed):null};})};P.sess.hp=H2;P.pokesBaselined=true;}}if(est.balls&&typeof est.balls==='object'){P.ws.balls=P.ws.balls||{counts:{},catalog:[]};P.ws.balls.counts=est.balls;}}}catch(x){}const OF=window.fetch;window.fetch=function(...a){try{let H;const r0=a[0],ini=a[1];if(ini&&ini.headers)H=ini.headers;else if(r0&&typeof r0==='object'&&r0.headers)H=r0.headers;if(H){let au;if(typeof H.get==='function')au=H.get('authorization');else au=H.Authorization||H.authorization;if(au){auth=au;P.auth=au;}}}catch(x){}const p=OF.apply(this,a);try{let u=(a[0]&&a[0].url)||a[0];if(typeof u==='string'&&(/\/api\/|items\.json/.test(u)||u.includes('items.json'))){p.then(r=>{const c=r.clone();c.json().then(j=>{const key=u.split('?')[0];if(u.includes('creatures.json')){P.creatures=j.creatures||[];(j.creatures||[]).forEach(cr=>{if(cr&&cr.pokeId!=null)P.creaturesMap[cr.pokeId]=cr;});}if(u.includes('items.json')){P.api['/game/items.json']=j;P.api['/assets/items.json']=j;}if(key==='/api/game/used-balls'){if(j&&j.pokemons){const cs=new Set(Array.isArray(j.caught)?j.caught:[]);P.shinyEnc=j.pokemons.reduce((s,p)=>s+(p.shiny?(+p.total||0):0),0);P.usedList=j.pokemons.map(p=>({sid:p.speciesId||p.dexId,name:p.name,shiny:!!p.shiny,attempts:p.attempts||0,total:p.total||0,caught:!!p.caught||(p.shiny?(+p.total||0)>(+p.attempts||0):cs.has(p.dexId!=null?p.dexId:p.speciesId))}));}return;}if(key==='/api/characters/me'){if(!j||!j.character){P.meMiss=(P.meMiss||0)+1;return;}P.meMiss=0;const o0=P.api[key];if(o0&&o0.character&&o0.character.id!==j.character.id){P.knownPokes={};P.pokesBaselined=false;}}P.api[key]=j}).catch(()=>{})}).catch(()=>{})}}catch(x){}return p;};const poll=()=>{try{while(P.catchLog&&P.catchLog.length>400)P.catchLog.shift();while(P.shinyLog&&P.shinyLog.length>300)P.shinyLog.shift();syncAutoHeal();const isPokeIdle=typeof location!=='undefined'&&location.hostname.includes('pokeidle.io');if(!isPokeIdle){const o=auth?{headers:{Authorization:auth}}:undefined;fetch('/api/characters/me',o).catch(()=>{});fetch('/api/game/used-balls',o).catch(()=>{});try{if(P.sock&&P.sock.readyState===1){P.sock.send(JSON.stringify({type:'inv-get'}));P.sock.send(JSON.stringify({type:'analyzer-get'}));}}catch(x){}}else{try{if(P.sock&&P.sock.readyState===1){P.sock.send(JSON.stringify({t:'ping'}));}}catch(x){}}}catch(x){}};setInterval(poll,30000);setTimeout(poll,9000);let bT=0;setInterval(()=>{try{const B=P.ws.boosts,lv=!!(B&&Array.isArray(B.boosts)&&B.boosts.some(b=>b&&b.live));if((lv||++bT%5===0)&&P.sock&&P.sock.readyState===1)P.sock.send(JSON.stringify({type:'boosts-refresh'}));}catch(x){}},25000);})()`).catch(() => { }); // coletor de estado + sessao dual-protocol (pokeidle.io WS + legado)
+          wv.executeJavaScript('/* PIO: o coletor é instalado pelo launcher_gameplay.js (script de início). A cópia que ficava aqui tinha erros de escape e nunca rodava; foi removida. */0').catch(() => { }); // coletor de estado + sessao dual-protocol (pokeidle.io WS + legado)
           // volta pra hunt (experimental): so se a conta estava farmando ha pouco (kill nos ultimos 10 min),
           wv.executeJavaScript('(' + PioCaptureValue.installCaptureValue.toString() + ')()').catch(() => { });
           wv.executeJavaScript('(' + PioAutoDepot.installAutoDepot.toString() + ')()').catch(() => { });
@@ -4687,6 +4687,999 @@
       if (window.PioBattleHud?.isBlasterActive(i)) return Promise.resolve(stCache[i]?.d || null);
       return stateReads.read(i, webviews[i]).then(d => window.PioInventory.project(d));
     }
+
+    // Extração Claude: status das contas para colar no chat (botao no topo ou Ctrl+Alt+S).
+    // So leitura: usa o mesmo leitor do painel e copia um JSON enxuto para a area de transferencia.
+    // Gemas e afins: le o estado VIVO do jogo (window.estado.eu), depois o HUD, e so por ultimo o
+    // snapshot do login (__poke.estado), que fica desatualizado depois de vendas e compras.
+    // "eu" traz tambem os campos numericos/booleanos do treinador, para achar contadores (ex.: capturas da semana).
+    const PIO_STATUS_EXTRA = `(() => {
+      const P = window.__poke || {};
+      const login = P.estado || {};
+      const vivo = (window.estado && (window.estado.eu || window.estado)) || login;
+      const pick = (o, ...ks) => { for (const k of ks) if (o && o[k] != null) return o[k]; return null; };
+      const dom = (...ids) => { for (const id of ids) { const el = document.getElementById(id); if (el && el.textContent && /[0-9]/.test(el.textContent)) return el.textContent.trim(); } return null; };
+      const eu = {};
+      for (const [k, v] of Object.entries(vivo)) {
+        if (typeof v === 'number' || typeof v === 'boolean') eu[k] = v;
+        else if (typeof v === 'string' && v.length <= 40) eu[k] = v;
+        else if (v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length <= 12 && Object.values(v).every(x => typeof x !== 'object' || x === null)) eu[k] = v;
+      }
+      return {
+        gemas: pick(vivo, 'gemas', 'gems', 'orbs', 'orbes'),
+        gemasHud: dom('tr-gemas', 'tr-gems', 'tr-orbs', 'tr-orbes'),
+        gemasLogin: pick(login, 'gemas', 'gems', 'orbs', 'orbes'),
+        diamantes: pick(vivo, 'diamantes', 'diamonds'),
+        huntSlug: pick(vivo, 'huntSlug') ?? pick(login, 'huntSlug'),
+        outlandTier: pick(vivo, 'outlandTier') ?? pick(login, 'outlandTier'),
+        noCentro: pick(vivo, 'noCentro') ?? pick(login, 'noCentro'),
+        eu,
+        // Tipos de mensagem recebidos do servidor e rotas de API ja usadas pela pagina (para achar ranking semanal).
+        wsTipos: Object.keys(P.ws || {}).slice(0, 80),
+        // Ranking semanal de capturas e ranking geral, como o servidor mandou (cortados em 40 KB cada).
+        wsTopCatch: (() => { try { const j = JSON.stringify((P.ws || {}).topCatch || null); return j && j.length > 40000 ? j.slice(0, 40000) : JSON.parse(j); } catch (e) { return null; } })(),
+        wsRanking: (() => { try { const j = JSON.stringify((P.ws || {}).ranking || null); return j && j.length > 40000 ? j.slice(0, 40000) : JSON.parse(j); } catch (e) { return null; } })(),
+        diaSazonal: login.diaSazonal || null,
+        topCatchEstado: login.topCatch || null,
+        // Capturas desde que a pagina abriu (nome, horario), para a corrida semanal.
+        capturasSessao: (P.catchLog || []).slice(-300).map(c => [c.n, c.t]),
+        apis: (() => { try { return Array.from(new Set(performance.getEntriesByType('resource').map(r => r.name).filter(n => n.indexOf('/api/') >= 0).map(n => n.split('?')[0]))).slice(0, 60); } catch (e) { return []; } })()
+      };
+    })()`;
+    // Ficha do pokemon ativo (o mesmo exportador do botao de JSON do jogo).
+    const PIO_STATUS_FICHA = "(() => { try { return typeof window.__pgExportActivePokemon === 'function' ? window.__pgExportActivePokemon() : null; } catch (e) { return { erro: String(e) }; } })()";
+    // Ranking do script /hunt (precisa da versao 1.0.4-fix-aoe-claude ou mais nova).
+    const PIO_STATUS_HUNT = "(async () => { try { const h = window.__pokeidleHunt; if (!h || typeof h.top !== 'function') return { aviso: 'script /hunt sem a funcao top (instale a versao -claude)' }; return await Promise.race([h.top(10), new Promise(r => setTimeout(() => r({ aviso: 'tempo esgotado' }), 15000))]); } catch (e) { return { erro: String(e) }; } })()";
+    const PIO_STATUS_PRECOS = `(() => {
+      let db = null; try { db = JSON.parse(localStorage.getItem('pio-precos-v1')); } catch (e) { }
+      if (!db) return null;
+      const med = a => { if (!a || !a.length) return null; const b = a.slice().sort((x, y) => x - y), m = b.length >> 1; return b.length % 2 ? b[m] : Math.round((b[m - 1] + b[m]) / 2); };
+      const dias = Object.keys(db).filter(k => /^\\d{4}-\\d{2}-\\d{2}$/.test(k)).sort().slice(-3);
+      const out = {};
+      for (const d of dias) {
+        out[d] = {};
+        for (const [id, e] of Object.entries(db[d])) {
+          out[d][id] = [e.n || '', e.g.length ? Math.min(...e.g) : null, med(e.g), e.o.length ? Math.min(...e.o) : null, med(e.o), e.g.length + e.o.length];
+        }
+      }
+      return { colunas: ['nome', 'coinsMin', 'coinsMediana', 'gemasMin', 'gemasMediana', 'fotos'], dias: out };
+    })()`;
+    // Dados guardados pelos scripts no navegador de cada conta (sniper e AutoDex) e notas de atualizacao do jogo.
+    const PIO_STATUS_SCRIPTS = `(async () => {
+      // Ranking semanal de espécies direto do servidor (mesmo pedido da tela de Ranks), sem abrir abas.
+      const rankCaptura = await new Promise(resolve => {
+        const sock = window.__poke && window.__poke.sock;
+        if (!sock || sock.readyState !== 1) return resolve({ erro: 'socket fechado' });
+        const on = ev => { try { const r = JSON.parse(ev.data); const d = r && r.t === 'ranking' ? r : (r && r.data && r.data.t === 'ranking' ? r.data : null);
+          if (d && d.aba === 'capturas') { clearTimeout(tm); sock.removeEventListener('message', on); resolve(d); } } catch (e) { } };
+        const tm = setTimeout(() => { sock.removeEventListener('message', on); resolve({ erro: 'sem resposta em 6 s' }); }, 6000);
+        sock.addEventListener('message', on);
+        try { sock.send(JSON.stringify({ t: 'ranking.pedir', aba: 'capturas' })); } catch (e) { clearTimeout(tm); resolve({ erro: String(e) }); }
+      }).then(d => {
+        if (!d || !Array.isArray(d.linhas)) return d;
+        const nick = String((window.__poke.estado || {}).nick || window.__poke.nick || '').toLowerCase();
+        const v = p => { const l = d.linhas.find(x => Number(x.pos != null ? x.pos : x.rank) === p); return l ? Number(l.valor) : null; };
+        const eu = d.linhas.find(x => String(x.nick || '').toLowerCase() === nick);
+        return { corte90: v(90), corte100: v(100), top1: v(1), linhas: d.linhas.length, minhaPos: eu ? (eu.pos != null ? eu.pos : eu.rank) : null,
+          meu: d.meu != null ? d.meu : null, top10: d.linhas.slice(0, 10).map(x => [x.pos != null ? x.pos : x.rank, x.nick, x.valor]),
+          pos85a105: d.linhas.filter(x => { const p = Number(x.pos != null ? x.pos : x.rank); return p >= 85 && p <= 105; }).map(x => [x.pos != null ? x.pos : x.rank, x.nick, x.valor]) };
+      });
+      const ls = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+      const sn = k => ls('pio-auto-sniper-v1:' + k);
+      const rules = sn('rotom_sniper_rules');
+      const logs = sn('rotom_sniper_logs');
+      const ad = ls('pio-autodex-v021');
+      let arquivos = [];
+      try { arquivos = Array.from(new Set(performance.getEntriesByType('resource').map(r => r.name.split('?')[0]).filter(n => /novidade|changelog|news|patch|notas|update|versao|version/i.test(n)))).slice(0, 20); } catch (e) { }
+      return {
+        arquivosNovidades: arquivos,
+        sniper: {
+          ligado: sn('rotom_sniper_enabled'),
+          regras: Array.isArray(rules) ? rules.map(r => ({ item: r.targetName, ouro: r.maxPriceGold, gemas: r.maxPriceGems, ativa: r.active, comprados: r.totalBought })) : null,
+          ultimosLogs: Array.isArray(logs) ? logs.slice(0, 15) : null, // o Sniper guarda o mais novo primeiro
+          meusAnuncios: sn('rotom_my_listings'),
+          farm: sn('rotom_farm_stats')
+        },
+        autodex: ad ? { modo: ad.runMode, ordem: ad.runOrder, fila: (ad.queue || []).length, posicao: ad.index, capturados: (ad.captured || []).length,
+          pulados: (ad.skipped || []).length, meta: ad.goal, capturasRodada: ad.runCaptures, inicioRodada: ad.runStartedAt,
+          proximos: (ad.queue || []).slice(ad.index || 0, (ad.index || 0) + 8).map(q => q.name) } : null,
+        rankingCapturas: rankCaptura,
+        autodexCorte: ad && ad.rankCatch ? ad.rankCatch : null,
+        enviosAoServidor: (() => { const A = window.__pioOut || [], por = {}; for (const x of A) { const k = x.tipo || '?'; (por[k] = por[k] || []).push(x); }
+          const out = {}; for (const k in por) out[k] = { total: por[k].length, ultimos: por[k].slice(-3) }; return out; })(),
+        testeHunts: (() => { try { return window.PIOHuntTester ? window.PIOHuntTester.estado() : ls('pio-autodex-tester-v1'); } catch (e) { return null; } })()
+      };
+    })()`;
+    // Notas de atualizacao: le o carrossel "NOVIDADES NO POKEIDLE" se ele estiver aberto em alguma conta,
+    // clicando em cada bolinha. Fica guardado no launcher; nas proximas extracoes vai so a lista de versoes.
+    const PIO_STATUS_NOTAS = `(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const head = Array.from(document.querySelectorAll('body *')).find(e => e.children.length === 0 && /NOVIDADES NO POKEIDLE/i.test(e.textContent || ''));
+      if (!head) return null;
+      let root = head;
+      for (let i = 0; i < 10 && root.parentElement; i++) {
+        root = root.parentElement;
+        if (root.querySelectorAll('button').length >= 3 && (root.innerText || '').length > 300) break;
+      }
+      const dots = [];
+      root.querySelectorAll('*').forEach(c => {
+        const kids = Array.from(c.children);
+        if (kids.length >= 3 && kids.every(k => k.tagName === kids[0].tagName && k.offsetWidth > 0 && k.offsetWidth <= 24 && k.offsetHeight <= 24)) kids.forEach(k => { if (!dots.includes(k)) dots.push(k); });
+      });
+      const ler = () => (root.innerText || '').replace(/\\n{3,}/g, '\\n\\n').trim();
+      const atual = dots.find(d => /ativ|active|atual|on\\b|sel/i.test(String(d.className))) || null;
+      const textos = [];
+      if (dots.length) {
+        for (const d of dots) { d.click(); await wait(200); textos.push(ler()); }
+        if (atual) atual.click();
+      } else textos.push(ler());
+      return { bolinhas: dots.length, notas: Array.from(new Set(textos)).map(t => t.slice(0, 12000)) };
+    })()`;
+    function pioStatusEnxuto(d) {
+      if (!d || typeof d !== 'object') return d;
+      const o = { ...d };
+      if (Array.isArray(o.catchLog)) o.catchLog = o.catchLog.slice(0, 10);
+      if (Array.isArray(o.allPokes)) {
+        // [nome, nivel, qualidade, IV total, shiny, na equipe]
+        o.pokes = o.allPokes.map(p => [p.name, p.level, p.q, p.ivt, p.shiny ? 1 : 0, p.team ? 1 : 0]);
+        delete o.allPokes;
+      }
+      for (const k of ['shinyLog', 'usedList', 'chatShares', 'ballCatalog', 'rawDrops', 'ballMap']) delete o[k];
+      if (o.kick) { o.kick = { ...o.kick }; delete o.kick.oficiais; delete o.kick.recompensas; }
+      if (o.twitch) { o.twitch = { ...o.twitch }; delete o.twitch.oficiais; delete o.twitch.lives; }
+      return o;
+    }
+    function pioStatusAviso(msg) {
+      if (typeof pioToast === 'function') { pioToast(msg, /falh|não |erro/i.test(msg) ? 'aviso' : 'ok'); return; }
+      let el = document.getElementById('pioStatusAviso');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'pioStatusAviso';
+        el.style.cssText = 'position:fixed;top:64px;right:16px;z-index:2147483000;padding:8px 12px;border-radius:8px;background:#0f2a1a;color:#b8f5c8;border:1px solid #2f8f55;font:600 12px system-ui,sans-serif;box-shadow:0 6px 20px #0008';
+        document.body.appendChild(el);
+      }
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el.__t);
+      el.__t = setTimeout(() => { el.style.display = 'none'; }, 3500);
+    }
+    function pioCopiarTexto(texto) {
+      const ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { }
+      document.body.removeChild(ta);
+      return ok;
+    }
+    async function pioCopiarStatus() {
+      try {
+        pioStatusAviso('Lendo as contas...');
+        const contas = [];
+        for (let i = 0; i < webviews.length; i++) {
+          if (!webviews[i]) continue;
+          let d = null, extra = null;
+          try { d = await readPanelState(i); } catch (e) { d = { erro: String(e) }; }
+          try { extra = await webviews[i].executeJavaScript(PIO_STATUS_EXTRA); } catch (e) { extra = { erro: String(e) }; }
+          let ficha = null, huntTop = null;
+          try { ficha = await webviews[i].executeJavaScript(PIO_STATUS_FICHA); } catch (e) { ficha = { erro: String(e) }; }
+          try { huntTop = await webviews[i].executeJavaScript(PIO_STATUS_HUNT); } catch (e) { huntTop = { erro: String(e) }; }
+          let scripts = null;
+          try { scripts = await webviews[i].executeJavaScript(PIO_STATUS_SCRIPTS); } catch (e) { scripts = { erro: String(e) }; }
+          contas.push({ conta: i + 1, ...pioStatusEnxuto(d), extra, fichaAtivo: ficha, huntTop, scripts });
+        }
+        let notasAtualizacao = null;
+        for (let i = 0; i < webviews.length && !notasAtualizacao; i++) {
+          if (!webviews[i]) continue;
+          try { notasAtualizacao = await webviews[i].executeJavaScript(PIO_STATUS_NOTAS); } catch (e) { }
+        }
+        let cacheNotas = {};
+        try { cacheNotas = JSON.parse(localStorage.getItem('pio-notas-cache') || '{}') || {}; } catch (e) { }
+        if (notasAtualizacao && Array.isArray(notasAtualizacao.notas)) {
+          for (const t of notasAtualizacao.notas) {
+            const v = pioNotaChave(t);
+            cacheNotas[v] = t;
+          }
+          try { localStorage.setItem('pio-notas-cache', JSON.stringify(cacheNotas)); } catch (e) { }
+        }
+        // Preços do mercado (foto por hora do Sniper): últimos 3 dias, mínimo e mediana dos mínimos por item.
+        let precosMercado = null;
+        for (let i = 0; i < webviews.length && !precosMercado; i++) {
+          if (!webviews[i]) continue;
+          try { precosMercado = await webviews[i].executeJavaScript(PIO_STATUS_PRECOS); } catch (e) { }
+        }
+        let grid = null;
+        try { grid = window.pioResumoParaExtracao ? window.pioResumoParaExtracao() : null; } catch (e) { }
+        const texto = JSON.stringify({ geradoEm: new Date().toISOString(), grid, precosMercado, contas,
+          notasAtualizacao: notasAtualizacao || { aviso: 'janela de Novidades fechada em todas as contas', versoesConhecidas: Object.keys(cacheNotas) } });
+        window.__statusContas = texto;
+        // Grava tudo na pasta claude do fork: a extração, os preços do mercado e as notas de update novas.
+        let arquivo = null;
+        try {
+          const quando = pioCarimbo();
+          if (await pioArq.salvar('extracoes/' + quando + '.json', texto)) arquivo = 'claude\\extracoes\\' + quando + '.json';
+          if (precosMercado) await pioArq.salvar('mercado/extracao-' + quando + '.json', JSON.stringify(precosMercado));
+          for (const [v, txt] of Object.entries(cacheNotas)) {
+            const nome = 'changelog-jogo/' + String(v).replace(/[^\w.\- ]+/g, '_').trim().slice(0, 80) + '.txt';
+            if (!(await pioArq.existe(nome))) await pioArq.salvar(nome, txt);
+          }
+          await pioEspelhar(true);
+        } catch (e) { pioErro('extração', e && e.message || e); }
+        let ok = false;
+        try { await navigator.clipboard.writeText(texto); ok = true; } catch (e) { }
+        if (!ok) ok = pioCopiarTexto(texto);
+        pioStatusAviso((arquivo ? 'Extração salva em ' + arquivo + '. ' : 'Não consegui salvar na pasta claude. ') + (ok
+          ? `Também copiada (${Math.round(texto.length / 1024)} KB).`
+          : 'Para copiar, rode no Console do launcher: copy(__statusContas)'));
+      } catch (e) {
+        pioStatusAviso('Falha ao ler o status: ' + (e && e.message || e));
+      }
+    }
+    window.pioCopiarStatus = pioCopiarStatus;
+    // Nome de cada nota de update: versão (se houver) ou o primeiro título real, mais um código curto do texto
+    // (as notas do jogo não trazem número de versão e todas começam com "Novidades no PokeIdle").
+    function pioNotaChave(t) {
+      t = String(t || '');
+      const ver = (t.match(/v\d+\.\d+\.\d+/) || [])[0];
+      const titulo = t.split('\n').map(l => l.trim()).filter(l => l.length >= 4 && /[a-zà-ú]{3}/i.test(l) && !/^novidades no pokeidle$/i.test(l))[0] || 'nota';
+      let h = 5381; for (let i = 0; i < t.length; i++) h = ((h * 33) ^ t.charCodeAt(i)) >>> 0;
+      return (ver ? ver + ' ' : '') + titulo.slice(0, 50) + ' ' + h.toString(36);
+    }
+    // Vote & Ganhe: abre a janela de voto do jogo em cada conta, captura o link que o botão
+    // "Votar no TopIdle" abriria (com o nick já preenchido) e abre no navegador padrão, uma conta
+    // por vez. O voto e a autorização Google continuam manuais, no site do TopIdle.
+    const PIO_VOTO = `(async () => {
+      const wait = ms => new Promise(r => setTimeout(r, ms));
+      const est = (window.__poke && window.__poke.estado) || {};
+      const nick = est.nick || (window.__poke && window.__poke.nick) || '';
+      const pistas = {};
+      for (const k of Object.keys(est)) if (/vot|topidle/i.test(k)) pistas[k] = est[k];
+      const rot = e => ((e.textContent || '') + ' ' + (e.getAttribute('title') || '') + ' ' + (e.getAttribute('aria-label') || '')).replace(/\\s+/g, ' ');
+      const botaoVotar = () => Array.from(document.querySelectorAll('button,a')).find(b => /votar no topidle/i.test(b.textContent || ''));
+      let alvo = botaoVotar(), abri = false;
+      if (!alvo) {
+        const abre = Array.from(document.querySelectorAll('button,a,[role=button],[title],[aria-label]'))
+          .find(b => /vote\\s*(&|e)\\s*ganhe|topidle/i.test(rot(b)) && !/votar no topidle/i.test(b.textContent || ''));
+        if (!abre) return { ok: false, nick, motivo: 'botão Vote & Ganhe não encontrado', pistas };
+        abre.click(); abri = true;
+        for (let i = 0; i < 25 && !(alvo = botaoVotar()); i++) await wait(150);
+        if (!alvo) return { ok: false, nick, motivo: 'a janela de voto não abriu', pistas };
+      }
+      let modal = alvo;
+      while (modal.parentElement && !/vote\\s*(&|e)\\s*ganhe/i.test(modal.innerText || '')) modal = modal.parentElement;
+      const texto = (modal.innerText || '').replace(/\\s+/g, ' ');
+      const disponivel = /dispon[ií]vel agora/i.test(texto);
+      let url = null;
+      const a = alvo.closest('a[href]');
+      if (a) url = a.href;
+      if (!url && disponivel) {
+        const ow = window.open;
+        const cap = ev => { const an = ev.target && ev.target.closest && ev.target.closest('a[href]'); if (an && !/^javascript:/i.test(an.getAttribute('href') || '')) { url = an.href; ev.preventDefault(); } };
+        window.open = u => { url = String(u); return null; };
+        document.addEventListener('click', cap, true);
+        try { alvo.click(); for (let i = 0; i < 20 && !url; i++) await wait(150); }
+        finally { window.open = ow; document.removeEventListener('click', cap, true); }
+      }
+      if (abri) {
+        const x = Array.from(modal.querySelectorAll('button')).find(b => /^\\s*[×✕✖xX]\\s*$/.test(b.textContent || '') || /fechar|close/i.test((b.getAttribute('aria-label') || '') + (b.getAttribute('title') || '') + (b.className || '')));
+        if (x) x.click(); else document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      }
+      const m = texto.match(/(pr[oó]ximo voto[^.]*?\\d[^.]*|dispon[ií]vel em[^.]*|falta \\d+ voto[^.]*diamante)/i);
+      return { ok: true, nick, disponivel, url, situacao: m ? m[0].slice(0, 80) : (disponivel ? 'voto disponível' : texto.slice(0, 80)), pistas };
+    })()`;
+    const PIO_VOTO_KEY = 'pio-voto-v1';
+    const pioVotoHoje = () => new Date().toLocaleDateString('sv-SE');
+    function pioVotoLer() { try { return JSON.parse(localStorage.getItem(PIO_VOTO_KEY)) || {}; } catch (e) { return {}; } }
+    function pioVotoBadge() {
+      const b = document.getElementById('leafVote');
+      if (!b) return;
+      const reg = pioVotoLer(), hoje = pioVotoHoje();
+      // O TopIdle conta um voto por pessoa (conta Google), então só a Conta 1 vota.
+      const n = reg[1] !== hoje ? 1 : 0;
+      const lbl = b.querySelector('.pio-voto-n');
+      if (lbl) lbl.textContent = n ? ' (1)' : ' ✓';
+      b.title = n ? 'Abrir o voto do TopIdle da Conta 1' : 'A Conta 1 já abriu o voto hoje';
+    }
+    async function pioAbrirUrl(url) {
+      const T = window.__TAURI__, I = window.__TAURI_INTERNALS__;
+      if (T && T.opener && typeof T.opener.openUrl === 'function') return T.opener.openUrl(url);
+      if (I && typeof I.invoke === 'function') return I.invoke('plugin:opener|open_url', { url });
+      window.open(url, '_blank');
+    }
+    let pioVotando = false;
+    async function pioVotar() {
+      if (pioVotando) return;
+      pioVotando = true;
+      pioStatusAviso('Vote & Ganhe: lendo as contas…');
+      try {
+        const res = [];
+        // Só a Conta 1: o TopIdle aceita um voto por pessoa, e o link é o mesmo para todas.
+        for (let i = 0; i < Math.min(1, webviews.length); i++) {
+          if (!webviews[i]) continue;
+          let r;
+          try { r = await webviews[i].executeJavaScript(PIO_VOTO); } catch (e) { r = { ok: false, motivo: String(e && e.message || e) }; }
+          res.push({ conta: i + 1, ...(r || { ok: false, motivo: 'sem resposta' }) });
+        }
+        window.__pioVoto = res;
+        const reg = pioVotoLer(), hoje = pioVotoHoje(), abertas = [];
+        for (const r of res) {
+          if (!r.ok) continue;
+          if (!r.disponivel) { reg[r.conta] = hoje; continue; }
+          if (!r.url) continue;
+          try { await pioAbrirUrl(r.url); abertas.push(r.nick || ('conta ' + r.conta)); reg[r.conta] = hoje; } catch (e) { r.motivo = 'não abriu o navegador: ' + (e && e.message || e); }
+          await new Promise(ok => setTimeout(ok, 1500));
+        }
+        try { localStorage.setItem(PIO_VOTO_KEY, JSON.stringify(reg)); } catch (e) { }
+        pioVotoBadge();
+        const falhas = res.filter(r => !r.ok || (r.disponivel && !r.url)).map(r => (r.nick || 'conta ' + r.conta) + ': ' + (r.motivo || 'link do voto não capturado'));
+        const espera = res.filter(r => r.ok && !r.disponivel).map(r => r.nick || 'conta ' + r.conta);
+        pioStatusAviso('Vote & Ganhe: ' + (abertas.length ? 'abri ' + abertas.join(', ') + ' no navegador.' : 'nenhuma conta com voto disponível.')
+          + (espera.length ? ' Já votaram/aguardando: ' + espera.join(', ') + '.' : '') + (falhas.length ? ' Falhou: ' + falhas.join('; ') : ''));
+      } catch (e) {
+        pioStatusAviso('Vote & Ganhe falhou: ' + (e && e.message || e));
+      } finally { pioVotando = false; }
+    }
+    window.pioVotar = pioVotar;
+    window.pioVotoBadge = pioVotoBadge;
+    setInterval(pioVotoBadge, 60000);
+    setTimeout(pioVotoBadge, 3000);
+    // ===== PIO: pasta "claude" do fork (extrações, logs, configurações e pedidos para aplicar) =====
+    const pioArq = {
+      filas: {},
+      // Uma fila por arquivo: gravações no mesmo arquivo nunca se cruzam (antes, duas contas criando o mesmo
+      // CSV ao mesmo tempo podiam gravar o cabeçalho duas vezes ou apagar uma linha recém-anexada).
+      fila(rel, fn) { const ant = this.filas[rel] || Promise.resolve(); const p = ant.then(fn, fn); this.filas[rel] = p.catch(() => { }); return p; },
+      inv(cmd, args) { const I = window.__TAURI_INTERNALS__; return I && typeof I.invoke === 'function' ? I.invoke(cmd, args) : Promise.reject(new Error('Tauri indisponível')); },
+      salvar(rel, txt, anexar = false) { return this.fila(rel, () => this.inv('pio_salvar', { rel, conteudo: String(txt), anexar }).catch(e => { console.warn('[PIO arquivos]', rel, e); return false; })); },
+      anexar(rel, txt) { return this.salvar(rel, txt, true); },
+      ler(rel) { return this.inv('pio_ler', { rel }).catch(() => null); },
+      existe(rel) { return this.inv('pio_existe', { rel }).catch(() => false); },
+      listar(rel) { return this.inv('pio_listar', { rel }).catch(() => []); },
+      mover(de, para) { return this.inv('pio_mover', { de, para }).catch(e => { console.warn('[PIO arquivos]', e); return false; }); }
+    };
+    window.pioArq = pioArq;
+    const pio2 = n => String(n).padStart(2, '0');
+    const pioDia = (t = Date.now()) => { const d = new Date(t); return d.getFullYear() + '-' + pio2(d.getMonth() + 1) + '-' + pio2(d.getDate()); };
+    const pioMes = (t = Date.now()) => pioDia(t).slice(0, 7);
+    const pioCarimbo = (t = Date.now()) => { const d = new Date(t); return pioDia(t) + '_' + pio2(d.getHours()) + pio2(d.getMinutes()) + pio2(d.getSeconds()); };
+    const pioDataHora = (t = Date.now()) => { const d = new Date(t); return pioDia(t) + ' ' + pio2(d.getHours()) + ':' + pio2(d.getMinutes()) + ':' + pio2(d.getSeconds()); };
+    const pioCsv = v => { const s = String(v == null ? '' : v); return /[;"\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+    function pioCsvLinha(rel, cabecalho, campos) {
+      const linha = campos.map(pioCsv).join(';') + '\n';
+      // Tudo dentro da fila do arquivo: confere se existe, cria o cabeçalho e anexa a linha, sem outra gravação no meio.
+      return pioArq.fila(rel, async () => {
+        const existe = await pioArq.inv('pio_existe', { rel }).catch(() => true);
+        const txt = existe ? linha : '\ufeff' + cabecalho.join(';') + '\n' + linha;
+        return pioArq.inv('pio_salvar', { rel, conteudo: txt, anexar: true }).catch(e => { console.warn('[PIO arquivos]', rel, e); return false; });
+      });
+    }
+    // Erros do grid (janela principal), com horário. Repetições do mesmo erro em 60 s são agrupadas.
+    const pioErrosRecentes = {};
+    function pioErro(origem, msg) {
+      const k = origem + '|' + String(msg).slice(0, 160);
+      if (pioErrosRecentes[k] && Date.now() - pioErrosRecentes[k] < 60000) return;
+      pioErrosRecentes[k] = Date.now();
+      pioArq.anexar('erros/' + pioMes() + '.log', pioDataHora() + ' [' + origem + '] ' + String(msg).replace(/\s+/g, ' ').slice(0, 1200) + '\n');
+    }
+    window.pioErro = pioErro;
+    window.addEventListener('error', e => { try { pioErro('grid', (e.message || 'erro') + (e.filename ? ' @ ' + e.filename.split('/').pop() + ':' + e.lineno : '')); } catch (x) { } });
+    window.addEventListener('unhandledrejection', e => { try { const r = e.reason; pioErro('grid', 'promessa rejeitada: ' + (r && (r.stack || r.message) || r)); } catch (x) { } });
+    // ===== PIO: avisos com horário, metas (nível e gemas) e saldo da Kick =====
+    // Tudo roda na janela do grid: lê cada conta a cada 30 s com um script curto e não puxa foco.
+    const PIO_AV_KEY = 'pio-avisos-v1', PIO_METAS_KEY = 'pio-metas-v1', PIO_ALVO_KEY = 'pio-metas-alvo-v1';
+    const pioLer = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } };
+    const pioGravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } };
+    const pioInicio = Date.now();
+    let pioAv = pioLer(PIO_AV_KEY, { itens: [], lidoAte: 0, vistos: {} });
+    if (!Array.isArray(pioAv.itens)) pioAv = { itens: [], lidoAte: 0, vistos: {} };
+    const pioHora = t => { const d = new Date(t); return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); };
+    const pioHa = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'agora' : m < 60 ? 'há ' + m + ' min' : 'há ' + Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'); };
+    const pioNum = n => n == null || !isFinite(n) ? '—' : Math.abs(n) >= 1e9 ? (n / 1e9).toFixed(2).replace('.', ',') + ' bi' : Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' mi' : Math.round(n).toLocaleString('pt-BR');
+    const pioEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    // Aviso rápido na faixa do topo (área do grid que nunca fica sob os painéis do jogo).
+    function pioToast(msg, nivel) {
+      let el = document.getElementById('pioToast');
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'pioToast';
+        el.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:2147483000;max-width:min(620px,60vw);padding:7px 14px;border-radius:8px;font:600 12px system-ui,sans-serif;box-shadow:0 6px 20px #0008;pointer-events:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none';
+        document.body.appendChild(el);
+      }
+      const cor = nivel === 'erro' ? ['#3a1414', '#ffc9c9', '#b84a4a'] : nivel === 'aviso' ? ['#3a2a10', '#ffe3a2', '#b88a3a'] : ['#0f2a1a', '#b8f5c8', '#2f8f55'];
+      el.style.background = cor[0]; el.style.color = cor[1]; el.style.border = '1px solid ' + cor[2];
+      el.textContent = msg;
+      el.style.display = 'block';
+      clearTimeout(el.__t);
+      el.__t = setTimeout(() => { el.style.display = 'none'; }, nivel === 'erro' ? 12000 : 7000);
+    }
+    function pioAvisar(conta, fonte, msg, nivel = 'aviso', t = Date.now()) {
+      const item = { id: t + '-' + Math.random().toString(36).slice(2, 7), t, conta, fonte, msg: String(msg).slice(0, 240), nivel };
+      pioAv.itens.push(item);
+      pioAv.itens.sort((a, b) => a.t - b.t);
+      // Até 50 por conta; sai só o mais antigo, nunca por tempo.
+      const porConta = {};
+      for (let k = pioAv.itens.length - 1; k >= 0; k--) {
+        const c = pioAv.itens[k].conta; porConta[c] = (porConta[c] || 0) + 1;
+        if (porConta[c] > 50) pioAv.itens.splice(k, 1);
+      }
+      pioGravar(PIO_AV_KEY, pioAv);
+      pioAvisosBadge();
+      pioArq.anexar('avisos/' + pioMes(t) + '.jsonl', JSON.stringify({ quando: pioDataHora(t), conta, fonte, nivel, msg: item.msg }) + '\n');
+      if (nivel === 'erro') pioErro('conta ' + conta + ' / ' + fonte, item.msg);
+      pioToast((conta ? 'Conta ' + conta : 'Grid') + ' · ' + fonte + ': ' + msg, nivel);
+      if (document.getElementById('pioAvisosPanel')?.classList.contains('show')) pioRenderAvisos();
+    }
+    function pioAvisosBadge() {
+      const b = document.getElementById('leafAvisos');
+      if (!b) return;
+      const novos = pioAv.itens.filter(x => x.t > (pioAv.lidoAte || 0)).length;
+      const n = b.querySelector('.pio-av-n');
+      if (n) n.textContent = novos ? ' (' + novos + ')' : '';
+      b.classList.toggle('pio-av-novo', novos > 0);
+    }
+    function pioPainel(id, html) {
+      let p = document.getElementById(id);
+      if (!p) {
+        p = document.createElement('div');
+        p.id = id;
+        p.style.cssText = 'position:fixed;top:56px;right:16px;z-index:2147482000;width:min(760px,92vw);max-height:70vh;overflow:auto;background:#1b120e;color:#ffedcc;border:1px solid #a47746;border-radius:10px;box-shadow:0 12px 40px #000a;font:12px system-ui,sans-serif;padding:10px 12px;display:none';
+        document.body.appendChild(p);
+        p.addEventListener('click', e => { if (e.target.closest('[data-pio-fechar]')) pioFecharPaineis(); });
+      }
+      p.innerHTML = html;
+      return p;
+    }
+    function pioFecharPaineis() {
+      for (const id of ['pioAvisosPanel', 'pioMetasPanel', 'pioAplicarPanel']) { const p = document.getElementById(id); if (p) { p.classList.remove('show'); p.style.display = 'none'; } }
+    }
+    function pioAbrir(id, render) {
+      const p = document.getElementById(id);
+      const aberto = p && p.classList.contains('show');
+      pioFecharPaineis();
+      if (aberto) return;
+      render();
+      const q = document.getElementById(id);
+      q.style.display = 'block'; q.classList.add('show');
+    }
+    function pioRenderAvisos() {
+      const lista = pioAv.itens.slice().reverse();
+      const cor = { erro: '#ffb4b4', aviso: '#ffe3a2', ok: '#b8f5c8' };
+      const linhas = lista.length ? lista.map(x => '<div style="padding:4px 0;border-bottom:1px solid #3a2a20;' + (x.t > (pioAv.lidoAte || 0) ? 'font-weight:700' : 'opacity:.85') + '">' +
+        '<span style="color:#d6b278">' + pioHora(x.t) + ' (' + pioHa(x.t) + ')</span> · ' + (x.conta ? 'Conta ' + x.conta : 'Grid') + ' · ' + pioEsc(x.fonte) +
+        ': <span style="color:' + (cor[x.nivel] || '#ffedcc') + '">' + pioEsc(x.msg) + '</span></div>').join('')
+        : '<div style="opacity:.7">Nenhum aviso ainda.</div>';
+      pioPainel('pioAvisosPanel', '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="color:#ffe3a2">Avisos (o mais recente primeiro)</b>' +
+        '<span><button id="pioAvLimpar" style="margin-right:6px">Limpar histórico</button><button data-pio-fechar>×</button></span></div>' + linhas);
+      document.getElementById('pioAvLimpar').onclick = () => { pioAv.itens = []; pioGravar(PIO_AV_KEY, pioAv); pioAvisosBadge(); pioRenderAvisos(); };
+      pioAv.lidoAte = Date.now(); pioGravar(PIO_AV_KEY, pioAv); pioAvisosBadge();
+    }
+    window.pioAbrirAvisos = () => pioAbrir('pioAvisosPanel', pioRenderAvisos);
+
+    // ----- Metas: XP acumulado do treinador. A curva foi conferida com o jogo: do nível L para L+1 = 50L² - 150L + 200.
+    function pioXpAte(L) { const n = Math.max(0, L - 1); return 50 * n * (n + 1) * (2 * n + 1) / 6 - 150 * n * (n + 1) / 2 + 200 * n; }
+    let pioMetas = pioLer(PIO_METAS_KEY, {});
+    const pioAlvo = () => Object.assign({ 1: 2000, 2: 1000, 3: 1000, 4: 1000, gemas: 1000 }, pioLer(PIO_ALVO_KEY, {}));
+    function pioFoto(conta, d) {
+      if (d.xp == null || d.level == null) return;
+      const h = pioMetas[conta] = pioMetas[conta] || { nick: d.nick, fotos: [] };
+      if (d.nick && h.nick && h.nick !== d.nick) { h.nick = d.nick; h.fotos = []; }
+      h.nick = d.nick || h.nick;
+      const ult = h.fotos[h.fotos.length - 1];
+      if (ult && Date.now() - ult.t < 10 * 60000) return;
+      h.fotos.push({ t: Date.now(), l: d.level, x: d.xp, g: d.gemas, o: d.ouro });
+      pioCsvLinha('metas/conta-' + conta + '.csv', ['dataHora', 'nick', 'nivel', 'xp', 'gemas', 'ouro'], [pioDataHora(), d.nick, d.level, d.xp, d.gemas, d.ouro]);
+      while (h.fotos.length > 432) h.fotos.shift(); // 3 dias a cada 10 min
+      pioGravar(PIO_METAS_KEY, pioMetas);
+    }
+    const pioUltimo = {};
+    function pioRitmo(conta) {
+      const h = pioMetas[conta], atual = pioUltimo[conta];
+      if (!h || !atual || atual.xp == null) return {};
+      const agora = Date.now();
+      const fx = h.fotos.find(f => f.t >= agora - 6 * 3600000 && agora - f.t >= 60 * 60000);
+      const xph = fx ? (atual.xp - fx.x) / ((agora - fx.t) / 3600000) : null;
+      const fg = h.fotos.find(f => f.t >= agora - 72 * 3600000 && agora - f.t >= 6 * 3600000 && f.g != null);
+      const gDia = fg && atual.gemas != null ? (atual.gemas - fg.g) / ((agora - fg.t) / 86400000) : null;
+      return { xph, gDia, desdeXp: fx ? fx.t : null, desdeG: fg ? fg.t : null };
+    }
+    function pioEta(falta, porHora) {
+      if (!(falta > 0)) return 'atingida';
+      if (!(porHora > 0)) return 'sem ritmo ainda';
+      const t = Date.now() + falta / porHora * 3600000;
+      const dias = (t - Date.now()) / 86400000;
+      return pioHora(t) + ' (' + (dias >= 1 ? dias.toFixed(1).replace('.', ',') + ' dias' : Math.round(dias * 24) + ' h') + ')';
+    }
+    function pioRenderMetas() {
+      const alvo = pioAlvo();
+      let linhas = '';
+      for (let c = 1; c <= 4; c++) {
+        const a = pioUltimo[c];
+        if (!a) continue;
+        const r = pioRitmo(c);
+        const meta = Number(alvo[c]) || 1000;
+        const faltaXp = pioXpAte(meta) - (a.xp || 0);
+        const faltaG = (Number(alvo.gemas) || 1000) - (a.gemas || 0);
+        linhas += '<tr><td>' + c + ' · ' + pioEsc(a.nick || '') + '</td><td>' + (a.level ?? '—') + '</td>' +
+          '<td><input data-pio-alvo="' + c + '" type="number" min="1" value="' + meta + '" style="width:62px"></td>' +
+          '<td>' + (r.xph != null ? pioNum(r.xph) + '/h' : 'medindo') + '</td><td>' + pioNum(Math.max(0, faltaXp)) + '</td>' +
+          '<td>' + (r.xph != null ? pioEta(faltaXp, r.xph) : 'medindo (1 h)') + '</td>' +
+          '<td>' + (a.gemas ?? '—') + '</td><td>' + (r.gDia != null ? pioNum(r.gDia) + '/dia' : 'medindo (6 h)') + '</td>' +
+          '<td>' + (r.gDia != null ? pioEta(faltaG, r.gDia / 24) : '—') + '</td></tr>';
+      }
+      const th = 'style="text-align:left;color:#d6b278;padding:3px 6px;border-bottom:1px solid #a47746"';
+      pioPainel('pioMetasPanel', '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="color:#ffe3a2">Metas</b>' +
+        '<span>Meta de gemas <input id="pioAlvoGemas" type="number" min="1" value="' + (Number(alvo.gemas) || 1000) + '" style="width:70px"> <button data-pio-fechar>×</button></span></div>' +
+        '<table style="border-collapse:collapse;width:100%"><tr><th ' + th + '>Conta</th><th ' + th + '>Nível</th><th ' + th + '>Meta</th><th ' + th + '>XP/h (6 h)</th><th ' + th + '>XP que falta</th><th ' + th + '>Chega em</th>' +
+        '<th ' + th + '>Gemas</th><th ' + th + '>Ritmo (72 h)</th><th ' + th + '>Meta de gemas em</th></tr>' + (linhas || '<tr><td colspan="9">Aguardando a primeira leitura das contas.</td></tr>') + '</table>' +
+        '<div style="margin-top:6px;opacity:.75">Fotos a cada 10 min guardadas por 3 dias. XP/h usa as últimas 6 h; gemas, as últimas 72 h.</div>');
+      const p = document.getElementById('pioMetasPanel');
+      p.querySelectorAll('[data-pio-alvo]').forEach(inp => inp.onchange = () => { const al = pioLer(PIO_ALVO_KEY, {}); al[inp.dataset.pioAlvo] = Math.max(1, Number(inp.value) || 1000); pioGravar(PIO_ALVO_KEY, al); pioRenderMetas(); });
+      const g = document.getElementById('pioAlvoGemas');
+      if (g) g.onchange = () => { const al = pioLer(PIO_ALVO_KEY, {}); al.gemas = Math.max(1, Number(g.value) || 1000); pioGravar(PIO_ALVO_KEY, al); pioRenderMetas(); };
+    }
+    window.pioAbrirMetas = () => pioAbrir('pioMetasPanel', pioRenderMetas);
+
+    // ----- Kick (só Conta 1): pontos do melhor canal e quantos buffs dá para resgatar.
+    function pioKickChip() {
+      const b = document.getElementById('leafKick');
+      if (!b) return;
+      let txt = 'Kick: sem saldo', tip = 'Abra a integração da Kick para consultar o saldo.';
+      try {
+        const acc = (typeof kickPointsState !== 'undefined' && kickPointsState.accounts) ? kickPointsState.accounts[0] : null;
+        const bal = acc && acc.balances ? Object.entries(acc.balances).filter(([, v]) => v && Number.isFinite(v.points)) : [];
+        if (bal.length) {
+          bal.sort((x, y) => y[1].points - x[1].points);
+          const [slug, v] = bal[0];
+          const prio = (typeof kickBonusConfig !== 'undefined' && kickBonusConfig.claimPriority) || undefined;
+          const sel = window.KickRewardStatus ? window.KickRewardStatus.selected(prio) : [];
+          const buffs = sel.filter(r => r.cost > 0).map(r => Math.floor(v.points / r.cost) + '× ' + r.label);
+          const idade = v.checkedAt ? Date.now() - v.checkedAt : 0;
+          txt = 'Kick ' + v.points.toLocaleString('pt-BR') + ' pts' + (buffs.length ? ' · ' + buffs[0] : '');
+          tip = 'Melhor canal: @' + slug + '. ' + (buffs.join(' ou ') || '') + (idade > 300000 ? '. Saldo de ' + pioHa(v.checkedAt) + '.' : '.') +
+            (bal.length > 1 ? ' Outros: ' + bal.slice(1, 4).map(([s, x]) => '@' + s + ' ' + x.points.toLocaleString('pt-BR')).join(', ') + '.' : '');
+        }
+      } catch (e) { }
+      try {
+        const red = kickPointsState.accounts && kickPointsState.accounts[0] && kickPointsState.accounts[0].redemption;
+        if (red && red.status && red.status !== 'off') {
+          const k = red.status + '|' + (red.message || '') + '|' + (red.at || red.updatedAt || '');
+          if (k !== pioKickRedUlt) { const primeiro = pioKickRedUlt === null; pioKickRedUlt = k; if (!primeiro) pioArq.anexar('kick/resgates.log', pioDataHora() + ' [' + red.status + '] ' + (red.message || '') + '\n'); }
+        }
+      } catch (e) { }
+      const t = b.querySelector('.pio-kick-t');
+      if (t && t.textContent !== txt) t.textContent = txt;
+      b.title = tip;
+    }
+    let pioKickRedUlt = null;
+    window.pioAbrirKick = () => { try { if (typeof openKickBonusModal === 'function') openKickBonusModal(); } catch (e) { } };
+
+    // ----- PIO: leitura única para os cards do Simples. Usa só a sessão do próprio jogo (a mesma do painel
+    // Economia) e o estado vivo da conta, para não misturar fontes (antes um card alternava entre a sessão
+    // local, sem bônus, e a do jogo).
+    const PIO_CARD = `(() => {
+      const P = window.__poke || {}, ws = P.ws || {}, viv = (window.estado && (window.estado.eu || window.estado)) || {}, est = P.estado || {};
+      let sL = null; try { sL = JSON.parse(localStorage.getItem('sessao') || 'null'); } catch (e) { }
+      const nicks = [viv.nick, est.nick, P.nick, sL && sL.nick].filter(Boolean).map(n => String(n).toLowerCase());
+      let gs = null;
+      for (const n of nicks) { try { const r = localStorage.getItem('sessao-hunt:' + n); if (r) { gs = JSON.parse(r); break; } } catch (e) { } }
+      let sess = null;
+      if (gs && typeof gs === 'object') {
+        const cB = (ws.balls && ws.balls.catalog) || [];
+        const PB = { 1: 5, 2: 20, 3: 50, 4: 130 }, PC = { 200: 50, 201: 150, 202: 400, 203: 800, 204: 1500, 205: 600, 206: 2500 };
+        let gastos = 0;
+        for (const id in (gs.bolas || {})) { const b = cB.find(x => x.id === +id); gastos += (+gs.bolas[id] || 0) * ((b && b.priceGold != null) ? +b.priceGold : (PB[+id] || 0)); }
+        for (const id in (gs.pocoes || {})) gastos += (+gs.pocoes[id] || 0) * (PC[+id] || 0);
+        for (const id in (gs.revives || {})) gastos += (+gs.revives[id] || 0) * (PC[+id] || 0);
+        sess = { ms: +gs.ms || 0, xp: +gs.xpTreinador || 0, gold: +gs.gold || 0, gastos, abates: +gs.abates || 0, capturas: +gs.capturas || 0,
+          shV: gs.shiniesVistos != null ? +gs.shiniesVistos : null, shP: gs.shinies != null ? +gs.shinies : null };
+      }
+      const act = P.activeId != null ? P.activeId : (viv.activeId != null ? viv.activeId : est.activeId);
+      const pk = act != null ? ((ws.pokes && ws.pokes.list) || []).find(x => String(x.id) === String(act)) || (P.pokemonsMap || {})[act] || null : null;
+      const fi = ws['field-init'];
+      const noCentro = viv.noCentro != null ? !!viv.noCentro : (fi === null);
+      const hunt = noCentro ? 'Centro' : (viv.huntSlug || (fi && fi.slug) || est.huntSlug || P.lastSlug || '');
+      return { t: Date.now(), sess, hunt, ativo: pk ? { nome: pk.name || pk.nome || '', nivel: pk.level || 0, shiny: !!pk.shiny, ivt: pk.ivTotal != null ? pk.ivTotal : null, q: pk.quality != null ? +pk.quality : null } : null };
+    })()`;
+    const pioLeitura = {}; // última leitura PIO_CARD por conta (o nome pioCard já é o desenho dos quadros)
+    // ----- PIO: registro de drops raros e pedras (com origem: drop da hunt ou compra do Sniper) -----
+    const PIO_RARO_RE = /boss token|key fragment|fragmento de chave|shiny stone|bicicleta|bike|mega stone|fragmento de mega|tm disk|pe[çc]a de tm|mystic ticket|safari ticket|ovo shiny|shiny egg/i;
+    function pioTipoItem(nome) {
+      const n = String(nome || '');
+      if (PIO_RARO_RE.test(n)) return 'raro';
+      if (/\bstone\b/i.test(n) && !/fragment|fragmento/i.test(n)) return 'pedra';
+      return null;
+    }
+    let pioDrops = pioLer('pio-drops-v1', []);
+    if (!Array.isArray(pioDrops)) pioDrops = [];
+    const pioDropsUlt = {};
+    let pioPrecos = {};
+    /* Taxas do jogo (wiki do PokeIdle, out/2026): venda no mercado 15%, arredondada para baixo (5 gemas rendem 4);
+       saque de gemas 10% (1000 gemas = US$ 9). pioPrecoItem devolve o preço bruto (mediana) e o líquido da venda. */
+    const PIO_TAXA_VENDA = 0.15, PIO_TAXA_SAQUE = 0.10, PIO_GEMAS_POR_USD = 100;
+    const pioLiquidoVenda = v => Math.floor((+v || 0) * (1 - PIO_TAXA_VENDA) + 1e-9);
+    const pioGemasEmUsd = g => (+g || 0) * (1 - PIO_TAXA_SAQUE) / PIO_GEMAS_POR_USD;
+    function pioPrecoItem(nome) { const p = pioPrecos[String(nome || '').toLowerCase()]; if (!p) return null; const coinsBruto = p[2] || p[1] || 0, gemasBruto = p[4] || p[3] || 0;
+      return { coins: pioLiquidoVenda(coinsBruto), gemas: pioLiquidoVenda(gemasBruto), coinsBruto, gemasBruto }; }
+    function pioRegistrarDrop(conta, nick, item, qtd, origem, extra = {}) {
+      const tipo = pioTipoItem(item);
+      if (!tipo || !(qtd > 0)) return;
+      const ev = { t: Date.now(), conta, nick, item, qtd, tipo, origem, ...extra };
+      // Pedras caem o tempo todo: no histórico da tela, juntam por conta, pedra e hora (o arquivo CSV guarda cada leitura).
+      const hora = Math.floor(ev.t / 3600000);
+      const junta = tipo === 'pedra' && origem === 'drop' ? pioDrops.slice(-60).reverse().find(x => x.tipo === 'pedra' && x.origem === 'drop' && x.conta === conta && x.item === item && Math.floor(x.t / 3600000) === hora) : null;
+      if (junta) junta.qtd += qtd; else pioDrops.push(ev);
+      const corte = Date.now() - 8 * 86400000;
+      while (pioDrops.length && pioDrops[0].t < corte) pioDrops.shift();
+      if (pioDrops.length > 5000) pioDrops.splice(0, pioDrops.length - 5000);
+      pioGravar('pio-drops-v1', pioDrops);
+      pioCsvLinha('drops/' + pioMes() + '.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'tipo', 'origem', 'hunt', 'preco', 'moeda'],
+        [pioDataHora(ev.t), conta, nick, item, qtd, tipo, origem === 'drop' ? 'Drop' : 'Sniper', extra.hunt || '', extra.preco || '', extra.moeda || '']);
+      if (tipo === 'raro' && origem === 'drop') pioAvisar(conta, 'Drop', qtd + '× ' + item + (extra.hunt ? ' em ' + extra.hunt : ''), 'ok');
+    }
+    function pioDropsTrack(conta, d) {
+      if (!d || !d.sess) return;
+      const st = d.sess.st, cur = {};
+      for (const [k, v] of Object.entries(d.drops || {})) { const nm = (v && v.name) || k; cur[nm] = (cur[nm] || 0) + (+(v && v.qty) || 0); }
+      const ult = pioDropsUlt[conta];
+      pioDropsUlt[conta] = { st, cur };
+      if (!ult) return; // primeira leitura depois de abrir: vira base (não conta a sessão restaurada)
+      const mesma = ult.st === st;
+      for (const nm in cur) { const dq = cur[nm] - (mesma ? (ult.cur[nm] || 0) : 0); if (dq > 0) pioRegistrarDrop(conta, d.nick, nm, dq, 'drop', { hunt: d.slug || '' }); }
+    }
+    function pioDropsDesde(dias) { const t0 = new Date(); t0.setHours(0, 0, 0, 0); return +t0 - (dias ? (dias - 1) * 86400000 : 0); }
+    function pioDropsResumo(dias) {
+      const desde = pioDropsDesde(dias), R = { raros: { qtd: 0, gemas: 0 }, pedras: { qtd: 0, coins: 0 }, sniper: 0 };
+      for (const x of pioDrops) { if (x.t < desde) continue; const p = pioPrecoItem(x.item);
+        if (x.origem !== 'drop') { if (x.tipo === 'raro') R.sniper += x.qtd; continue; }
+        if (x.tipo === 'raro') { R.raros.qtd += x.qtd; R.raros.gemas += (p ? p.gemas : 0) * x.qtd; }
+        else if (x.tipo === 'pedra' && x.origem === 'drop') { R.pedras.qtd += x.qtd; R.pedras.coins += (p ? p.coins : 0) * x.qtd; } }
+      return R;
+    }
+    function pioDropsPorItem(tipo, dias) {
+      const desde = pioDropsDesde(dias), M = {};
+      for (const x of pioDrops) { if (x.t < desde || x.tipo !== tipo || x.origem !== 'drop') continue; // só drop; compras do Sniper aparecem na lista com a origem
+        const e = M[x.item] = M[x.item] || { qtd: 0, porConta: {}, valor: 0 }; const p = pioPrecoItem(x.item);
+        e.qtd += x.qtd; e.porConta[x.conta] = (e.porConta[x.conta] || 0) + x.qtd; e.valor += (p ? (tipo === 'pedra' ? p.coins : p.gemas) : 0) * x.qtd; }
+      return M;
+    }
+    function pioDropsSessao(conta) {
+      const u = pioDropsUlt[conta]; if (!u) return { raros: [], pedras: 0 };
+      const raros = [], ped = Object.entries(u.cur).filter(([n]) => pioTipoItem(n) === 'pedra').reduce((s, [, q]) => s + q, 0);
+      for (const [n, q] of Object.entries(u.cur)) if (pioTipoItem(n) === 'raro' && q > 0) raros.push({ n, q });
+      return { raros, pedras: ped };
+    }
+    // ----- Leitura periódica das contas: avisos dos scripts, compras do Sniper, conta parada, metas.
+    const PIO_COLETA = `(() => {
+      const P = window.__poke || {}, e = P.estado || {}, S = P.sess || {};
+      let logs = null; try { logs = JSON.parse(localStorage.getItem('pio-auto-sniper-v1:rotom_sniper_logs')); } catch (x) { }
+      const fi = P.ws ? P.ws['field-init'] : undefined;
+      // XP ao vivo: o estado do jogo só traz o XP total de vez em quando; somamos o XP da sessão desde a última leitura.
+      const xpVivo = (() => {
+        const ex = e.xp != null ? e.xp : (P.xp != null ? P.xp : null);
+        if (ex == null) return null;
+        const sx = Number(S.xp) || 0, B = window.__pioXpBase;
+        if (!B || B.e0 !== ex) { window.__pioXpBase = { e0: ex, v: ex, s: sx }; return ex; }
+        if (sx >= B.s) B.v += sx - B.s;
+        B.s = sx;
+        return Math.max(B.v, ex);
+      })();
+      return { nick: e.nick || P.nick || '', level: e.level != null ? e.level : (P.level != null ? P.level : null), xp: xpVivo,
+        gemas: e.orbs != null ? e.orbs : (e.gemas != null ? e.gemas : null), ouro: e.gold != null ? e.gold : (P.gold != null ? P.gold : null),
+        sockOk: !!(P.sock && P.sock.readyState === 1), noCentro: fi === null, slug: (fi && fi.slug) || '', lastKillT: S.lastKillT || 0,
+        alertas: (window.__pioAlertas || []).slice(-50),
+        erros: (() => {
+          if (!window.__pioErrHook) {
+            window.__pioErrHook = true; window.__pioErros = [];
+            const add = (m) => { const A = window.__pioErros; A.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: Date.now(), msg: String(m).slice(0, 600) }); if (A.length > 50) A.shift(); };
+            window.addEventListener('error', ev => add((ev.message || 'erro') + (ev.filename ? ' @ ' + String(ev.filename).split('/').pop() + ':' + ev.lineno : '')));
+            window.addEventListener('unhandledrejection', ev => { const r = ev.reason; add('promessa rejeitada: ' + (r && (r.stack || r.message) || r)); });
+          }
+          return (window.__pioErros || []).slice(-50);
+        })(),
+        bosses: (() => {
+          // Vitórias em boss: guarda o evento bruto (nome, valor, drops) para conferir o retorno.
+          if (P.sock && window.__pioBossSock !== P.sock) {
+            window.__pioBossSock = P.sock; window.__pioBoss = window.__pioBoss || [];
+            P.sock.addEventListener('message', ev => { try {
+              const raw = JSON.parse(ev.data); const m = raw && raw.data && typeof raw.data === 'object' ? Object.assign({}, raw, raw.data) : raw;
+              if (!m || m.t !== 'batalha') return;
+              for (const b of (m.ev || [])) if (b && b.k === 'bossMorto') { const B = window.__pioBoss; B.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 6), t: Date.now(), ev: JSON.stringify(b).slice(0, 800) }); if (B.length > 50) B.shift(); }
+            } catch (x) { } });
+          }
+          return (window.__pioBoss || []).slice(-50);
+        })(),
+        capturas: (window.__pioCapturas || []).slice(-50),
+        sess: { st: S.start || 0, k: S.kills || 0, g: S.gold || 0, v: S.sellG || 0, s: S.supGold || 0, c: S.captures || 0, sf: S.shinyN || 0, sc: S.shinyCapN || 0 },
+        atrasos: (window.__pioAtrasos || []).slice(-50),
+        atrasosSniper: (window.__pioSniperAtrasos || []).slice(-50),
+        oculto: document.hidden,
+        xpNivel: e.xpNivel != null ? e.xpNivel : null, xpProximo: e.xpProximo != null ? e.xpProximo : null,
+        diamantes: e.diamonds != null ? e.diamonds : (P.diamonds != null ? P.diamonds : null),
+        drops: S.drops || {},
+        boostXp: (() => { try { const el = Array.from(document.querySelectorAll('span,div,b,small')).find(x => x.childElementCount === 0 && /^XP\\s*\\+\\s*[\\d.,]+\\s*%$/.test((x.textContent || '').trim())); return el ? el.textContent.trim().replace(/^XP\\s*/, '') : null; } catch (x) { return null; } })(),
+        vipDias: (() => { try { const m = ((document.querySelector('.game-hud-tl') || document.body).textContent || '').match(/XP\\s*(\\d+)\\s*dias/); return m ? +m[1] : null; } catch (x) { return null; } })(),
+        passeDias: (() => { try { const m = ((document.querySelector('.game-hud-tl') || document.body).textContent || '').match(/Passe Premium\\s*(\\d+)\\s*dias/i); return m ? +m[1] : null; } catch (x) { return null; } })(),
+        topCatch: e.topCatch ? { s: e.topCatch.s, n: e.topCatch.n } : null,
+        rankCatch: (() => { try { const a = JSON.parse(localStorage.getItem('pio-autodex-v021') || 'null'); return a && a.rankCatch ? a.rankCatch : null; } catch (x) { return null; } })(),
+        sniper: Array.isArray(logs) ? logs.slice(0, 40).map(l => ({ id: l.id, t: l.timestamp, s: l.status, n: l.targetName, p: l.price, m: l.currency, q: l.qty, o: l.offerId })) : [] };
+    })()`;
+    const pioEstado = {};
+    const pioSniperUlt = {};
+    let pioColetando = false;
+    async function pioColetar() {
+      if (typeof webviews === 'undefined' || pioColetando) return; // uma leitura por vez: duas em paralelo contariam drops e XP em dobro
+      pioColetando = true;
+      try { await pioColetarContas(); } finally { pioColetando = false; }
+    }
+    async function pioColetarContas() {
+      for (let i = 0; i < webviews.length; i++) {
+        if (!webviews[i]) continue;
+        const conta = i + 1;
+        let d = null;
+        try { d = await webviews[i].executeJavaScript(PIO_COLETA); } catch (e) { d = null; }
+        if (!d || typeof d !== 'object') continue;
+        const antes = pioUltimo[conta];
+        pioUltimo[conta] = { ...d, t: Date.now() };
+        pioFoto(conta, d);
+        // Livro-caixa: toda mudança de gemas fica registrada.
+        if (antes && antes.gemas != null && d.gemas != null && antes.gemas !== d.gemas && antes.nick === d.nick)
+          pioCsvLinha('livro-caixa/gemas.csv', ['dataHora', 'conta', 'nick', 'antes', 'depois', 'variacao'], [pioDataHora(), conta, d.nick, antes.gemas, d.gemas, d.gemas - antes.gemas]);
+        const vistos = pioAv.vistos[conta] = pioAv.vistos[conta] || [];
+        let mudou = false;
+        const novo = (id, t) => { if (!id || vistos.includes(id)) return false; vistos.push(id); mudou = true; return (t || 0) >= pioInicio - 60000; };
+        for (const a of d.alertas || []) if (novo('a' + a.id, a.t)) pioAvisar(conta, a.fonte || 'Script', a.msg, a.nivel || 'aviso', a.t);
+        for (const x of d.erros || []) if (novo('e' + x.id, x.t)) pioErro('conta ' + conta + ' / jogo', x.msg);
+        for (const b of d.bosses || []) if (novo('b' + b.id, b.t)) pioArq.anexar('bosses/' + pioMes(b.t) + '.jsonl', JSON.stringify({ quando: pioDataHora(b.t), conta, nick: d.nick, evento: b.ev }) + '\n');
+        for (const c of d.capturas || []) if (novo('c' + c.id, c.t)) pioCsvLinha('autodex/capturas.csv', ['dataHora', 'conta', 'nick', 'especie', 'nome', 'modo', 'minutosNaHunt', 'bolasNaHunt'], [pioDataHora(c.t), conta, d.nick, c.especie, c.nome, c.modo, c.minutos, c.bolas]);
+        if (d.topCatch && d.topCatch.s) pioTopCatch(conta, d);
+        pioAcumDia(conta, d);
+        pioDropsTrack(conta, d);
+        // Diagnóstico de atraso (jogo oculto pode frear a página): tudo vai para o arquivo; aviso no máximo 1 a cada 30 min.
+        for (const x of d.atrasosSniper || []) if (novo('d' + x.id, x.t)) {
+          pioCsvLinha('diagnostico/sniper-atrasos.csv', ['dataHora', 'conta', 'nick', 'anuncio', 'item', 'atrasoMs', 'jogoOculto'], [pioDataHora(x.t), conta, d.nick, x.anuncio, x.item, x.atraso, x.oculto ? 'sim' : 'nao']);
+          if (x.atraso > 1000) { const ch = conta + '|sn-atraso'; if (Date.now() - (pioSniperUlt[ch] || 0) > 30 * 60000) { pioSniperUlt[ch] = Date.now(); pioAvisar(conta, 'Diagnóstico', 'Sniper disparou ' + (x.atraso / 1000).toFixed(1).replace('.', ',') + ' s depois da liberação' + (x.oculto ? ' (jogo oculto)' : '') + '.', 'aviso', x.t); } }
+        }
+        for (const x of d.atrasos || []) if (novo('l' + x.id, x.t)) {
+          pioCsvLinha('diagnostico/atrasos.csv', ['dataHora', 'conta', 'nick', 'atrasoMs', 'jogoOculto', 'autodexRodando', 'testeRodando'], [pioDataHora(x.t), conta, d.nick, x.atraso, x.oculto ? 'sim' : 'nao', x.autodex ? 'sim' : 'nao', x.teste ? 'sim' : 'nao']);
+          if (x.atraso > 10000 && (x.autodex || x.teste)) { const ch = conta + '|lag'; if (Date.now() - (pioSniperUlt[ch] || 0) > 30 * 60000) { pioSniperUlt[ch] = Date.now(); pioAvisar(conta, 'Diagnóstico', 'scripts atrasaram ' + Math.round(x.atraso / 1000) + ' s' + (x.oculto ? ' com o jogo oculto' : '') + (x.autodex ? ' (AutoDex rodando)' : ' (teste rodando)') + '.', 'aviso', x.t); } }
+        }
+        const nomes = { CONFIRMADO: ['comprou', 'ok'], SALDO_INSUFICIENTE: ['sem saldo para', 'aviso'], RECUSADO: ['compra recusada de', 'aviso'], SLOTS_LOTADOS: ['slots lotados ao comprar', 'aviso'] };
+        const logsSn = d.sniper || [];
+        for (const l of logsSn.slice().sort((x, y) => (x.t || 0) - (y.t || 0))) {
+          if (l.s === 'PERDIDO') {
+            if (novo('s' + l.id, l.t)) { const nomeP = String(l.n || 'item').replace(/^\d+\s*[x×]\s*/i, '');
+              pioCsvLinha('sniper/perdas.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t || Date.now()), conta, d.nick, nomeP, l.q || 1, l.p || '', l.m === 'orb' ? 'gemas' : 'Coins', l.o != null ? l.o : l.id]); }
+            continue;
+          }
+          const k = nomes[l.s];
+          if (!k) { novo('s' + l.id, 0); continue; }
+          if (novo('s' + l.id, l.t)) {
+            // A confirmação nem sempre traz preço e moeda: pega do agendamento/disparo do mesmo anúncio.
+            const par = l.o != null ? logsSn.find(x => x.o === l.o && x.p) : null;
+            const preco = l.p || (par && par.p) || null, moeda = (l.p ? l.m : par && par.m) || l.m;
+            const nome = String(l.n || 'item').replace(/^\d+\s*[x×]\s*/i, '');
+            const msg = k[0] + ' ' + (l.q || 1) + 'x ' + nome + (preco ? ' por ' + pioNum(preco) + ' ' + (moeda === 'orb' ? 'gemas' : 'Coins') : '');
+            if (l.s === 'CONFIRMADO') {
+              pioAvisar(conta, 'Sniper', msg, k[1], l.t || Date.now());
+              pioRegistrarDrop(conta, d.nick, nome, +l.q || 1, 'sniper', { preco, moeda: moeda === 'orb' ? 'gemas' : 'Coins' });
+              pioCsvLinha('sniper/compras.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t || Date.now()), conta, d.nick, nome, l.q || 1, preco, moeda === 'orb' ? 'gemas' : 'Coins', l.o != null ? l.o : l.id]);
+            } else {
+              // Sem saldo / recusado / slots: um aviso por item a cada 30 min (o Sniper repete várias vezes por segundo).
+              const ch = conta + '|' + l.s + '|' + nome, st0 = pioSniperUlt[ch] || 0;
+              if (Date.now() - st0 > 30 * 60000) { pioSniperUlt[ch] = Date.now(); pioAvisar(conta, 'Sniper', msg, k[1], l.t || Date.now()); }
+            }
+          }
+        }
+        if (vistos.length > 400) vistos.splice(0, vistos.length - 400);
+        if (mudou) pioGravar(PIO_AV_KEY, pioAv);
+        // Conta parada: desconectada, sem abates na hunt ou esquecida no Centro.
+        const st = pioEstado[conta] = pioEstado[conta] || {};
+        const agora = Date.now();
+        if (!d.sockOk) { st.off = st.off || agora; if (!st.offAv && agora - st.off > 120000) { st.offAv = true; pioAvisar(conta, 'Grid', 'desconectada do jogo desde ' + pioHora(st.off) + '.', 'erro', agora); } }
+        else { if (st.offAv) pioAvisar(conta, 'Grid', 'reconectada.', 'ok'); st.off = 0; st.offAv = false; }
+        if (d.sockOk && d.slug && d.lastKillT) {
+          if (agora - d.lastKillT > 5 * 60000) { if (st.semAbate !== d.lastKillT) { st.semAbate = d.lastKillT; pioAvisar(conta, 'Grid', 'sem abates em ' + d.slug + ' desde ' + pioHora(d.lastKillT) + '.', 'erro', agora); } }
+        }
+        if (d.sockOk && d.noCentro) { st.centro = st.centro || agora; if (!st.centroAv && agora - st.centro > 10 * 60000) { st.centroAv = true; pioAvisar(conta, 'Grid', 'parada no Centro desde ' + pioHora(st.centro) + '.', 'aviso', agora); } }
+        else { st.centro = 0; st.centroAv = false; }
+      }
+      pioKickChip();
+      if (document.getElementById('pioMetasPanel')?.classList.contains('show')) pioRenderMetas();
+      pioEspelhar().catch(e => pioErro('espelho', e && e.message || e));
+      pioPrecosHora().catch(() => { });
+      pioAplicarContar().catch(() => { });
+    }
+    // Top Catch da semana: um arquivo por semana, atualizado quando muda.
+    const pioTcUlt = {};
+    function pioTopCatch(conta, d) {
+      const k = d.topCatch.s + '|' + d.topCatch.n + '|' + (d.rankCatch ? d.rankCatch.corte90 : '');
+      if (pioTcUlt[conta] === k) return;
+      pioTcUlt[conta] = k;
+      const sem = pioTcSemanas[d.topCatch.s] = pioTcSemanas[d.topCatch.s] || { semana: d.topCatch.s, contas: {} };
+      sem.contas[conta] = { nick: d.nick, especies: d.topCatch.n, atualizadoEm: pioDataHora() };
+      if (d.rankCatch && d.rankCatch.key === d.topCatch.s) sem.corte = { corte90: d.rankCatch.corte90, corte100: d.rankCatch.corte100, top1: d.rankCatch.top1, lidoEm: pioDataHora(d.rankCatch.at) };
+      pioArq.salvar('topcatch/' + d.topCatch.s + '.json', JSON.stringify(sem, null, 1));
+    }
+    const pioTcSemanas = {};
+    // Preços do mercado: arquivo por dia (mínimo e mediana dos mínimos por hora), regravado de hora em hora.
+    let pioPrecosUlt = 0;
+    async function pioPrecosHora() {
+      if (Date.now() - pioPrecosUlt < 3600000 || typeof webviews === 'undefined') return;
+      for (let i = 0; i < webviews.length; i++) {
+        if (!webviews[i]) continue;
+        let pr = null;
+        try { pr = await webviews[i].executeJavaScript(PIO_STATUS_PRECOS); } catch (e) { }
+        if (pr && pr.dias) {
+          pioPrecosUlt = Date.now();
+          const ultDia = Object.keys(pr.dias).sort().pop();
+          if (ultDia) { const P2 = {}; for (const v of Object.values(pr.dias[ultDia])) if (v && v[0]) P2[String(v[0]).toLowerCase()] = v; pioPrecos = P2; }
+          for (const [dia, itens] of Object.entries(pr.dias)) await pioArq.salvar('mercado/precos-' + dia + '.json', JSON.stringify({ colunas: pr.colunas, dia, itens }, null, 0));
+          return;
+        }
+      }
+    }
+    // Espelho das configurações de cada conta (AutoDex, testador, Sniper) a cada 10 min, e cada teste de hunt concluído.
+    const PIO_CONFIG = `(() => {
+      const ls = k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } };
+      let tester = null; try { tester = window.PIOHuntTester ? window.PIOHuntTester.estado() : ls('pio-autodex-tester-v1'); } catch (e) { }
+      const ad = window.PIOAutoDex ? window.PIOAutoDex.estado() : (() => { const a = ls('pio-autodex-v021'); return a ? { goal: a.goal, modo: a.modePreference, ordem: a.orderPreference } : null; })();
+      return { nick: ((window.__poke || {}).estado || {}).nick || '', autodex: ad, tester,
+        sniper: { ligado: ls('pio-auto-sniper-v1:rotom_sniper_enabled'), regras: ls('pio-auto-sniper-v1:rotom_sniper_rules'), config: ls('pio-auto-sniper-v1:rotom_sniper_config') } };
+    })()`;
+    let pioEspelhoUlt = 0;
+    const pioEspelhoHash = {}, pioTesteSalvo = {};
+    async function pioEspelhar(forcar = false) {
+      if ((!forcar && Date.now() - pioEspelhoUlt < 600000) || typeof webviews === 'undefined') return;
+      pioEspelhoUlt = Date.now();
+      for (let i = 0; i < webviews.length; i++) {
+        if (!webviews[i]) continue;
+        const conta = i + 1;
+        let c = null;
+        try { c = await webviews[i].executeJavaScript(PIO_CONFIG); } catch (e) { }
+        if (!c) continue;
+        const tester = c.tester || null;
+        const cfg = { conta, nick: c.nick, salvoEm: pioDataHora(), metaNivel: pioAlvo()[conta], metaGemas: pioAlvo().gemas, autodex: c.autodex, sniper: c.sniper,
+          tester: tester ? { minNivel: tester.minNivel, regiao: tester.regiao, minutos: tester.minutos, descarte: tester.descarte, vantagemMin: tester.vantagemMin, nota: tester.nota } : null };
+        const h = JSON.stringify({ ...cfg, salvoEm: '' });
+        if (forcar || pioEspelhoHash[conta] !== h) { pioEspelhoHash[conta] = h; await pioArq.salvar('config/conta-' + conta + '.json', JSON.stringify(cfg, null, 1)); }
+        // Teste de hunt concluído: guarda a rodada inteira, uma vez.
+        if (tester && !tester.rodando && /^Teste conclu/.test(tester.fase || '')) {
+          const datas = Object.values(tester.resultados || {}).map(r => r && r.data || 0);
+          const ult = datas.length ? Math.max(...datas) : 0;
+          const chave = conta + '|' + ult;
+          if (ult && !pioTesteSalvo[chave] && !(await pioArq.existe('testes-hunt/conta-' + conta + '_' + pioCarimbo(ult) + '.json'))) {
+            pioTesteSalvo[chave] = true;
+            await pioArq.salvar('testes-hunt/conta-' + conta + '_' + pioCarimbo(ult) + '.json', JSON.stringify({ conta, nick: c.nick, concluidoEm: pioDataHora(ult), criterio: tester.nota,
+              pokemon: tester.pokemon || null, fase: tester.fase, ranking: tester.ranking || [], candidatas: tester.candidatas || [], resultados: tester.resultados || {} }, null, 1));
+          }
+        }
+      }
+    }
+    window.pioEspelhar = pioEspelhar;
+    setInterval(() => { pioColetar().catch(() => { }); }, 30000);
+    setTimeout(() => { pioColetar().catch(() => { }); pioAvisosBadge(); }, 8000);
+    setInterval(pioKickChip, 15000);
+    // ----- Pedidos do Claude (pasta claude\aplicar): nada muda sem o seu clique; antes de aplicar, guarda backup.
+    // Formato: { "descricao": "...", "tipo": "autodex" | "tester" | "sniper-regras" | "sniper-config" | "metas", "contas": [1, 2] ou "todas", "dados": { ... } }
+    let pioPendentes = [];
+    async function pioAplicarContar() {
+      const nomes = (await pioArq.listar('aplicar')).filter(n => /\.json$/i.test(n));
+      pioPendentes = nomes;
+      const b = document.getElementById('leafAplicar');
+      if (b) { b.style.display = nomes.length ? '' : 'none'; const n = b.querySelector('.pio-ap-n'); if (n) n.textContent = ' (' + nomes.length + ')'; }
+      if (document.getElementById('pioAplicarPanel')?.classList.contains('show')) pioRenderAplicar();
+    }
+    async function pioRenderAplicar() {
+      const itens = [];
+      for (const n of pioPendentes) {
+        const txt = await pioArq.ler('aplicar/' + n);
+        let j = null; try { j = JSON.parse(txt); } catch (e) { }
+        itens.push({ n, j });
+      }
+      const html = itens.length ? itens.map(({ n, j }) => '<div style="padding:8px 0;border-bottom:1px solid #3a2a20">' +
+        '<div><b style="color:#ffe3a2">' + pioEsc(j && j.descricao || n) + '</b></div>' +
+        '<div style="opacity:.85">' + (j ? 'Tipo: ' + pioEsc(j.tipo) + ' · Contas: ' + pioEsc(Array.isArray(j.contas) ? j.contas.join(', ') : (j.contas || '—')) : 'Arquivo inválido (JSON com erro)') + ' · ' + pioEsc(n) + '</div>' +
+        (j ? '<pre style="white-space:pre-wrap;max-height:160px;overflow:auto;background:#120c09;padding:6px;border-radius:6px;margin:6px 0">' + pioEsc(JSON.stringify(j.dados, null, 1).slice(0, 1500)) + '</pre>' : '') +
+        '<button data-pio-ap="' + pioEsc(n) + '" data-acao="aplicar"' + (j ? '' : ' disabled') + '>Aplicar</button> <button data-pio-ap="' + pioEsc(n) + '" data-acao="descartar">Descartar</button></div>').join('')
+        : '<div style="opacity:.7">Nenhum pedido pendente.</div>';
+      const p = pioPainel('pioAplicarPanel', '<div style="display:flex;justify-content:space-between;align-items:center"><b style="color:#ffe3a2">Mudanças propostas pelo Claude</b><button data-pio-fechar>×</button></div>' +
+        '<div style="opacity:.75;margin:4px 0 6px">Antes de aplicar, a configuração atual de cada conta vai para claude\\config\\backup.</div>' + html);
+      p.querySelectorAll('[data-pio-ap]').forEach(b => b.onclick = async () => { b.disabled = true; await pioAplicarUm(b.dataset.pioAp, b.dataset.acao); await pioAplicarContar(); pioRenderAplicar(); });
+    }
+    async function pioAplicarUm(nome, acao) {
+      const quando = pioCarimbo();
+      if (acao === 'descartar') { await pioArq.mover('aplicar/' + nome, 'aplicar/descartados/' + quando + '_' + nome); pioAvisar(0, 'Claude', 'pedido descartado: ' + nome, 'aviso'); return; }
+      let j = null; try { j = JSON.parse(await pioArq.ler('aplicar/' + nome)); } catch (e) { }
+      if (!j || !j.tipo) { pioAvisar(0, 'Claude', 'pedido inválido: ' + nome, 'erro'); return; }
+      const contas = j.contas === 'todas' || !j.contas ? [1, 2, 3, 4] : (Array.isArray(j.contas) ? j.contas : [j.contas]).map(Number);
+      const resultados = [];
+      if (j.tipo === 'metas') {
+        await pioArq.salvar('config/backup/' + quando + '_metas.json', JSON.stringify(pioAlvo(), null, 1));
+        const al = pioLer(PIO_ALVO_KEY, {});
+        for (const [k, v] of Object.entries(j.dados || {})) if (Number(v) > 0) al[k] = Number(v);
+        pioGravar(PIO_ALVO_KEY, al);
+        resultados.push('metas: ' + JSON.stringify(j.dados));
+      } else {
+        for (const conta of contas) {
+          const wv = webviews[conta - 1];
+          if (!wv) { resultados.push('conta ' + conta + ': painel fechado'); continue; }
+          try { const atual = await wv.executeJavaScript(PIO_CONFIG); await pioArq.salvar('config/backup/' + quando + '_conta-' + conta + '_' + j.tipo + '.json', JSON.stringify(atual, null, 1)); } catch (e) { }
+          const script = `(async () => {
+            const tipo = ${JSON.stringify(j.tipo)}, dados = ${JSON.stringify(j.dados || {})};
+            try {
+              if (tipo === 'autodex') return window.PIOAutoDex ? window.PIOAutoDex.aplicar(dados) : { ok: false, msg: 'AutoDex não está ativo nesta conta' };
+              if (tipo === 'tester') return window.PIOHuntTester && window.PIOHuntTester.aplicar ? window.PIOHuntTester.aplicar(dados) : { ok: false, msg: 'Testador não está ativo nesta conta' };
+              if (tipo === 'sniper-regras' || tipo === 'sniper-config') {
+                const S = window.PIOSniperStorage;
+                if (!S) return { ok: false, msg: 'Sniper não está ativo nesta conta' };
+                if (tipo === 'sniper-regras') {
+                  if (!Array.isArray(dados.regras)) return { ok: false, msg: 'faltou a lista completa de regras' };
+                  await S.set({ rotom_sniper_rules: dados.regras });
+                  window.postMessage({ source: 'ROTOM_POPUP', type: 'UPDATE_SNIPER_RULES', rules: dados.regras }, '*');
+                  return { ok: true, msg: dados.regras.length + ' regras' };
+                }
+                const atual = (await S.get(['rotom_sniper_config'])).rotom_sniper_config || {};
+                const novo = Object.assign({}, atual, dados.config || {});
+                await S.set({ rotom_sniper_config: novo });
+                window.postMessage({ source: 'ROTOM_POPUP', type: 'UPDATE_SNIPER_CONFIG', config: novo }, '*');
+                return { ok: true, msg: Object.keys(dados.config || {}).join(', ') || 'nada a mudar' };
+              }
+              return { ok: false, msg: 'tipo desconhecido: ' + tipo };
+            } catch (e) { return { ok: false, msg: String(e && e.message || e) }; }
+          })()`;
+          let r = null;
+          try { r = await wv.executeJavaScript(script); } catch (e) { r = { ok: false, msg: String(e && e.message || e) }; }
+          resultados.push('conta ' + conta + ': ' + (r && r.ok ? 'ok' : 'falhou') + (r && r.msg ? ' (' + r.msg + ')' : ''));
+        }
+      }
+      await pioArq.mover('aplicar/' + nome, 'aplicar/aplicados/' + quando + '_' + nome);
+      await pioArq.anexar('aplicar/aplicados/registro.log', pioDataHora() + ' ' + nome + ' · ' + (j.descricao || '') + ' · ' + resultados.join(' | ') + '\n');
+      const falhou = resultados.some(x => /falhou|fechado/.test(x));
+      pioAvisar(0, 'Claude', 'aplicado "' + (j.descricao || nome) + '": ' + resultados.join(' | '), falhou ? 'aviso' : 'ok');
+      await pioEspelhar(true);
+    }
+    window.pioAbrirAplicar = () => pioAbrir('pioAplicarPanel', () => { pioRenderAplicar(); });
+    setTimeout(() => { pioAplicarContar().catch(() => { }); pioArq.inv('pio_pasta', {}).then(p => { if (!p) pioToast('Pasta claude do fork não encontrada: os arquivos não serão gravados.', 'aviso'); }).catch(() => { }); }, 6000);
+    // ----- Histórico diário (Hoje / 7 dias / Total do modo Simples), refeito pelo PIO:
+    // XP pela diferença do XP total da conta; abates, capturas e ouro pela sessão local, detectando troca de
+    // sessão pelo horário de início (antes a troca de hunt somava a sessão inteira de novo e inflava os totais).
+    window.__pioHistV2 = true;
+    const pioDiaUlt = {};
+    function pioAcumDia(conta, d) {
+      if (!d || !d.sess) return;
+      const i = conta - 1, k = dayKey(0);
+      if (k !== curDay) { const fecha = curDay; curDay = k; try { lsSet('curDay', k); } catch (e) { } viraODia(fecha); }
+      const ult = pioDiaUlt[conta];
+      pioDiaUlt[conta] = { xp: d.xp, s: d.sess, nick: d.nick };
+      if (!ult || ult.nick !== d.nick) return;
+      const b = (histDay[k] = histDay[k] || {})[i] = (histDay[k][i] || { g: 0, x: 0, kl: 0, c: 0, sf: 0, sc: 0 });
+      const mesma = ult.s && ult.s.st === d.sess.st;
+      const dv = f => mesma ? Math.max(0, (+d.sess[f] || 0) - (+ult.s[f] || 0)) : (+d.sess[f] || 0);
+      const liq = x => (+x.g || 0) + (+x.v || 0) - (+x.s || 0);
+      b.g += liq(d.sess) - (mesma ? liq(ult.s) : 0);
+      if (d.xp != null && ult.xp != null && d.xp >= ult.xp && d.xp - ult.xp < 5e10) b.x += d.xp - ult.xp;
+      b.kl += dv('k'); b.c += dv('c'); b.sf += dv('sf'); b.sc += dv('sc');
+      try { lsSet('histDay', JSON.stringify(histDay)); } catch (e) { }
+    }
+    // Uma vez: guarda o histórico antigo (inflado) na pasta claude e começa do zero.
+    setTimeout(() => {
+      try {
+        if (lsGet('pioHistV2') === '1') return;
+        pioArq.salvar('config/backup/histDay-antigo-' + pioCarimbo() + '.json', JSON.stringify(histDay));
+        Object.keys(histDay).forEach(k2 => delete histDay[k2]);
+        lsSet('histDay', '{}'); lsSet('pioHistV2', '1');
+        pioAvisar(0, 'Grid', 'Histórico diário recomeçado do zero (o antigo estava inflado; cópia em claude\\config\\backup).', 'ok');
+      } catch (e) { pioErro('histDay', e && e.message || e); }
+    }, 4000);
+    window.pioResumoParaExtracao = () => ({ avisos: pioAv.itens.slice(-60), metas: Object.fromEntries(Object.keys(pioUltimo).map(c => {
+      const a = pioUltimo[c], r = pioRitmo(c), alvo = pioAlvo(), meta = Number(alvo[c]) || 1000;
+      return [c, { nick: a.nick, nivel: a.level, meta, xpFalta: Math.max(0, pioXpAte(meta) - (a.xp || 0)), xpHora6h: r.xph != null ? Math.round(r.xph) : null, gemas: a.gemas, gemasDia72h: r.gDia != null ? Math.round(r.gDia * 10) / 10 : null }];
+    })) });
+    window.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.altKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) { e.preventDefault(); pioCopiarStatus(); }
+    });
     // Depot por conta (pedido do Semai: "aparece o depot da familia?"). Busca preguicosa: so com o
     // Simples aberto e a secao de inventario visivel, no maximo a cada 2 min por conta. A resposta
     // vem de codigo injetado, entao e saneada: so chaves simples, quantidade > 0, teto de 500 itens.
@@ -4784,17 +5777,23 @@
           }
         }
 
+        // Esquema atual do jogo: kick.bonus = { xp: <expira em ms>, ... } (o mesmo que o /hunt le).
+        // Sem isso o bonus vinha 0 da telemetria e 1 da leitura da tela, e o status alternava.
+        const kickBonusObj = d.kick.bonus && typeof d.kick.bonus === 'object' ? d.kick.bonus : {};
+        const kickAgora = Date.now();
+        const kickAte = (...keys) => Math.max(0, ...keys.map(k => num(kickBonusObj[k])).filter(v => v > kickAgora));
+        const kickXpAte = kickAte('xp', 'exp'), kickCatchAte = kickAte('catch', 'captura', 'capture'), kickLureAte = kickAte('lure', 'secretLure');
         d.kick = {
           login: String(d.kick.login || '').slice(0, 40),
           vinculado: !!(d.kick.vinculado || d.kick.login),
           pontos: Number.isFinite(d.kick.pontos) && d.kick.pontos >= 0 ? d.kick.pontos : null,
           pontosPorCanal: sanitizedPontosPorCanal,
-          bonusExp: num(d.kick.bonusExp),
-          bonusCatch: num(d.kick.bonusCatch),
-          bonusLure: num(d.kick.bonusLure),
+          bonusExp: num(d.kick.bonusExp) || (kickXpAte ? 1 : 0),
+          bonusCatch: num(d.kick.bonusCatch) || (kickCatchAte ? 1 : 0),
+          bonusLure: num(d.kick.bonusLure) || (kickLureAte ? 1 : 0),
           bonusTime: String(d.kick.bonusTime || d.kick.tempo || d.kick.time || d.kick.expires || '').slice(0, 30),
           bonusQty: num(d.kick.bonusQty || d.kick.qtd || d.kick.qty || 0),
-          bonusExpiresAt: num(d.kick.bonusExpiresAt || d.kick.expiresAt || 0),
+          bonusExpiresAt: num(d.kick.bonusExpiresAt || d.kick.expiresAt || 0) || Math.max(kickXpAte, kickCatchAte, kickLureAte),
           lives: rawLives.map(item => parseKickStreamer(item, true)).filter(Boolean),
           oficiais: rawOficiais.map(item => parseKickStreamer(item)).filter(Boolean),
           offline: rawOffline.map(item => parseKickStreamer(item)).filter(Boolean)
@@ -8911,6 +9910,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     function accumHist(i, r) {
       const k = dayKey(0);
       if (k !== curDay) { const fecha = curDay; curDay = k; try { lsSet('curDay', k); } catch { } viraODia(fecha); }
+      if (window.__pioHistV2) return; // PIO: o histórico agora é somado pelo coletor do PIO (pioAcumDia)
       const a = r.a || {};
       const cur = {
         k: (r.kills != null ? r.kills : (a.kills || 0)),
@@ -9633,7 +10633,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           gKph = Math.round(gKills / horas);
         }
 
-        if (ecoDom) {
+        if (ecoDom && !(gs && typeof gs === 'object')) { // PIO: placar da Economia só quando não há sessão da hunt (evita alternar 1 min / 23 min)
           gLucro = ecoDom.lucro;
           if (ecoDom.gph) gGph = ecoDom.gph;
           if (ecoDom.gastos) gGastos = ecoDom.gastos;
@@ -9796,6 +10796,14 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     if (team.length > 0 && !team.some(p => p.ld)) {
       team[0].ld = true;
     }
+    if (!hasActPoke && actId != null) { /* PIO: o ativo de verdade nem sempre vem marcado no time; busca na lista completa */
+      const apL = ((ws.pokes && ws.pokes.list) || []).find(p => String(p.id) === String(actId)) || (P.pokemonsMap ? P.pokemonsMap[actId] : null);
+      if (apL) {
+        team.forEach(p => { p.ld = false; });
+        team.unshift({ id: String(apL.id).slice(0, 40), name: apL.name || apL.nome || '', level: apL.level || 0, shiny: !!apL.shiny, t1: apL.type1 || '', t2: apL.type2 || '', ld: true,
+          q: nL(apL.quality), ivt: apL.ivTotal != null ? nL(apL.ivTotal) : null, dt: !!apL.isDitto, tms: [], sid: +apL.speciesId || +apL.pokeId || 0, hp: +apL.hp || 0, hm: +apL.maxHp || 0, xpp: null });
+      }
+    }
     if (team.length === 0) {
       const estPokes = (window.estado && (window.estado.eu ? window.estado.eu.pokemons : window.estado.pokemons)) || [];
       if (Array.isArray(estPokes) && estPokes.length > 0) {
@@ -9856,9 +10864,16 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     const allPokes = ((ws.pokes && ws.pokes.list)||[]).slice(0, 1000).map(p=>({id:p.id!=null?String(p.id).slice(0,40):'',name:String(p.name||'').slice(0,30),speciesId:+p.speciesId||+p.pokeId||0,level:+p.level||0,shiny:!!p.shiny,team:!!p.team,slot:p.slot,q:nL(p.quality),ivt:p.ivTotal!=null?nL(p.ivTotal):null,ivs:p.ivs||null}));
     const locationState = P.estado || window.estado || {};
     const fieldSlug = (ws['field-init'] && ws['field-init'].slug) || '';
-    let hunt = locationState.noCentro === true ? 'centro'
-      : locationState.noCentro === false && locationState.huntSlug ? locationState.huntSlug
-      : fieldSlug || locationState.huntSlug || P.lastSlug || '';
+    // Local: o evento de campo e a fonte viva (field-init ao entrar; field-none/teleporte zera para null).
+    // O P.estado vem do login e so recebe parte das atualizacoes, por isso fica por ultimo.
+    const liveEst = (window.estado && (window.estado.eu || window.estado)) || {};
+    const fieldEv = ws['field-init'];
+    let hunt = fieldSlug ? fieldSlug
+      : fieldEv === null ? 'centro'
+      : liveEst.noCentro === true ? 'centro'
+      : liveEst.noCentro === false && liveEst.huntSlug ? liveEst.huntSlug
+      : locationState.noCentro === true ? 'centro'
+      : locationState.huntSlug || P.lastSlug || '';
     if (!hunt && typeof document !== 'undefined') {
       const hEl = document.getElementById('hud-hunt') || document.getElementById('eco-onde') || document.querySelector('.hud-hunt');
       if (hEl && hEl.textContent) {
@@ -9917,9 +10932,9 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       let domBonusTime = '', domBonusQty = 0, domBonusExp = 0, domBonusCatch = 0, domBonusLure = 0;
       if (kickBtn && !kickBtn.classList.contains('kk-conectar')) {
         const fullTxt = ((kickBtn.getAttribute('title') || '') + ' ' + (kickBtn.getAttribute('data-tooltip') || '') + ' ' + (kickBtn.textContent || '')).trim();
-        const tM = fullTxt.match(/(?:(\d+)\s*h(?:r|rs)?(?:\s*(\d+)\s*(?:m|min)?)?)/i) || fullTxt.match(/(\d+)\s*(?:m|min)/i) || fullTxt.match(/(\d+)\s*(?:s|seg)/i);
+        const tM = fullTxt.match(/(?:(\\d+)\\s*h(?:r|rs)?(?:\\s*(\\d+)\\s*(?:m|min)?)?)/i) || fullTxt.match(/(\\d+)\\s*(?:m|min)/i) || fullTxt.match(/(\\d+)\\s*(?:s|seg)/i);
         if (tM) domBonusTime = tM[0].trim();
-        const qM = fullTxt.match(/(\d+)\s*x\b|\bx\s*(\d+)/i);
+        const qM = fullTxt.match(/(\\d+)\\s*x\\b|\\bx\\s*(\\d+)/i);
         if (qM) domBonusQty = parseInt(qM[1] || qM[2], 10) || 1;
         if (/exp|xp/i.test(fullTxt)) domBonusExp = 1;
         if (/catch/i.test(fullTxt)) domBonusCatch = 1;
@@ -10840,8 +11855,8 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     let huntScope = lsGet('huntScope') || 'minhas'; // 'minhas' (as que voce farma/favoritou) | 'todas'
     let showHiddenHunts = false; // transitorio: revelar as ocultas pra desfazer
     // ----- Cartas modular: cada seção liga/desliga e reordena, salvo no localStorage -----
-    const CDSECTS = ['kpis', 'today', 'table', 'hunts', 'catches', 'shinies', 'shinyTried', 'trend', 'shared', 'team', 'inv'];
-    const cdLabel = (k) => ({ kpis: t('cdSecKpis'), today: t('cdToday'), table: t('cdByAcc2'), hunts: t('cdHunts'), catches: t('cdCatches'), shinies: t('cdShinies'), shinyTried: t('cdShinyTried'), trend: t('cdTrend'), shared: t('cdShared'), team: t('cdTeams'), inv: t('cdInv') }[k] || k);
+    const CDSECTS = ['pioTopo', 'pioContas', 'pioPedras', 'pioRaros', 'kpis', 'today', 'table', 'hunts', 'catches', 'shinies', 'shinyTried', 'trend', 'shared', 'team', 'inv'];
+    const cdLabel = (k) => ({ pioTopo: 'Resumo PIO', pioContas: 'Contas (PIO)', pioPedras: 'Pedras (PIO)', pioRaros: 'Raros (PIO)', kpis: t('cdSecKpis'), today: t('cdToday'), table: t('cdByAcc2'), hunts: t('cdHunts'), catches: t('cdCatches'), shinies: t('cdShinies'), shinyTried: t('cdShinyTried'), trend: t('cdTrend'), shared: t('cdShared'), team: t('cdTeams'), inv: t('cdInv') }[k] || k);
     // Melhor catch: por que criterio. O padrao e a NOTA, que e a resposta do proprio jogo pra
     // "qual nasceu melhor": ela ja pesa IV, qualidade, potencia e shiny na regua da especie, o
     // que nenhum dos outros criterios faz sozinho (IV x qualidade ignora um P5, que dobra os
@@ -10873,9 +11888,31 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     // larguras padrão (colunas de 12): linhas fecham certinho em tela cheia (12 | 12 | 4+4+4 | 6+3+3)
     let cdFC = { p: -1, n: '', sh: 0, q: 0, potencia: 0, nota: 0, iv: 0, per: 0, stat: '', statV: 0 }; // filtros das capturas (conta, nome, shiny, qualidade, IV total, periodo, stat ind.)
     try { const c0 = lsObj('cdFC'); cdFC = { p: +c0.p >= 0 ? +c0.p : -1, n: String(c0.n || '').slice(0, 30).toLowerCase(), sh: c0.sh ? 1 : 0, q: Math.max(0, +c0.q || 0), potencia: Math.max(0, Math.min(5, Math.floor(+c0.potencia || 0))), nota: Math.max(0, Math.min(10, +c0.nota || 0)), iv: +c0.iv || 0, per: +c0.per || 0, stat: String(c0.stat || '').slice(0, 10), statV: +c0.statV || 0 }; } catch { }
-    const CDW_DEF = { kpis: 12, today: 12, table: 12, hunts: 4, catches: 4, shinies: 4, shinyTried: 6, trend: 3, shared: 3, team: 12, inv: 6 };
+    const CDW_DEF = { pioTopo: 12, pioContas: 12, pioPedras: 12, pioRaros: 12, kpis: 12, today: 12, table: 12, hunts: 4, catches: 8, shinies: 4, shinyTried: 6, trend: 3, shared: 3, team: 12, inv: 6 };
     const cdW = (s) => Math.max(3, Math.min(12, +(cardsCfg.w[s]) || CDW_DEF[s] || 6));
     try { const c = lsObj('cardsCfg'); if (Array.isArray(c.order)) cardsCfg.order = c.order.filter(x => CDSECTS.includes(x)); CDSECTS.forEach(s => { if (!cardsCfg.order.includes(s)) cardsCfg.order.push(s); }); cardsCfg.hide = c.hide || {}; if (c.w && typeof c.w === 'object') cardsCfg.w = c.w; if (c.h && typeof c.h === 'object') cardsCfg.h = c.h; } catch { }
+    // PIO: primeira vez com o Simples sob medida: seções PIO no topo, as genéricas escondidas (dá para religar na engrenagem) e capturas só com Nota >= 3,5.
+    try {
+      if (lsGet('pioCardsV1') !== '1') {
+        const pio = ['pioTopo', 'pioContas', 'pioPedras', 'pioRaros', 'catches', 'shinies', 'today'];
+        cardsCfg.order = pio.concat(cardsCfg.order.filter(x => !pio.includes(x)));
+        ['kpis', 'table', 'hunts', 'trend', 'shared', 'team', 'inv', 'shinyTried'].forEach(x => { cardsCfg.hide[x] = true; });
+        ['pioTopo', 'pioContas', 'pioPedras', 'pioRaros', 'catches', 'shinies', 'today'].forEach(x => { delete cardsCfg.hide[x]; });
+        lsSet('cardsCfg', JSON.stringify(cardsCfg)); lsSet('pioCardsV1', '1');
+        cdFC.nota = 3.5; try { lsSet('cdFC', JSON.stringify(cdFC)); } catch (e) { }
+      }
+    } catch (e) { }
+    // PIO v2 (22/10/2026): macro > micro. Hoje no topo, depois a Sessão; Capturas e Shinies logo abaixo das Pedras;
+    // Raros (a faixa que mais cresce) por último, com altura fixa e rolagem própria.
+    try {
+      if (lsGet('pioCardsV2') !== '1') {
+        const pio2 = ['today', 'pioTopo', 'pioContas', 'pioPedras', 'catches', 'shinies', 'pioRaros'];
+        cardsCfg.order = pio2.concat(cardsCfg.order.filter(x => !pio2.includes(x)));
+        pio2.forEach(x => { delete cardsCfg.hide[x]; delete cardsCfg.w[x]; delete cardsCfg.h[x]; });
+        cardsCfg.h.pioRaros = 380; cardsCfg.h.catches = 420; cardsCfg.h.shinies = 420;
+        lsSet('cardsCfg', JSON.stringify(cardsCfg)); lsSet('pioCardsV2', '1');
+      }
+    } catch (e) { }
     const saveCardsCfg = () => { try { lsSet('cardsCfg', JSON.stringify(cardsCfg)); } catch { } };
     // base medida por conta e hunt: media (EWMA) do que CADA conta realmente fez ali (gold/h, xp/h, capturas/h).
     // amostra a taxa acumulada da sessao (ja e uma media) quando a hunt rodou tempo suficiente pra estabilizar.
@@ -11394,7 +12431,8 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       const ae = document.activeElement;
       if (!force && ae && cardsEl.contains(ae) && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)) return;
       depColeta(); // depot e assincrono e cacheado; a proxima passada ja pinta com ele
-      const rows = []; let sumG = 0, sumX = 0, sumK = 0, sumC = 0, sumSF = 0, sumSC = 0, ativos = 0; const shinyTried = {};
+      const velhoMs = {}, pioD = {};
+      const rows = []; let nG = 0, sumG = 0, sumX = 0, sumK = 0, sumC = 0, sumSF = 0, sumSC = 0, ativos = 0; const shinyTried = {};
       for (let i = 0; i < count; i++) {
         const nm0 = tabNames[i] || stName(i), dot = ACOR[i % ACOR.length] || 'var(--cd-muted, #8b949e)';
         if (off[i] || !webviews[i]) { rows.push({ i, dot, name: nm0, st: 'off' }); continue; }
@@ -11407,7 +12445,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
             d = stSane(d) || d;
             stCache[i] = { t: Date.now(), d };
           } else if (pc) {
-            d = pc.d;
+            d = pc.d; velhoMs[i] = Date.now() - pc.t; // PIO: leitura falhou, mostrando o último dado
           }
         } else if (pc) {
           d = pc.d;
@@ -11416,7 +12454,13 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         if (d.name && tabNames[i] !== d.name) tabNames[i] = d.name;
         const a = d.a || {};
         ativos++;
-        sumG += a.gph || 0; sumX += a.xph || 0; sumK += a.kph || 0; sumC += a.captures || 0; sumSF += a.shinyFound || 0; sumSC += a.shinyCap || 0;
+        pioD[i] = d;
+        try { const pc2 = await webviews[i].executeJavaScript(PIO_CARD); if (pc2) pioLeitura[i] = pc2; } catch (e) { }
+        // PIO: ouro/h só conta com 1 h de hunt; XP/h vem da sessão do jogo (a mesma do painel Economia, com boosts).
+        const pioR = typeof pioRitmo === 'function' ? pioRitmo(i + 1) : {};
+        if (!(+a.xph > 0) && pioR && pioR.xph != null) a.xph = Math.round(pioR.xph);
+        if ((a.seconds || 0) >= 3600) { sumG += a.gph || 0; nG++; }
+        sumX += a.xph || 0; sumK += a.kph || 0; sumC += a.captures || 0; sumSF += a.shinyFound || 0; sumSC += a.shinyCap || 0;
         const cl = d.catchLog || [];
         const best = cl.length ? cl.reduce((b, x) => (bestScore(x) > bestScore(b) ? x : b)) : null;
         const last = cl.length ? cl[cl.length - 1] : null;
@@ -11432,7 +12476,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           }
         });
         if (d.usedList && d.usedList.length) (utBase[i] || (utBase[i] = { init: 0 })).init = 1; // a partir daqui, especie inedita = tentativa da sessao
-        rows.push({ i, dot, cid: d.cid || '', name: d.name || nm0, st: (d.live !== false ? 'on' : 'wait'), hunt: d.hunt || '', secs: a.seconds || 0, gph: a.gph || 0, xph: a.xph || 0, kph: a.kph || 0, mvs: Array.isArray(a.mvs) ? a.mvs : [], hpk: +a.hpk || 0, caps: a.captures || 0, sh: a.shinyFound || 0, best, last, since: a.sinceCatch || 0, lead: (d.team || []).find(p => p.ld) || (d.team || [])[0] || null, shares: d.chatShares || [], team: d.team || [], inv: d.invMap || {}, tlv: +d.level || 0, balls: +d.balls || 0, equippedBall: d.equippedBall || null, pots: +d.potions || 0, aBalls: a.ballsUsed || 0, aPots: a.potsUsed || 0 });
+        rows.push({ velho: velhoMs[i] || 0, i, dot, cid: d.cid || '', name: d.name || nm0, st: (d.live !== false ? 'on' : 'wait'), hunt: d.hunt || '', secs: a.seconds || 0, gph: a.gph || 0, xph: a.xph || 0, kph: a.kph || 0, mvs: Array.isArray(a.mvs) ? a.mvs : [], hpk: +a.hpk || 0, caps: a.captures || 0, sh: a.shinyFound || 0, best, last, since: a.sinceCatch || 0, lead: (d.team || []).find(p => p.ld) || (d.team || [])[0] || null, shares: d.chatShares || [], team: d.team || [], inv: d.invMap || {}, tlv: +d.level || 0, balls: +d.balls || 0, equippedBall: d.equippedBall || null, pots: +d.potions || 0, aBalls: a.ballsUsed || 0, aPots: a.potsUsed || 0 });
       }
       dhist.push({ t: Date.now(), g: sumG, x: sumX });
       dhist = dhist.filter(p => p.t > Date.now() - 3600e3);
@@ -11456,23 +12500,151 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       SB.kpis = () => {
         const kpi = (v, l, c) => '<div class="cd-kpi"><div class="v"' + (c ? ' style="color:' + c + '"' : '') + '>' + v + '</div><div class="l">' + l + '</div></div>';
         return '<div class="cd-kpis">'
-          + kpi(ncs(sumG), t('cdGold'), sumG < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + kpi(nc(sumX), t('cdXp'), 'var(--cd-xp, #79c0ff)')
+          + kpi(nG ? ncs(sumG) : 'medindo', t('cdGold') + (nG && nG < ativos ? ' (' + nG + ' conta' + (nG > 1 ? 's' : '') + ' com 1 h+)' : ''), sumG < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + kpi(nc(sumX), t('cdXp'), 'var(--cd-xp, #79c0ff)')
           + kpi(nf(sumK), t('cdKills')) + kpi(nf(sumC), t('cdCaps'))
           + kpi(nf(sumSF) + ' / ' + nf(sumSC), t('cdShiny'), sumSF > 0 ? 'var(--cd-shiny, #f778ba)' : null)
           + kpi(ativos + ' / ' + count, t('cdActive'), 'var(--cd-positive, #3fb950)') + '</div>';
+      };
+      // ===== PIO: modo Simples sob medida (topo, cards por conta, pedras, raros) =====
+      const pioCorMain = '#79c0ff', pioCorAlt = 'var(--cd-positive, #3fb950)', pioCorWarn = 'var(--cd-warning, #f0883e)', pioCorOuro = '#f2c665', pioCorShiny = 'var(--cd-shiny, #f778ba)';
+      const pioCard = (lbl, v, sub, cor, grande) => '<div style="background:var(--cd-card, #161b22);border:1px solid var(--cd-border, #30363d);border-radius:8px;padding:7px 9px;min-width:0">'
+        + '<div style="font-size:10px;letter-spacing:.04em;text-transform:uppercase;color:var(--cd-muted, #7d8590)">' + lbl + '</div>'
+        + '<div style="font-size:' + (grande ? 21 : 17) + 'px;font-weight:800;color:' + (cor || 'var(--cd-text, #e6edf3)') + ';white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + v + '</div>'
+        + (sub ? '<div style="font-size:10.5px;color:var(--cd-muted, #8b949e);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + sub + '</div>' : '') + '</div>';
+      // Números da sessão do jogo (iguais ao painel Economia); sem a sessão do jogo, usa a leitura antiga como reserva.
+      const pioSess = i => {
+        const c = pioLeitura[i], s0 = c && c.sess;
+        if (s0 && s0.ms > 0) { const h = s0.ms / 3600000;
+          return { fonte: 'jogo', seg: s0.ms / 1000, xp: s0.xp, xph: s0.xp / h, liq: s0.gold - s0.gastos, liqh: (s0.gold - s0.gastos) / h, gastos: s0.gastos, abates: s0.abates, kph: s0.abates / h, caps: s0.capturas, capsh: s0.capturas / h,
+            shV: s0.shV != null ? s0.shV : 0, shP: s0.shP != null ? s0.shP : 0 }; }
+        const a = (pioD[i] && pioD[i].a) || {};
+        return { fonte: 'grid', seg: a.seconds || 0, xp: a.xpg || 0, xph: a.xph || 0, liq: a.balance || 0, liqh: a.gph || 0, gastos: a.supplyGold || 0, abates: a.kills || 0, kph: a.kph || 0, caps: a.captures || 0,
+          capsh: a.seconds > 0 ? (a.captures || 0) / a.seconds * 3600 : 0, shV: a.shinyFound || 0, shP: a.shinyCap || 0 };
+      };
+      // Cabeçalho de faixa: ícone, título, subtítulo e cor de destaque (borda superior).
+      const pioCab = (ico, titulo, sub, cor, extra) => '<div class="cd-h" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="font-size:13px">' + ico + '</span><span style="color:' + cor + ';font-weight:800;font-size:11px">' + titulo + '</span>'
+        + (sub ? '<span style="text-transform:none;letter-spacing:0;color:var(--cd-muted, #8b949e)">' + sub + '</span>' : '') + (extra ? '<span style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;text-transform:none">' + extra + '</span>' : '') + '</div>';
+      const pioSecAbre = cor => '<div class="cd-sec" style="border-top:3px solid ' + cor + '">';
+      const pioUsd = g => 'US$ ' + pioGemasEmUsd(g).toFixed(2).replace('.', ',');
+      SB.pioTopo = () => {
+        let gAlt = 0, nAlt = 0, xpMain = null, shV = 0, shP = 0, gemas = 0, segMax = 0, rarosQ = 0, rarosG = 0, pedras = 0;
+        ordered.forEach(r => { const d = pioD[r.i]; if (!d || r.st !== 'on') return; const z = pioSess(r.i);
+          if (r.i === 0) xpMain = z.xph || 0; else if (z.seg >= 3600) { gAlt += z.liqh || 0; nAlt++; }
+          segMax = Math.max(segMax, +z.seg || 0);
+          shV += +z.shV || 0; shP += +z.shP || 0;
+          const ses = pioDropsSessao(r.i + 1); pedras += ses.pedras;
+          ses.raros.forEach(x => { rarosQ += x.q; const pr = pioPrecoItem(x.n); rarosG += (pr ? pr.gemas : 0) * x.q; }); });
+        Object.keys(pioUltimo).forEach(c => { gemas += +pioUltimo[c].gemas || 0; });
+        const desde = segMax > 0 ? new Date(Date.now() - segMax * 1000) : null, p2 = x => String(x).padStart(2, '0');
+        return pioSecAbre(pioCorMain) + pioCab('⏱', 'Sessão', desde ? 'desde ' + p2(desde.getHours()) + ':' + p2(desde.getMinutes()) + ' · ' + tsec(segMax) + ' (até o reset)' : 'até o reset', pioCorMain,
+            '<button id="pioReset" class="cd-inp" title="Zera a sessão das 4 contas. O histórico (Hoje, 7 dias e arquivos da pasta claude) continua.">⟲ Resetar sessão</button>')
+          + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px">'
+          + pioCard('Ouro líq./h das alts', nAlt ? ncs(gAlt) : 'medindo', nAlt ? nAlt + ' conta(s) com 1 h+' : 'precisa de 1 h na hunt', pioCorAlt, true)
+          + pioCard('XP/h do main', xpMain != null ? nc(xpMain) : '—', 'com bônus, sessão do jogo', pioCorMain, true)
+          + pioCard('Raros na sessão', nf(rarosQ), rarosQ ? '≈ ' + pioNum(rarosG) + ' gemas líq. · ' + pioUsd(rarosG) : 'nenhum ainda', rarosQ ? pioCorOuro : null)
+          + pioCard('Pedras na sessão', nf(pedras), 'todas as contas')
+          + pioCard('Shinies na sessão', nf(shV) + ' / ' + nf(shP), 'vistos / pegos', (shV || shP) ? pioCorShiny : null)
+          + pioCard('<span style="display:inline-block;filter:hue-rotate(150deg) saturate(1.6)">💎</span> Gemas agora', nf(gemas), 'soma das contas · ' + pioUsd(gemas) + ' se sacar · meta ' + nf(pioAlvo().gemas) + '/conta')
+          + '</div></div>';
+      };
+      SB.pioContas = () => {
+        const alvo = pioAlvo();
+        const blocos = ordered.map(r => {
+          const d = pioD[r.i], u = pioUltimo[r.i + 1] || {}, main = r.i === 0, cor = main ? pioCorMain : pioCorAlt;
+          if (!d || r.st !== 'on') return '<div style="border:1px solid var(--cd-border, #30363d);border-radius:10px;padding:10px;opacity:.6"><b>' + esc(r.name) + '</b> · ' + (r.st === 'off' ? t('cdOff') : t('cdWaiting')) + '</div>';
+          const z = pioSess(r.i), cd = pioLeitura[r.i] || {};
+          const at = cd.ativo, ld0 = (d.team || []).find(p => p && p.ld) || (d.team || [])[0] || null;
+          const lead = at ? { name: at.nome, level: at.nivel, shiny: at.shiny, ivt: at.ivt, q: at.q } : ld0;
+          const huntTxt = cd.hunt ? String(cd.hunt).replace(/[_-]+/g, ' ') : (r.hunt || '—');
+          // Nível e faixa de XP sempre derivados do XP total (curva exata do jogo): o nível do painel e os limites
+          // vindos do estado podiam estar de níveis diferentes, deixando a barra cheia e o "próximo nível" vazio.
+          const xp = +u.xp || 0;
+          let lvl = d.level || u.level || 0;
+          if (xp > 0) { lvl = Math.max(1, lvl - 3); while (pioXpAte(lvl + 1) <= xp) lvl++; }
+          const xn = pioXpAte(lvl), xpx = pioXpAte(lvl + 1);
+          const pct = xpx > xn ? Math.max(0, Math.min(100, (xp - xn) / (xpx - xn) * 100)) : 0;
+          const xph = +z.xph || 0, meta = Number(alvo[r.i + 1]) || (main ? 2000 : 1000);
+          // Previsões pelo ritmo real das últimas 6 h (XP total do treinador, já com paradas e Centro). O XP/h da sessão
+          // oscila demais logo após um reset ou ida ao Centro; fica só como reserva enquanto não houver 1 h de histórico.
+          const r6 = pioRitmo(r.i + 1).xph, ritmo = r6 > 0 ? r6 : xph, fonteRitmo = r6 > 0 ? 'ritmo 6 h: ' + nc(r6) + '/h' : 'ritmo da sessão';
+          const ritmoProx = z.seg >= 1800 && xph > 0 ? xph : ritmo;
+          const prox = ritmoProx > 0 && xpx > xp ? tsec((xpx - xp) / ritmoProx * 3600) : '—';
+          const falta = pioXpAte(meta) - xp, etaMeta = ritmo > 0 && falta > 0 ? (falta / ritmo >= 48 ? (falta / ritmo / 24).toFixed(1).replace('.', ',') + ' dias' : Math.round(falta / ritmo) + ' h') : (falta <= 0 ? 'atingida' : '—');
+          const kph = +z.kph || 0, cap = +z.caps || 0, kills = +z.abates || 0;
+          const umACada = kph > 0 ? (3600 / kph).toFixed(1).replace('.', ',') + ' s' : '—';
+          const capCada = cap > 0 ? Math.round(kills / cap) : null;
+          const longo = z.seg >= 3600;
+          const bag = d.bag || [];
+          const grp = lb => (bag.find(g => g.label === lb) || { items: [], total: 0 });
+          const bolas = grp('Pokébolas').items, rev = grp('Revive').total;
+          const ses = pioDropsSessao(r.i + 1);
+          const kpi = (lbl, v, sub, destaque) => '<div style="min-width:0"><div style="font-size:10px;color:var(--cd-muted, #7d8590);text-transform:uppercase">' + lbl + '</div><div style="font-size:' + (destaque ? 20 : 16) + 'px;font-weight:800;color:' + (destaque ? cor : 'var(--cd-text, #e6edf3)') + '">' + v + '</div><div style="font-size:10.5px;color:var(--cd-muted, #8b949e)">' + sub + '</div></div>';
+          return '<div style="border:1px solid ' + cor + ';border-left:4px solid ' + cor + ';border-radius:10px;padding:9px 11px;min-width:0">'
+            + '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="cd-dot" style="background:' + r.dot + '"></span><b style="font-size:14px">' + esc(r.name) + '</b>'
+            + '<span style="color:' + cor + ';font-weight:800">Nv ' + nf(lvl) + '</span><span style="color:var(--cd-muted, #8b949e);font-size:11px">próximo nível em ' + prox + ' · meta ' + nf(meta) + ': <span title="' + fonteRitmo + '">' + etaMeta + '</span></span>'
+            + '<span style="margin-left:auto;font-size:11px"><span title="Gemas" style="display:inline-block;filter:hue-rotate(150deg) saturate(1.6)">💎</span> ' + nf(u.gemas) + (u.diamantes != null ? ' · <span title="Diamantes">💎</span> ' + nf(u.diamantes) : '') + (u.vipDias ? ' · VIP ' + u.vipDias + 'd' : '') + (u.passeDias ? ' · Passe ' + u.passeDias + 'd' : '') + '</span></div>'
+            + '<div style="height:5px;background:var(--cd-border, #30363d);border-radius:3px;margin:5px 0"><div style="height:5px;width:' + pct.toFixed(1) + '%;background:' + cor + ';border-radius:3px"></div></div>'
+            + '<div style="font-size:11.5px;color:var(--cd-secondary, #adbac7);margin-bottom:6px">' + esc(huntTxt) + ' · ⏱ ' + tsec(z.seg) + (z.fonte === 'grid' ? ' <span title="Sessão do jogo indisponível nesta leitura: números do grid, sem bônus de XP" style="color:' + pioCorWarn + '">(grid)</span>' : '') + (u.boostXp ? ' · <span style="color:' + pioCorMain + '">XP ' + esc(u.boostXp) + '</span>' : '') + '</div>'
+            + '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">'
+            + kpi('XP/h', nc(xph), 'sessão ' + nc(z.xp), main)
+            + kpi('Lucro líq./h', '<span' + (longo ? '' : ' style="opacity:.6" title="Menos de 1 h na hunt: valor ainda instável"') + '>' + ncs(z.liqh) + '</span>', 'sessão ' + ncs(z.liq) + ' · gasto ' + nc(z.gastos), !main)
+            + kpi('Abates/h', nf(kph), '1 a cada ' + umACada, !main)
+            + kpi('Capturas/h', nf(z.capsh), capCada ? '1 a cada ' + nf(capCada) + ' abates' : '—', false)
+            + '</div>'
+            + '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:7px;font-size:11.5px">'
+            + (lead ? '<span>' + (lead.shiny ? '✨ ' : '') + '<b>' + esc(lead.name) + '</b> Nv ' + nf(lead.level) + (lead.ivt != null ? ' · IV ' + nf(lead.ivt) + '/192' : '') + (lead.q ? ' · Q ' + (+lead.q).toFixed(3).replace('.', ',') : '') + '</span>' : '')
+            + '<span style="color:' + pioCorShiny + '">✨ ' + nf(z.shV) + ' / ' + nf(z.shP) + '</span>'
+            + '<span style="color:' + pioCorOuro + '">Raros: ' + (ses.raros.length ? ses.raros.map(x => nf(x.q) + '× ' + esc(x.n)).join(', ') : '0') + '</span>'
+            + '<span>Pedras: ' + nf(ses.pedras) + '</span>'
+            + '<span style="margin-left:auto;' + (rev < 100 ? 'color:' + pioCorWarn + ';font-weight:700' : '') + '">Revive ' + nf(rev) + '</span>'
+            + bolas.map(b => '<span style="' + (b.qty < 500 ? 'color:' + pioCorWarn + ';font-weight:700' : '') + '">' + esc(String(b.name).replace(' Ball', '')) + ' ' + nf(b.qty) + '</span>').join('')
+            + '</div></div>';
+        });
+        return pioSecAbre('var(--cd-positive, #3fb950)') + pioCab('👥', 'Contas', 'sessão de cada conta', 'var(--cd-positive, #3fb950)') + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:10px">' + blocos.join('') + '</div></div>';
+      };
+      SB.pioPedras = () => {
+        const hoje = pioDropsPorItem('pedra', 0), sem = pioDropsPorItem('pedra', 7);
+        const nomes = Object.keys(sem).sort((x, y) => (sem[y].valor || 0) - (sem[x].valor || 0));
+        if (!nomes.length) return pioSecAbre('#a5b0bc') + pioCab('🪨', 'Pedras', 'drops', '#a5b0bc') + '<div style="opacity:.7">Nenhuma pedra registrada ainda. O registro começa nesta versão.</div></div>';
+        const topo = nomes.reduce((b, n) => (hoje[n] && (!b || hoje[n].valor > hoje[b].valor)) ? n : b, null);
+        const linhas = nomes.map(n => { const h = hoje[n] || { qtd: 0, porConta: {}, valor: 0 }, s = sem[n], p = pioPrecoItem(n);
+          return '<tr' + (n === topo ? ' style="color:' + pioCorOuro + ';font-weight:700"' : '') + '><td>' + esc(n) + '</td>' + [1, 2, 3, 4].map(c => '<td>' + (h.porConta[c] ? nf(h.porConta[c]) : '·') + '</td>').join('')
+            + '<td><b>' + nf(h.qtd) + '</b></td><td>' + nf(s.qtd) + '</td><td>' + (p && p.coinsBruto ? pioNum(p.coinsBruto) : '—') + '</td><td>' + pioNum(h.valor) + '</td></tr>'; }).join('');
+        const tot = nomes.reduce((acc, n) => acc + ((hoje[n] && hoje[n].valor) || 0), 0);
+        return pioSecAbre('#a5b0bc') + pioCab('🪨', 'Pedras', 'drops de hoje e 7 dias', '#a5b0bc') + '<table class="cd-table"><thead><tr><th>Pedra</th><th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>Hoje</th><th>7 dias</th><th>Mediana</th><th>Valor líquido hoje</th></tr></thead><tbody>'
+          + linhas + '</tbody><tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td style="color:' + pioCorOuro + '">' + pioNum(tot) + ' Coins</td></tr></tfoot></table>'
+          + '<div style="font-size:10.5px;opacity:.7;margin-top:4px">Mediana do mercado (fotos por hora do Sniper). Valor líquido: mediana menos 15% de taxa de venda, arredondado para baixo por unidade. Só drops; compras do Sniper ficam em Raros.</div></div>';
+      };
+      SB.pioRaros = () => {
+        const ev = pioDrops.filter(x => x.tipo === 'raro').slice(-40).reverse();
+        const hoje = pioDropsPorItem('raro', 0), sem = pioDropsPorItem('raro', 7);
+        const resumo = Object.keys(sem).map(n => esc(n) + ': <b>' + nf((hoje[n] || {}).qtd || 0) + '</b> dropados hoje · ' + nf(sem[n].qtd) + ' em 7 dias').join('<br>');
+        const linhas = ev.map(x => { const p = pioPrecoItem(x.item); return '<tr><td>' + pioHora(x.t) + '</td><td>Conta ' + x.conta + '</td><td>' + esc(x.item) + '</td><td>' + nf(x.qtd) + '</td>'
+          + '<td><span style="padding:1px 6px;border-radius:8px;font-size:10.5px;background:' + (x.origem === 'drop' ? 'rgba(63,185,80,.18);color:#3fb950' : 'rgba(121,192,255,.18);color:#79c0ff') + '">' + (x.origem === 'drop' ? 'Drop' : 'Sniper') + '</span></td>'
+          + '<td>' + (p && p.gemas ? '≈ ' + pioNum(p.gemas * x.qtd) + ' gemas líq. (US$ ' + pioGemasEmUsd(p.gemas * x.qtd).toFixed(2).replace('.', ',') + ')' : (x.preco ? pioNum(x.preco) + ' ' + (x.moeda || '') : '—')) + '</td></tr>'; }).join('');
+        return pioSecAbre(pioCorOuro) + pioCab('💎', 'Raros', 'últimos 40 (drop e Sniper)', pioCorOuro) + (resumo ? '<div style="font-size:11.5px;margin-bottom:6px;color:' + pioCorOuro + '">' + resumo + '</div>' : '')
+          + (linhas ? '<table class="cd-table"><thead><tr><th>Quando</th><th>Conta</th><th>Item</th><th>Qtd</th><th>Origem</th><th>Valor</th></tr></thead><tbody>' + linhas + '</tbody></table>' : '<div style="opacity:.7">Nenhum raro registrado ainda.</div>') + '</div>';
       };
       SB.today = () => {
         const T = totalDia(curDay), W = somaDias(7), A = somaDias(0);
         const kpi = (v, l, c) => '<div class="cd-kpi"><div class="v"' + (c ? ' style="color:' + c + '"' : '') + '>' + v + '</div><div class="l">' + l + '</div></div>';
         const barra = (v, m, lbl) => { const p = Math.min(100, Math.max(0, Math.round(v / m * 100))); return '<div style="margin-top:7px"><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--cd-muted, #7d8590)"><span>' + lbl + '</span><span>' + nf(Math.round(v)) + ' / ' + nf(m) + (p >= 100 ? ' 🎉' : '') + '</span></div><div class="cd-goal"><i style="width:' + p + '%' + (p >= 100 ? ';background:var(--cd-gold, #f2c665)' : '') + '"></i></div></div>'; };
         const linha = (lbl, D) => '<span>' + lbl + ': <b style="color:var(--cd-secondary, #adbac7)">' + ncs(Math.round(D.g)) + '</b> gold · <b style="color:var(--cd-xp, #79c0ff)">' + nc(D.x) + '</b> XP · <b>' + nf(D.c) + '</b> ' + t('stCaptures').toLowerCase() + ' · <span style="color:var(--cd-shiny, #f778ba)">✨ ' + nf(D.sf) + '/' + nf(D.sc) + '</span></span>';
-        return '<div class="cd-sec"><div class="cd-h" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">' + t('cdToday') + ' · ' + curDay
+        const PH = pioDropsResumo(0), PS = pioDropsResumo(7), t0h = new Date(); t0h.setHours(0, 0, 0, 0);
+        const notaHoje = lifeCatch.filter(x => +x.t >= +t0h && x.nota != null && +x.nota >= 3.5).length;
+        return pioSecAbre(pioCorOuro) + '<div class="cd-h" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-size:13px">📅</span><span style="color:' + pioCorOuro + ';font-weight:800;font-size:11px">' + t('cdToday') + '</span><span style="text-transform:none;letter-spacing:0;color:var(--cd-muted, #8b949e)">' + curDay + ' · desde 00:00</span>'
           + '<span style="margin-left:auto;display:flex;gap:10px;align-items:center;flex-wrap:wrap;text-transform:none">'
           + '<label style="display:flex;gap:4px;align-items:center">' + t('goalG') + ' <input id="cdGoalG" type="number" min="0" step="1000" value="' + (goals.g || '') + '" class="cd-inp" style="width:90px"></label>'
           + '<label style="display:flex;gap:4px;align-items:center">' + t('goalC') + ' <input id="cdGoalC" type="number" min="0" value="' + (goals.c || '') + '" class="cd-inp" style="width:60px"></label>'
           + '<button id="cdCsv" title="' + t('csvTitle') + '">⬇ ' + t('csvDia') + '</button>'
           + '<button id="cdCsvHunts" title="' + t('csvHuntsTitle') + '">⬇ ' + t('csvHunts') + ' (' + huntLog.length + ')</button></span></div>'
           + '<div class="cd-kpis">' + kpi(ncs(Math.round(T.g)), 'Gold', T.g < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + kpi(nc(T.x), 'XP', 'var(--cd-xp, #79c0ff)') + kpi(nf(T.kl), 'Kills') + kpi(nf(T.c), t('stCaptures')) + kpi(nf(T.sf) + ' / ' + nf(T.sc), t('cdShiny'), T.sf > 0 ? 'var(--cd-shiny, #f778ba)' : null) + '</div>'
+          + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:8px">'
+          + pioCard('Raros dropados', nf(PH.raros.qtd), '≈ ' + pioNum(PH.raros.gemas) + ' gemas líq. · ' + pioUsd(PH.raros.gemas) + ' · 7 dias: ' + nf(PS.raros.qtd), PH.raros.qtd ? pioCorOuro : null)
+          + pioCard('Pedras dropadas', nf(PH.pedras.qtd), '≈ ' + pioNum(PH.pedras.coins) + ' Coins líq. · 7 dias: ' + nf(PS.pedras.qtd))
+          + pioCard('Nota ≥ 3,5', nf(notaHoje), 'capturas de todas as contas', notaHoje ? pioCorOuro : null)
+          + pioCard('Raros via Sniper', nf(PH.sniper), '7 dias: ' + nf(PS.sniper), PH.sniper ? '#79c0ff' : null)
+          + '</div>'
           + (goals.g > 0 ? barra(T.g, goals.g, t('goalG')) : '') + (goals.c > 0 ? barra(T.c, goals.c, t('goalC')) : '')
           + (() => {
             if (!(goals.g > 0) || T.g >= goals.g || !(sumG > 0)) return '';
@@ -11511,11 +12683,12 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const stTxt = r.st === 'off' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdOff') + '</span>'
             : r.st === 'wait' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdWaiting') + '</span>'
               : '<span style="color:var(--cd-positive, #3fb950)">' + t('cdHunting') + '</span>' + folegoTxt(r); // o pokémon em uso agora tem coluna própria
-          s += '<tr data-i="' + r.i + '"><td><span class="cd-dot" style="background:' + r.dot + '"></span>' + esc(r.name) + '</td>'
+          const pioVelho = (r.velho || 0) > 60000;
+          s += '<tr data-i="' + r.i + '"' + (pioVelho ? ' style="opacity:.5" title="Dado antigo: a última leitura desta conta falhou"' : '') + '><td><span class="cd-dot" style="background:' + r.dot + '"></span>' + esc(r.name) + (pioVelho ? ' <span style="font-size:10px;color:var(--cd-muted, #7d8590)">lido há ' + Math.round(r.velho / 60000) + ' min</span>' : '') + '</td>'
             + '<td>' + (r.lead ? (r.lead.shiny ? '✨ ' : '') + esc(r.lead.name) + ' <b style="color:var(--cd-secondary, #adbac7)">Lv' + nf(r.lead.level) + '</b>' : '—') + '</td>'
             + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + '</td>'
             + '<td style="color:var(--cd-secondary, #adbac7)">' + (r.st === 'on' ? tsec(r.secs) : '—') + '</td>'
-            + '<td style="color:' + ((r.gph || 0) < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (r.st === 'on' ? ncs(r.gph) : '—') + '</td>'
+            + '<td style="color:' + ((r.gph || 0) < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (r.st === 'on' ? ((r.secs || 0) >= 3600 ? ncs(r.gph) : '<span style="opacity:.65" title="Ouro por hora só depois de 1 h na mesma hunt">medindo ' + Math.floor((r.secs || 0) / 60) + ' min</span>') : '—') + '</td>'
             + '<td style="color:var(--cd-xp, #79c0ff)">' + (r.st === 'on' ? nc(r.xph) : '—') + '</td>'
             + '<td>' + (r.st === 'on' ? nf(r.kph) : '—') + '</td>'
             + '<td>' + (r.st === 'on' ? nf(r.caps) : '—') + '</td>'
@@ -11525,7 +12698,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
             + '<td>' + stTxt + '</td></tr>';
         });
         return s + '</tbody><tfoot><tr><td>' + t('cdTotal') + ' (' + ativos + ')</td><td></td><td></td><td></td>'
-          + '<td style="color:' + (sumG < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + ncs(sumG) + '</td>'
+          + '<td style="color:' + (sumG < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (nG ? ncs(sumG) : '<span style="opacity:.65">medindo</span>') + '</td>'
           + '<td style="color:var(--cd-xp, #79c0ff)">' + nc(sumX) + '</td><td>' + nf(sumK) + '</td><td>' + nf(sumC) + '</td>'
           + '<td>' + nf(sumSF) + '</td><td></td><td></td><td></td></tr></tfoot></table></div>';
       };
@@ -11566,7 +12739,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           ['spDef', 'SP.DEF'],
           ['speed', 'SPEED']
         ].map(o => '<option value="' + o[0] + '"' + (f.stat === o[0] ? ' selected' : '') + '>' + o[1] + '</option>').join('');
-        return '<div class="cd-sec"><div class="cd-h">' + t('cdCatches') + '</div>'
+        return pioSecAbre('var(--cd-iv, #55e6d3)') + pioCab('🎯', t('cdCatches'), cdFC.nota ? 'Nota ≥ ' + String(cdFC.nota).replace('.', ',') : '', 'var(--cd-iv, #55e6d3)')
           + '<div class="cd-cfg-row" style="flex-wrap:wrap;gap:4px;margin-bottom:6px">'
           + '<select id="cdFcP" class="cd-inp">' + optConta + '</select>'
           + '<input id="cdFcN" type="text" class="cd-inp" style="width:88px" placeholder="🔎" value="' + esc(f.n) + '">'
@@ -11584,7 +12757,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
             const ivStr = (effIv > 0 ? effIv + '/192' : '—');
             const pills = x.ivs ? ivsHtml(x.ivs) : '';
             const tFull = x.ivs ? (' · ' + ivsFmt(x.ivs)) : '';
-            return '<div class="cd-row cd-capture"><div class="cd-capture-main"><span class="rn" title="' + esc(x.n + ' · ' + x.acc) + '"><span class="cd-dot" style="background:' + x.dot + '"></span>' + (x.fx ? '<span title="' + t('cdFirst') + '">🆕</span> ' : '') + (x.sh ? '✨ ' : '') + esc(x.n) + raroHtml(x.q) + ' <span style="color:var(--cd-muted, #7d8590)">· ' + esc(x.acc) + '</span></span><span style="color:var(--cd-iv, #55e6d3);font-weight:600" title="' + esc(ivStr + tFull) + '">' + ivStr + '</span><span style="color:var(--cd-secondary, #adbac7)">Nota: ' + (x.nota != null && Number.isFinite(+x.nota) ? (+x.nota).toFixed(2) : '—') + '</span><span style="color:var(--cd-gold, #f2c665)">Potência: ' + (+x.potencia >= 1 && +x.potencia <= 5 ? 'P' + (+x.potencia) : '—') + '</span><span style="color:var(--cd-gold, #f2c665)">' + (+x.q ? '×' + (+x.q).toFixed(2) : '—') + '</span><span class="rt">' + fmtDT(x.t) + '</span></div>' + (pills || '') + '</div>';
+            return '<div class="cd-row cd-capture"><div class="cd-capture-main"><span class="rn" title="' + esc(x.n + ' · ' + x.acc) + '"><span class="cd-dot" style="background:' + x.dot + '"></span>' + (x.fx ? '<span title="' + t('cdFirst') + '">🆕</span> ' : '') + (x.sh ? '✨ ' : '') + esc(x.n) + raroHtml(x.q) + ' <span style="color:var(--cd-muted, #7d8590)">· ' + esc(x.acc) + '</span></span><span style="color:var(--cd-iv, #55e6d3);font-weight:600" title="' + esc(ivStr + tFull) + '">' + ivStr + '</span><span style="color:' + (+x.nota >= 4 ? '#f2c665;font-weight:800' : +x.nota >= 3.5 ? '#e6edf3;font-weight:700' : 'var(--cd-secondary, #adbac7)') + '">Nota: ' + (x.nota != null && Number.isFinite(+x.nota) ? (+x.nota).toFixed(2) : '—') + '</span><span style="color:var(--cd-gold, #f2c665)">Potência: ' + (+x.potencia >= 1 && +x.potencia <= 5 ? 'P' + (+x.potencia) : '—') + '</span><span style="color:var(--cd-gold, #f2c665)">' + (+x.q ? '×' + (+x.q).toFixed(2) : '—') + '</span><span class="rt">' + fmtDT(x.t) + '</span></div>' + (pills || '') + '</div>';
           }).join('') : '<div class="cd-empty">' + t('cdNone') + '</div>') + '</div>';
       };
       SB.team = () => { // chave 'team', a mesma do CDSECTS e do cardsCfg.order (SB.teams nunca era desenhado)
@@ -11629,7 +12802,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           + (linhas || '<div class="cd-empty">' + t('cdNone') + '</div>') + '</div>';
       };
       SB.shinies = () => {
-        const shinies = lifeShiny.slice(-12).reverse(); return '<div class="cd-sec"><div class="cd-h">' + t('cdShinies') + '</div>'
+        const shinies = lifeShiny.slice(-12).reverse(); return pioSecAbre(pioCorShiny) + pioCab('✨', t('cdShinies'), '', pioCorShiny)
           + '<div style="display:flex;gap:10px;margin-bottom:8px;font-size:11px;flex-wrap:wrap"><span style="color:var(--cd-positive, #3fb950)">' + nf(sumSC) + ' ' + t('cdCaught') + '</span><span style="color:var(--cd-gold, #f2c665)">' + nf(sumSF) + ' ' + t('cdSeen') + '</span><span style="color:var(--cd-danger, #f85149)">' + nf(lost) + ' ' + t('cdLost') + '</span><span style="color:var(--cd-muted, #6e7681);margin-left:auto">' + t('cdLifeHint') + '</span></div>'
           + (shinies.length ? shinies.map(x => '<div class="cd-row"><span class="cd-dot" style="background:' + x.dot + '"></span><span class="rn">✨ <b style="color:var(--cd-shiny, #f778ba)">' + esc(nomeShiny(x)) + '</b>' + (x.cap ? ' <span style="color:var(--cd-positive, #3fb950)" title="' + t('shCapT') + '">✓</span>' : (x.def ? ' <span style="color:var(--cd-danger, #f85149)" title="' + t('shDefT') + '">✕</span>' : '')) + ' <span style="color:var(--cd-muted, #7d8590)">· ' + esc(x.acc) + '</span></span><span class="rt">' + fmtDT(x.t) + '</span></div>').join('') : '<div class="cd-empty">' + t('cdNone') + '</div>') + '</div>';
       };
@@ -11874,6 +13047,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       cardsEl.querySelectorAll('th[data-k]').forEach(th => th.onclick = () => { const k = th.dataset.k; if (dsort.k === k) dsort.d *= -1; else dsort = { k, d: -1 }; cdSortPending = true; refreshCards(true); });
       cardsEl.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => { const i = +tr.dataset.i; cardsOn = false; applyCards(); window.PIWView?.set('windows'); toggleExpand(i); });
       const rb = cardsEl.querySelector('#cdReset'); if (rb) rb.onclick = resetSessao;
+      const prb = cardsEl.querySelector('#pioReset'); if (prb) prb.onclick = resetSessao;
       // ranking
       const hsc = cardsEl.querySelector('#cdHuntScope'); if (hsc) hsc.onchange = () => { huntScope = hsc.value; lsSet('huntScope', huntScope); refreshCards(true); };
       const hs = cardsEl.querySelector('#cdHuntSort'); if (hs) hs.onchange = () => { huntSort = hs.value; refreshCards(true); };
@@ -11928,7 +13102,14 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     // em totais da conta (gold, nivel, shinies de vida) nem em knownPokes (senao contaria captura repetida).
     const RESET_SESS = "(()=>{const P=window.__poke;if(!P)return;P.sess={start:Date.now(),kills:0,xp:0,balls:0,captures:0,drops:{},shinyN:0,shinySeen:{},shinyCapN:0,faintN:0,sellG:0,supGold:0,supN:0,gold:0,slug:P.lastSlug||'',hp:{}};P.catchLog=[];P.shinyLog=[];P.anBase=(P.ws&&P.ws.analyzer&&typeof P.ws.analyzer==='object')?JSON.parse(JSON.stringify(P.ws.analyzer)):null;try{const nK=(P.nick||(P.estado&&P.estado.nick)||'').toLowerCase();if(nK)localStorage.removeItem('sessao-hunt:'+nK);}catch(e){}try{const rb=document.querySelector('.eco-reset,#sessao-reset');if(rb)rb.click();}catch(e){}try{if(P.sock&&P.sock.readyState===1)P.sock.send(JSON.stringify({type:'analyzer-clear'}))}catch(e){}})()";
     function resetSessao() {
-      if (!window.confirm(t('resetConfirm'))) return;
+      if (!window.confirm(t('resetConfirm') + '\n\nO histórico (Hoje, 7 dias e a pasta claude) continua.')) return;
+      // PIO: antes de zerar, guarda o resumo de cada conta em claude\sessoes.
+      try {
+        const agora = Date.now();
+        webviews.forEach((w, i) => { const c = stCache[i]; if (!c || !c.d || off[i]) return; const d = c.d, a = d.a || {};
+          pioArq.anexar('sessoes/' + pioMes(agora) + '.jsonl', JSON.stringify({ zeradaEm: pioDataHora(agora), conta: i + 1, nick: d.name, hunt: d.hunt, segundos: a.seconds, xp: a.xpg, xpH: a.xph,
+            abates: a.kills, abatesH: a.kph, capturas: a.captures, lucroLiq: a.balance, lucroLiqH: a.gph, gasto: a.supplyGold, shiniesVistos: a.shinyFound, shiniesPegos: a.shinyCap, drops: a.drops || d.drops || [] }) + '\n'); });
+      } catch (e) { }
       webviews.forEach((w, i) => { if (off[i] || !w) return; try { w.executeJavaScript(RESET_SESS).catch(() => { }); } catch { } });
       dhist = []; // zera a tendencia (sparklines) tambem
       utBase.length = 0; sessSnap.length = 0; // shinies tentados "sessao" recomecam; e a semente antiga nao ressuscita a sessao zerada
@@ -11937,7 +13118,13 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     statsEl.querySelector('.st-reset').onclick = resetSessao;
 
     // ===== Gerenciador de scripts / extras (userscripts injetados nos painéis) =====
-    const PRESETS = [{ id: 'justpokedex', name: 'JustPokédex: Calculadora de IV', file: 'justpokedex.js', author: 'guilherme-se' }];
+    const PRESETS = [
+      { id: 'justpokedex', name: 'JustPokédex: Calculadora de IV', file: 'justpokedex.js', author: 'guilherme-se' },
+      // Internos (versoes revisadas para o grid): desligue as copias instaladas por link/codigo para nao rodar duas vezes.
+      { id: 'pio-hunt', name: '/hunt (PIO): AoE calibrado e ritmo medido', file: 'hunt-pio.js', author: 'Liang · ajustes PIO' },
+      { id: 'pio-autodex', name: 'AutoDex 0.2.7 (PIO): metas e Pokédex automática', file: 'autodex-pio.js', author: 'Dudu · ajustes PIO' },
+      { id: 'pio-sniper', name: 'Auto-Sniper v1.5.2.1 (PIO): ritmo adaptativo', file: 'auto-sniper.js', author: 'Dudu' }
+    ];
     let scriptsOn = {}; try { scriptsOn = lsObj('scriptsOn'); } catch { }
     let userScripts = []; try { userScripts = lsArr('userScripts'); } catch { }
     // teto total de 4 MB ANTES do lsSet: estourar a cota fazia o lsSet podar o HISTORICO do usuario (hunts,

@@ -290,17 +290,24 @@
     '#twitchBonusOverlay.show',
     '#kickBonusOverlay.show',
     '#menu.show',
-    'body.leaf-tools-open #leafToolsMenu',
     'body.leaf-settings-open #leafSettingsDrawer',
     '#stats.show',
     '#ivCard.show'
   ].join(', ');
 
-  function isAnyModalOpen() {
-    return Array.from(document.querySelectorAll(REAL_MODAL_SELECTORS)).some(el => {
-      const style = window.getComputedStyle(el);
-      return style.display !== 'none' && style.visibility !== 'hidden';
+  // Menus pequenos (popovers) so escondem o painel que eles cobrem; os demais continuam visiveis.
+  const POPOVER_SELECTORS = 'body.leaf-tools-open #leafToolsMenu, #pioAvisosPanel.show, #pioMetasPanel.show, #pioAplicarPanel.show';
+  const isShown = el => { const st = window.getComputedStyle(el); return st.display !== 'none' && st.visibility !== 'hidden'; };
+  function popoverCovers(rect) {
+    if (!rect) return false;
+    return Array.from(document.querySelectorAll(POPOVER_SELECTORS)).filter(isShown).some(el => {
+      const r = el.getBoundingClientRect();
+      return r.left < rect.right && r.right > rect.left && r.top < rect.bottom && r.bottom > rect.top;
     });
+  }
+  function isAnyModalOpen(rect) {
+    if (Array.from(document.querySelectorAll(REAL_MODAL_SELECTORS)).some(isShown)) return true;
+    return popoverCovers(rect);
   }
 
   const registeredWebviews = new Set();
@@ -395,9 +402,8 @@
         const isCardsOn = document.body.classList.contains('cards-on');
         const expandedPanel = document.querySelector('#grid > .panel.expanded');
         const coveredByExpandedPanel = expandedPanel && panel !== expandedPanel;
-        const modalOpen = isAnyModalOpen();
-
         const rect = el.getBoundingClientRect();
+        const modalOpen = isAnyModalOpen(rect);
 
         if (panel && panel.classList.contains('is-blaster-active')) return;
 

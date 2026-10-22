@@ -58,6 +58,11 @@ pub async fn query_window(app: &AppHandle, index: usize) -> Result<QueryWindow, 
     builder
         .title("Consulta de saldo Kick")
         .visible(false)
+        // Janela oculta recriada a cada consulta: sem foco e fora da barra de tarefas,
+        // senao rouba o teclado da janela principal e faz a tela piscar.
+        .focused(false)
+        .skip_taskbar(true)
+        .focusable(false)
         .data_directory(profile(index))
         // Only this inert document can be loaded by the query window.
         .on_navigation(|url| url.as_str() == "about:blank" || url.as_str() == QUERY_URL)
@@ -141,7 +146,7 @@ pub fn request_script(token: &str, path: &str) -> Result<String, String> {
             let raw;try{{raw=JSON.parse(text)}}catch{{}}
             const data=raw?.data||raw;
             return {{status:response.status,body:{path}==='/api/v1/user'
-                ?{{id:data?.id,username:data?.username}}:{path}.endsWith('/points')?{{data:{{points:data?.points}}}}:{{data}}}};
+                ?{{id:data?.id,username:data?.username,hint:data?.id?undefined:(response.status+' '+(response.headers.get('content-type')||'')+' '+text.slice(0,160).replace(/\s+/g,' '))}}:{path}.endsWith('/points')?{{data:{{points:data?.points}}}}:{{data}}}};
         }}finally{{clearTimeout(timer)}}
     }})()"#
     ))

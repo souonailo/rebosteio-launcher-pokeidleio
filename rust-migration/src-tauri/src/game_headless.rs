@@ -713,7 +713,7 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                 if value.is_null() { *target = None; }
                 else if value.is_object() {
                     let mut clean = target.clone().unwrap_or_else(||json!({}));
-                    for name in ["login","vinculado","assistindo","pctAtual","emLives","pontos","pontosPorCanal","bonusExp","bonusCatch","bonusLure","bonusTime","bonusQty","bonusExpiresAt","tempo","time","expires","lives","oficiais","offline","assistindoEm"] {
+                    for name in ["login","vinculado","assistindo","pctAtual","emLives","pontos","pontosPorCanal","bonusExp","bonusCatch","bonusLure","bonusTime","bonusQty","bonusExpiresAt","tempo","time","expires","lives","oficiais","offline","assistindoEm","bonus","pct"] {
                         if let Some(field) = value.get(name) { clean[name] = field.clone(); }
                     }
                     *target = Some(clean);

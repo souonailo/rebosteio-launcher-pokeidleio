@@ -13,5 +13,6 @@ commands.allow = [
   "kick_points_get", "kick_points_refresh", "kick_session_open", "kick_point_channels",
   "camoufox_check", "camoufox_login", "auth_cancel_login", "auth_window_open",
   "webview_settings", "webview_sync", "webview_set_visible", "webview_destroy", "webview_eval", "webview_navigate", "webview_fill_creds",
+  "pio_pasta", "pio_salvar", "pio_ler", "pio_existe", "pio_listar", "pio_mover",
   "instance_get", "instance_new"
 ]

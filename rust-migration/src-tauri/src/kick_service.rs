@@ -68,6 +68,22 @@ fn journal_with_receipt(mut journal: Value, index: usize, receipt: Value) -> Val
     journal
 }
 
+// PIO: canais favoritos (inscrito = mais pontos). Quando estão ao vivo, entram sempre na lista assistida,
+// vêm antes dos outros no limite de conexões e têm reconexão rápida (a cada 15 s, no máximo uma vez a cada 45 s).
+// Configuração: variável de ambiente PIO_KICK_FAVORITOS com os slugs separados por vírgula
+// (ex.: setx PIO_KICK_FAVORITOS "canal1,canal2"). Vazia = comportamento original, sem favoritos.
+fn favoritos() -> &'static [String] {
+    static F: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    F.get_or_init(|| {
+        std::env::var("PIO_KICK_FAVORITOS").unwrap_or_default()
+            .split(',').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).collect()
+    })
+}
+static FAV_AO_VIVO: [std::sync::atomic::AtomicBool; 4] = [const { std::sync::atomic::AtomicBool::new(false) }; 4];
+static FAV_ULTIMO_FORCE: [std::sync::atomic::AtomicU64; 4] = [const { std::sync::atomic::AtomicU64::new(0) }; 4];
+fn agora_s() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
+fn com_favoritos(mut alvo: BTreeSet<String>) -> BTreeSet<String> { for f in favoritos() { alvo.insert(f.clone()); } alvo }
+
 pub struct KickServiceManager {
     config: RwLock<Value>,
     accounts: RwLock<Vec<Value>>,
@@ -177,19 +193,33 @@ impl KickServiceManager {
     pub fn start(self: &Arc<Self>, app: AppHandle) {
         let manager = self.clone();
         tauri::async_runtime::spawn(async move {
-            let mut timer = tokio::time::interval(Duration::from_secs(60));
+            // Consulta completa a cada 60 s; a cada 15 s só confere se o canal favorito ao vivo continua conectado.
+            let mut timer = tokio::time::interval(Duration::from_secs(15));
+            let mut volta: u64 = 0;
             loop {
                 timer.tick().await;
+                let completa = volta % 4 == 0;
+                volta += 1;
                 for index in 0..4 {
                     if enabled(&*manager.config.read().await, index) {
                         let m = manager.clone();
                         let app = app.clone();
                         tokio::spawn(async move {
-                            let _ = m.refresh(&app, index, false).await;
+                            if completa {
+                                let _ = m.refresh(&app, index, false).await;
+                            } else if FAV_AO_VIVO[index].load(Ordering::Relaxed) {
+                                let conectados = m.connections.joined(index).await;
+                                let falta = favoritos().iter().any(|f| !conectados.iter().any(|c| c == f));
+                                let agora = agora_s();
+                                if falta && agora.saturating_sub(FAV_ULTIMO_FORCE[index].load(Ordering::Relaxed)) >= 45 {
+                                    FAV_ULTIMO_FORCE[index].store(agora, Ordering::Relaxed);
+                                    let _ = m.refresh(&app, index, true).await;
+                                }
+                            }
                         });
                     }
                 }
-                manager.emit(&app).await;
+                if completa { manager.emit(&app).await; }
             }
         });
     }
@@ -206,7 +236,7 @@ impl KickServiceManager {
         let config = self.config.read().await.clone();
         let accounts = self.accounts.read().await.clone();
         for index in 0..4 {
-            let keep = crate::kick_connections::targets(&lives[index]);
+            let keep = com_favoritos(crate::kick_connections::targets(&lives[index]));
             let desired = if enabled(&config,index) && accounts[index]["status"] == "authenticated" { keep.clone() } else { BTreeSet::new() };
             self.connections.retain(index,&desired).await;
         }
@@ -248,7 +278,7 @@ impl KickServiceManager {
         let mut builder=WebviewWindowBuilder::new(app,&label,WebviewUrl::External("about:blank".parse().unwrap()));
         if let Some(p)=&proxy{builder=builder.proxy_url(p.url.clone()).additional_browser_args(&crate::webview_memory::browser_args(Some(&p.url)));}
         builder.title(format!("Kick — Conta {}",index+1)).inner_size(1100.0,780.0)
-            .visible(visible).data_directory(profile)
+            .visible(visible).focused(visible).skip_taskbar(!visible).data_directory(profile)
             .on_page_load(move |window,payload| {
                 if payload.event()==tauri::webview::PageLoadEvent::Finished {
                     let app=window.app_handle().clone();
@@ -267,7 +297,9 @@ impl KickServiceManager {
                 let Some(window)=handle.get_webview_window(&format!("kick-session-{}",index)) else {break;};
                 let logged_in=window.cookies_for_url("https://kick.com".parse().unwrap()).ok()
                     .map(|cookies|cookies.iter().any(|c|c.name()=="session_token")).unwrap_or(false);
-                if logged_in {let _=manager.refresh(&handle,index,true).await;}
+                // Uma consulta ao detectar o login basta; repetir a cada 2 s recriava a
+                // janela de consulta sem parar enquanto a janela de login ficava aberta.
+                if logged_in {let _=manager.refresh(&handle,index,true).await;break;}
             }
         });
         // A restored session uses about:blank: no hidden player or viewer events.
@@ -325,6 +357,13 @@ impl KickServiceManager {
         if !force && !enabled(&config, index) {
             return Ok(self.get_points().await);
         }
+        // Conta sem login na Kick: a consulta automatica so abriria e fecharia uma janela
+        // oculta a cada minuto. Volta a consultar quando o usuario entra ou atualiza.
+        // So pula depois de uma consulta REAL ter confirmado a falta de login: ao abrir o grid o
+        // estado inicial tambem e "login_required", e pular ali impedia a reconexao automatica.
+        if !force && self.accounts.read().await[index]["loginConfirmadoAusente"] == true {
+            return Ok(self.get_points().await);
+        }
         {
             let mut last = self.last_refresh.lock().await;
             if last[index]
@@ -362,15 +401,18 @@ impl KickServiceManager {
             let token = cookies
                 .iter()
                 .find(|c| c.name() == "session_token")
-                .map(|c| c.value().to_string())
+                .map(|c| decode_cookie(c.value()))
                 .ok_or(("login_required".into(), "Entre na Kick nesta conta.".into()))?;
             let raw = crate::kick_browser::request(&window, &token, "/api/v1/user").await?;
             let user = raw.get("data").unwrap_or(&raw);
             let username = crate::social_store::slug(user["username"].as_str().unwrap_or(""))
                 .filter(|_| user["id"].as_u64().map(|id|id>0).unwrap_or(false))
-                .ok_or((
+                .ok_or_else(|| (
                     "error".into(),
-                    "Kick não confirmou a identidade da sessão.".into(),
+                    match user["hint"].as_str().filter(|h| !h.trim().is_empty()) {
+                        Some(hint) => format!("Kick não confirmou a identidade da sessão. Resposta: {}", hint.trim()),
+                        None => "Kick não confirmou a identidade da sessão.".into(),
+                    },
                 ))?;
             if expected.as_ref().map(|v| v != &username).unwrap_or(false) {
                 return Err((
@@ -379,17 +421,24 @@ impl KickServiceManager {
                 ));
             }
             state["username"] = json!(username);
+            state["loginConfirmadoAusente"] = json!(false);
             state["status"] = json!("authenticated");
             state["error"] = json!("");
-            let desired = crate::kick_connections::targets(&self.lives.read().await[index]);
+            let desired = com_favoritos(crate::kick_connections::targets(&self.lives.read().await[index]));
+            // Favoritos primeiro, para nunca ficarem fora do limite de conexões.
+            let mut ordem: Vec<String> = favoritos().iter().filter(|f| desired.contains(*f)).cloned().collect();
+            ordem.extend(desired.iter().filter(|s| !favoritos().contains(*s)).cloned());
             let mut native_lives = Vec::new();
-            for slug in &desired {
+            for slug in &ordem {
                 let raw = match crate::kick_browser::request(&window,&token,&format!("/api/v2/channels/{slug}")).await {
                     Ok(raw)=>raw,
                     Err(error) if error.0=="login_required" || error.0=="rate_limited"=>return Err(error),
                     Err(_)=>continue,
                 };
                 let data = raw.get("data").unwrap_or(&raw);
+                if favoritos().contains(slug) {
+                    FAV_AO_VIVO[index].store(data["livestream"]["is_live"] == true, Ordering::Relaxed);
+                }
                 if data["livestream"]["is_live"] == false { continue; }
                 if let (Some(channel),Some(stream),Some(chatroom)) = (data["id"].as_u64(),data["livestream"]["id"].as_u64(),data["chatroom"]["id"].as_u64()) {
                     if channel==0 || stream==0 || chatroom==0 {continue;}
@@ -453,6 +502,7 @@ impl KickServiceManager {
         .await;
         if let Err((status, error)) = result {
             self.connections.retain(index,&BTreeSet::new()).await;
+            state["loginConfirmadoAusente"] = json!(status == "login_required");
             state["status"] = json!(status);
             state["error"] = json!(error);
             if let Some(values) = state["balances"].as_object_mut() {
@@ -702,4 +752,25 @@ mod tests {
         assert!(crate::social_store::slug("../user").is_none());
         assert!(crate::social_store::slug("https://evil.test").is_none());
     }
+}
+
+/// Kick stores session_token URL-encoded (e.g. "123%7Cabc"); the API expects the
+/// decoded value ("123|abc") as Bearer, otherwise /api/v1/user answers 200 {}.
+fn decode_cookie(value: &str) -> String {
+    let bytes = value.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[i + 1..i + 3]).unwrap_or("");
+            if let Ok(b) = u8::from_str_radix(hex, 16) {
+                out.push(b);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8(out).unwrap_or_else(|_| value.to_string())
 }

@@ -26,6 +26,21 @@ function Find-CppTools {
     }
     return $null
 }
+function Test-Rustc {
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    Push-Location (Join-Path $root 'rust-migration')
+    try {
+        $script:RustcOutput = (& rustc.exe -vV 2>&1 | ForEach-Object { $_.ToString() }) -join "`n"
+        $code = $LASTEXITCODE
+    } catch {
+        $script:RustcOutput = $_.Exception.Message
+        $code = 1
+    } finally {
+        Pop-Location
+        $ErrorActionPreference = $eap
+    }
+    return ($code -eq 0 -and $script:RustcOutput -match '(?m)^host:')
+}
 function Has-WebView2 {
     foreach ($key in @('HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients', 'HKLM:\SOFTWARE\Microsoft\EdgeUpdate\Clients', 'HKCU:\SOFTWARE\Microsoft\EdgeUpdate\Clients')) {
         foreach ($child in @(Get-ChildItem $key -ErrorAction SilentlyContinue)) {
@@ -58,6 +73,20 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Nao foi possivel consultar as toolchains Rust.' }
     if (!($toolchains -match '^stable-x86_64-pc-windows-msvc')) {
         Invoke-Checked 'rustup.exe' @('toolchain', 'install', 'stable', '--profile', 'minimal')
+    }
+    # O Tauri CLI executa "rustc -vV" e quebra (unwrap em None) se a saida nao tiver "host:".
+    # Valida antes, tenta reparar a toolchain e, se falhar, grava o erro real no log.
+    $rustcOk = Test-Rustc
+    if (!$rustcOk) {
+        Write-Host 'rustc nao respondeu corretamente. Reparando a toolchain stable...'
+        $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+        & rustup.exe toolchain install stable --profile minimal --force 2>&1 | ForEach-Object { Write-Host $_.ToString() }
+        & rustup.exe default stable 2>&1 | ForEach-Object { Write-Host $_.ToString() }
+        $ErrorActionPreference = $eap
+        $rustcOk = Test-Rustc
+    }
+    if (!$rustcOk) {
+        throw "rustc continua sem responder. Saida de 'rustc -vV':`n$($script:RustcOutput)`nAbra um terminal e rode: rustup self update; rustup toolchain uninstall stable; rustup toolchain install stable"
     }
 
     $python = "$root\.runtime\python\Scripts\python.exe"

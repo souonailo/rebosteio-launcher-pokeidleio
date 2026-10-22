@@ -13,6 +13,7 @@ pub mod kick_rewards;
 pub mod twitch_service;
 pub mod webview_manager;
 pub mod webview_memory;
+pub mod pio_arquivos;
 
 use std::fs;
 use std::path::PathBuf;
@@ -231,9 +232,65 @@ async fn webhook_send(url: String, text: String) -> bool {
     client.post(&url).json(&body).send().await.is_ok()
 }
 
+#[derive(Serialize)]
+pub struct ExtensionResponse {
+    pub status: u16,
+    pub body: String,
+}
+
+// Porta do baixaUserScript do Electron: a interface espera {ok,url,code,error}.
+// So https em github.com/raw.githubusercontent.com, link /blob/ vira raw, ate 3 redirecionamentos,
+// 2 MB e 12 s; pagina HTML nao e aceita como script.
+fn userscript_raw_url(u: url::Url) -> url::Url {
+    if u.host_str() == Some("github.com") {
+        let p: Vec<&str> = u.path().split('/').filter(|s| !s.is_empty()).collect();
+        if let Some(i) = p.iter().position(|s| *s == "blob") {
+            if i >= 2 && p.len() > i + 2 {
+                let raw = format!("https://raw.githubusercontent.com/{}/{}/{}", p[0], p[1], p[i + 1..].join("/"));
+                if let Ok(r) = url::Url::parse(&raw) { return r; }
+            }
+        }
+    }
+    u
+}
+
 #[tauri::command]
-async fn userscript_fetch(url: String) -> userscripts::Response {
-    userscripts::fetch(&url, true).await
+async fn userscript_fetch(url: String) -> serde_json::Value {
+    let fail = |e: &str| serde_json::json!({"ok": false, "error": e});
+    let Ok(mut u) = url::Url::parse(url.trim()).map(userscript_raw_url) else { return fail("Link inválido."); };
+    let client = match reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(std::time::Duration::from_secs(12))
+        .user_agent(concat!("PIO-Rebosteio/", env!("CARGO_PKG_VERSION")))
+        .build() { Ok(c) => c, Err(_) => return fail("Não foi possível acessar o GitHub.") };
+    for hops in 0..=3 {
+        let allowed = u.scheme() == "https"
+            && matches!(u.host_str(), Some("github.com") | Some("raw.githubusercontent.com"))
+            && u.path().to_ascii_lowercase().ends_with(".js");
+        if !allowed {
+            return fail(if hops > 0 { "O GitHub redirecionou para um endereço fora da lista (link de release?). Use o link do arquivo .js dentro do repositório." } else { "Use um link https do GitHub para um arquivo .js" });
+        }
+        let resp = match client.get(u.clone()).header("Accept", "text/plain").send().await {
+            Ok(r) => r, Err(_) => return fail("Não foi possível acessar o GitHub."),
+        };
+        let status = resp.status();
+        if status.is_redirection() {
+            if hops == 3 { return fail("Redirecionamentos demais."); }
+            let next = resp.headers().get("location").and_then(|v| v.to_str().ok()).and_then(|l| u.join(l).ok());
+            match next { Some(n) => { u = userscript_raw_url(n); continue; } None => return fail("Redirecionamento inválido.") }
+        }
+        if status.as_u16() != 200 { return fail(&format!("GitHub respondeu HTTP {}", status.as_u16())); }
+        if resp.content_length().map(|n| n > 2 * 1024 * 1024).unwrap_or(false) { return fail("O script passa de 2 MB."); }
+        let Ok(bytes) = resp.bytes().await else { return fail("Falha ao ler o script."); };
+        if bytes.len() > 2 * 1024 * 1024 { return fail("O script passa de 2 MB."); }
+        let code = String::from_utf8_lossy(&bytes).to_string();
+        let t = code.trim();
+        if t.is_empty() || t.starts_with('<') {
+            return fail("Esse link não devolveu um arquivo .js. Abra o arquivo no GitHub e copie o link dele.");
+        }
+        return serde_json::json!({"ok": true, "url": u.to_string(), "code": code});
+    }
+    fail("Redirecionamentos demais.")
 }
 
 #[tauri::command]
@@ -855,7 +912,13 @@ pub fn run() {
             webview_fill_creds,
             webview_settings,
             instance_get,
-            instance_new
+            instance_new,
+            pio_arquivos::pio_pasta,
+            pio_arquivos::pio_salvar,
+            pio_arquivos::pio_ler,
+            pio_arquivos::pio_existe,
+            pio_arquivos::pio_listar,
+            pio_arquivos::pio_mover
         ])
         .run(context)
         .expect("erro ao rodar o aplicativo PIO Nailo em Rust");

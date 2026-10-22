@@ -8,7 +8,7 @@
   let namesHidden = false;
   try { namesHidden = localStorage.getItem(privacyKey) === '1'; } catch {}
   let sidebarCollapsed = false;
-  try { sidebarCollapsed = localStorage.getItem('hubSidebarCollapsed') === '1'; } catch {}
+  try { sidebarCollapsed = localStorage.getItem('hubSidebarCollapsed') !== '0'; /* PIO: recolhido por padrão */ } catch {}
   const accountLabel = i => `Conta ${String(i + 1).padStart(2, '0')}`;
   const displayName = r => namesHidden ? accountLabel(r.i) : (r.name || `Conta ${r.i + 1}`);
   const fmtCompact = (n) => {
@@ -76,13 +76,19 @@
         </div>
         <button class="leaf-chip" id="leafEco" aria-pressed="false"><span style="width:13px;height:13px">${ico('moon')}</span><span>Modo Eco</span><span class="switch" aria-hidden="true"></span></button>
         <button class="leaf-chip" id="leafHuntOnly"><span style="width:13px;height:13px">${ico('hunt')}</span><span class="txt-hide-sm">Só a caça</span></button>
-        <button class="leaf-chip" id="leafMap" aria-pressed="false"><span class="leaf-map-icon" style="width:13px;height:13px">${ico('chart')}</span><span class="txt-hide-sm">Painel</span></button>
+        <button class="leaf-chip" id="leafMap" aria-pressed="false" style="display:none"><span class="leaf-map-icon" style="width:13px;height:13px">${ico('chart')}</span><span class="txt-hide-sm">Painel</span></button>
         <button class="leaf-chip" id="leafAlerts" title="Alternar alertas e todos os sons do jogo"><span style="width:13px;height:13px">${ico('bell')}</span><span class="txt-hide-sm">Alertas</span></button>
       </div>
       <div class="leaf-top-right">
         <div class="leaf-top-note">Mesmo nas noites mais escuras,<br>há um propósito.</div>
         <span class="leaf-header-moon" aria-hidden="true">☾</span>
         <div class="leaf-connected"><span class="dot"></span><span id="leafConnectedText">0/0 conectadas</span></div>
+        <button class="leaf-chip" id="leafCopyStatus" title="Copiar status, ficha do ativo e ranking do /hunt das contas para colar no chat (Ctrl+Alt+S)"><span>📋</span><span>Extração Claude</span></button>
+        <button class="leaf-chip" id="leafVote" title="Abrir o voto do TopIdle da Conta 1"><span>🗳️</span><span>Votar<span class="pio-voto-n"></span></span></button>
+        <button class="leaf-chip" id="leafKick" title="Saldo da Kick da Conta 1"><span style="color:#53fc18">K</span><span class="pio-kick-t">Kick</span></button>
+        <button class="leaf-chip" id="leafMetas" title="Metas de nível e gemas por conta"><span>🎯</span><span>Metas</span></button>
+        <button class="leaf-chip" id="leafAvisos" title="Histórico de avisos com horário"><span>📣</span><span>Avisos<span class="pio-av-n"></span></span></button>
+        <button class="leaf-chip" id="leafAplicar" style="display:none" title="Mudanças propostas pelo Claude esperando o seu clique"><span>📥</span><span>Aplicar<span class="pio-ap-n"></span></span></button>
         <button class="leaf-chip leaf-chip-login-all" id="leafHeaderLoginAll" title="Logar as quatro contas da equipe"><span style="color:#7ee787">▶</span><span>Logar equipe</span></button>
         <button class="leaf-tools-btn" id="leafToolsBtn" title="Ferramentas" aria-label="Ferramentas" aria-expanded="false" aria-controls="leafToolsMenu"><span style="width:15px;height:15px">${ico('chart')}</span>Ferramentas</button>
         <button class="leaf-icon-btn" id="leafSettingsBtn" title="Configurações" aria-label="Configurações" aria-expanded="false" aria-controls="leafSettingsDrawer"><span style="width:14px;height:14px">${ico('gear')}</span></button>
@@ -274,6 +280,12 @@
   const topLoginBtn = $('#leafLoginAllTop');
   if (topLoginBtn) topLoginBtn.onclick = triggerLoginAll;
   const headerLoginBtn = $('#leafHeaderLoginAll');
+  $('#leafCopyStatus')?.addEventListener('click', () => { if (typeof window.pioCopiarStatus === 'function') window.pioCopiarStatus(); });
+  $('#leafVote')?.addEventListener('click', () => { if (typeof window.pioVotar === 'function') window.pioVotar(); });
+  $('#leafKick')?.addEventListener('click', () => { if (typeof window.pioAbrirKick === 'function') window.pioAbrirKick(); });
+  $('#leafMetas')?.addEventListener('click', () => { if (typeof window.pioAbrirMetas === 'function') window.pioAbrirMetas(); });
+  $('#leafAvisos')?.addEventListener('click', () => { if (typeof window.pioAbrirAvisos === 'function') window.pioAbrirAvisos(); });
+  $('#leafAplicar')?.addEventListener('click', () => { if (typeof window.pioAbrirAplicar === 'function') window.pioAbrirAplicar(); });
   if (headerLoginBtn) headerLoginBtn.onclick = triggerLoginAll;
   $('#leafReloadAll').onclick = () => clickOld('reloadAll');
   const handleOpenAccounts = () => {
