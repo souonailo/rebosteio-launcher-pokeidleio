@@ -1,3 +1,11 @@
+## 2.0.35 — Correção do Sistema Kick, Headless e Battle HUD
+
+- **Persistência de identidade vinculada**: o login retornado pelo jogo é salvo e mantido nas configurações de cada conta; telemetrias parciais não apagam o usuário vinculado (apenas desvinculação explícita limpa a identidade).
+- **Consulta em modo Headless**: suporte a checagem de estado Kick nas contas em modo Blaster/Headless lendo diretamente o cache de estado da conta (`window.stCache`), eliminando dependência de DOM inexistente de WebView.
+- **Ciclo de sessão no Rust**: o estado inicial inicia em `checking` ("Verificando sessão") e sessões ausentes são reconsultadas automaticamente a cada 5 minutos em segundo plano (com consulta manual imediata sob demanda), prevenindo bloqueio permanente da checagem em falhas transientes de inicialização.
+- **Estabilidade do Battle Slot HUD**: consultas periódicas de saldo em segundo plano não sobrepõem o status de "Sessão confirmada" com "Consultando saldo" se a sessão já estiver autenticada, e atualizações de texto de bônus idêntico não reescrevem o nó DOM.
+- **Novos testes automatizados**: adicionados testes para persistência da identidade vinculada (Electron e Rust UI) e ciclo de vida/renderização do HUD.
+
 ## Scripts e extensões — GitHub
 
 - Corrigido o contrato Rust de download e GM_xmlhttpRequest para devolver ok, status, URL e código, como esperado pelo menu.

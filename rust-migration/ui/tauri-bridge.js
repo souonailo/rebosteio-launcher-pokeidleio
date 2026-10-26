@@ -185,7 +185,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.34',
+    appVersion: '2.0.35',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {

@@ -22,7 +22,7 @@ fn official_url(channel: &str) -> Result<url::Url, String> {
     url::Url::parse(&format!("https://kick.com/{slug}")).map_err(|e|e.to_string())
 }
 fn empty() -> Value {
-    json!({"status":"login_required","username":"","balances":{},"refreshing":false,"error":""})
+    json!({"status":"checking","username":"","balances":{},"refreshing":false,"error":""})
 }
 fn enabled(config: &Value, index: usize) -> bool {
     config["masterEnabled"]
@@ -30,6 +30,9 @@ fn enabled(config: &Value, index: usize) -> bool {
         .or(config["enabled"].as_bool())
         .unwrap_or(false)
         && config["accounts"][index]["enabled"] != false
+}
+fn refresh_delay(force: bool, login_missing: bool) -> u64 {
+    if force { 3 } else if login_missing { 300 } else { 55 }
 }
 fn now() -> u64 {
     std::time::SystemTime::now()
@@ -357,17 +360,13 @@ impl KickServiceManager {
         if !force && !enabled(&config, index) {
             return Ok(self.get_points().await);
         }
-        // Conta sem login na Kick: a consulta automatica so abriria e fecharia uma janela
-        // oculta a cada minuto. Volta a consultar quando o usuario entra ou atualiza.
-        // So pula depois de uma consulta REAL ter confirmado a falta de login: ao abrir o grid o
-        // estado inicial tambem e "login_required", e pular ali impedia a reconexao automatica.
-        if !force && self.accounts.read().await[index]["loginConfirmadoAusente"] == true {
-            return Ok(self.get_points().await);
-        }
+        // A missing session is retried after five minutes: a transient startup read
+        // must not disable recovery for the rest of the launcher's lifetime.
+        let login_missing = self.accounts.read().await[index]["loginConfirmadoAusente"] == true;
         {
             let mut last = self.last_refresh.lock().await;
             if last[index]
-                .map(|t| t.elapsed() < Duration::from_secs(if force { 3 } else { 55 }))
+                .map(|t| t.elapsed() < Duration::from_secs(refresh_delay(force, login_missing)))
                 .unwrap_or(false)
             {
                 drop(last);
@@ -680,6 +679,13 @@ impl KickServiceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn startup_checks_session_before_requesting_login_and_retries_missing_sessions() {
+        assert_eq!(empty()["status"], "checking");
+        assert_eq!(refresh_delay(false, false), 55);
+        assert_eq!(refresh_delay(false, true), 300);
+        assert_eq!(refresh_delay(true, true), 3);
+    }
     #[test]
     fn official_live_navigation_preserves_the_requested_channel() {
         assert_eq!(official_url("biscoitao").unwrap().as_str(), "https://kick.com/biscoitao");

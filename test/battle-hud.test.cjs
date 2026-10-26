@@ -127,6 +127,11 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
     localStorage: mockLocalStorage,
     console
   };
+  const socialEvents = {};
+  context.window.pokeAPI = {
+    onKickPoints: cb => { socialEvents.points = cb; },
+    onKickStatus: cb => { socialEvents.kick = cb; }
+  };
   context.window.window = context.window;
   context.window.document = mockDocument;
   context.window.localStorage = mockLocalStorage;
@@ -332,6 +337,33 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
   const catchBonus = PioBattleHud.formatKickBonus({ bonusCatch: 1, bonusQty: 3, bonusTime: '1h 05m' }, null);
   assert.equal(catchBonus.active, true);
   assert.equal(catchBonus.text, 'Catch +15% · 1h 05m');
+
+  // Polling keeps the confirmed buff visible without replacing its DOM text.
+  PioBattleHud.update(panel, 0, { ...fakeState, kick: null });
+  socialEvents.kick({ accounts: [{ status: 'authenticated' }] });
+  const expiresAt = Date.now() + 5400000;
+  const confirmed = { status: 'authenticated', activeRedemption: {
+    status: 'confirmed', reward: { key: 'exp' }, expiresAt
+  } };
+  socialEvents.points({ accounts: [confirmed] });
+  const bonusBeforePoll = kickBonusEl.textContent;
+  let bonusWrites = 0;
+  Object.defineProperty(kickBonusEl, 'textContent', {
+    configurable: true,
+    get: () => bonusBeforePoll,
+    set: () => { bonusWrites++; }
+  });
+  socialEvents.points({ accounts: [{ ...confirmed, refreshing: true }] });
+  PioBattleHud.updateSocial(panel, 0);
+  socialEvents.points({ accounts: [{ ...confirmed, refreshing: false }] });
+  assert.equal(bonusWrites, 0, 'Unchanged countdown must not recreate the text node');
+  assert.equal(hudEl.querySelector('.bsh-kick-status').textContent, 'Sessão confirmada');
+  assert.ok(kickBonusEl.textContent.startsWith('EXP +15%'));
+  delete kickBonusEl.textContent;
+  socialEvents.points({ accounts: [{ ...confirmed, activeRedemption: {
+    ...confirmed.activeRedemption, expiresAt: Date.now() - 1
+  } }] });
+  assert.equal(kickBonusEl.textContent, 'Sem bônus', 'Expired buffs must disappear even without another balance request');
 });
 
 

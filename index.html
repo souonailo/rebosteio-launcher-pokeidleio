@@ -7836,7 +7836,9 @@
     function handleKickGameTelemetry(accIndex, kickData) {
       if (!kickData) return;
       kickCachedGameData[accIndex] = kickData;
-      const linkedUsername = kickData.login && (kickData.vinculado || kickData.login) ? String(kickData.login).toLowerCase().replace(/^@/, '') : '';
+      // Partial telemetry may omit the login; only an explicit unlink clears it.
+      const linkedUsername = kickData.login ? String(kickData.login).trim().toLowerCase().replace(/^@/, '')
+        : kickData.vinculado === false ? '' : (kickBonusConfig.accounts[accIndex]?.linkedUsername || '');
       if (kickBonusConfig.accounts[accIndex] && kickBonusConfig.accounts[accIndex].linkedUsername !== linkedUsername) {
         kickBonusConfig.accounts[accIndex].linkedUsername = linkedUsername;
         kickBonusConfig.accounts[accIndex].gameLinked = !!linkedUsername;
@@ -7947,6 +7949,12 @@
       } catch { showKickFeedback('Não foi possível abrir a Kick. Reabra o launcher atualizado.', true); }
     }
     async function syncKickGameStatus(idx) {
+      // Headless has no game DOM: use its per-account state instead of evaluating a WebView.
+      if (window.PioBattleHud?.isBlasterActive(idx)) {
+        const kick = window.stCache?.[idx]?.d?.kick;
+        if (kick) await handleKickGameTelemetry(idx, kick);
+        return;
+      }
       const wv = webviews[idx];
       if (!wv) return;
       try {
@@ -7982,7 +7990,10 @@
           kickCachedGameData[idx].vinculado = true;
           if (res.login) kickCachedGameData[idx].login = res.login;
           if (res.kick) Object.assign(kickCachedGameData[idx], res.kick);
-          if (kickBonusConfig.accounts[idx]) kickBonusConfig.accounts[idx].gameLinked = true;
+          if (kickBonusConfig.accounts[idx]) {
+            kickBonusConfig.accounts[idx].gameLinked = true;
+            if (res.login) kickBonusConfig.accounts[idx].linkedUsername = String(res.login).trim().toLowerCase().replace(/^@/, '');
+          }
           if (res.login && kickBonusConfig.accounts[idx] && !kickBonusConfig.accounts[idx].username) {
             kickBonusConfig.accounts[idx].username = res.login;
           }
@@ -8084,7 +8095,10 @@
           if (!kickCachedGameData[index]) kickCachedGameData[index] = {};
           kickCachedGameData[index].vinculado = true;
           if (lName) kickCachedGameData[index].login = lName;
-          if (kickBonusConfig.accounts[index]) kickBonusConfig.accounts[index].gameLinked = true;
+          if (kickBonusConfig.accounts[index]) {
+            kickBonusConfig.accounts[index].gameLinked = true;
+            if (res.login) kickBonusConfig.accounts[index].linkedUsername = String(res.login).trim().toLowerCase().replace(/^@/, '');
+          }
           if (lName && !kickBonusConfig.accounts[index]?.username) {
             kickBonusConfig.accounts[index].username = lName;
           }

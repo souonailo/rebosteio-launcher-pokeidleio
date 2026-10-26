@@ -88,6 +88,9 @@
     return Math.round(a).toLocaleString('pt-BR');
   }
 
+  function setSocialText(element, text) {
+    if (element.textContent !== text) element.textContent = text;
+  }
   const social = { twitch: null, kick: null, points: null };
   const gameSocial = new Map();
   function refreshSocial() {
@@ -349,7 +352,7 @@
       const box = panel.querySelector('.battle-slot-hud');
       if (!box) return;
       const game = gameSocial.get(i) || {};
-      const labels = { authenticated: 'Sessão confirmada', blocked: 'Consulta bloqueada', rate_limited: 'Aguarde', account_mismatch: 'Outra conta', connected: 'Conectada', connecting: 'Conectando', waiting_live: 'Sem live', error: 'Erro', login_required: 'Entrar', disconnected: 'Desconectada' };
+      const labels = { checking: 'Verificando sessão', authenticated: 'Sessão confirmada', blocked: 'Consulta bloqueada', rate_limited: 'Aguarde', account_mismatch: 'Outra conta', connected: 'Conectada', connecting: 'Conectando', waiting_live: 'Sem live', error: 'Erro', login_required: 'Entrar', disconnected: 'Desconectada' };
       const account = social.points?.accounts?.[i];
       for (const platform of ['twitch', 'kick']) {
         const row = box.querySelector('.bsh-social-' + platform);
@@ -357,14 +360,17 @@
         const telemetry = game[platform];
         const connected = status === 'connected' || status === 'authenticated';
         row.classList.toggle('is-connected', connected);
-        box.querySelector('.bsh-' + platform + '-status').textContent = labels[status] || (platform === 'twitch' && telemetry?.assistindo ? 'Assistindo' : telemetry?.login ? 'Vinculada' : 'Aguardando');
+        const statusEl = box.querySelector('.bsh-' + platform + '-status');
+        // Routine balance polls do not replace an already confirmed session label.
+        setSocialText(statusEl, (platform === 'kick' && account?.refreshing && !connected ? 'Consultando saldo' : labels[status]) || (platform === 'twitch' && telemetry?.assistindo ? 'Assistindo' : telemetry?.login ? 'Vinculada' : 'Aguardando'));
+        statusEl.title = platform === 'kick' && account?.refreshing ? 'Atualizando saldo em segundo plano' : '';
         const bonusEl = box.querySelector('.bsh-' + platform + '-bonus');
         if (platform === 'twitch') {
           let twBonus = 'Bônus —';
           if (telemetry) {
             twBonus = telemetry.assistindo && telemetry.pctAtual > 0 ? '+' + telemetry.pctAtual + '% XP' : 'Sem bônus';
           }
-          bonusEl.textContent = twBonus;
+          setSocialText(bonusEl, twBonus);
           bonusEl.classList.toggle('is-bonus-active', twBonus.startsWith('+'));
         } else {
           let kickBonusText = 'Bônus —';
@@ -376,7 +382,7 @@
           } else {
             bonusEl.classList.remove('is-bonus-active');
           }
-          bonusEl.textContent = kickBonusText;
+          setSocialText(bonusEl, kickBonusText);
         }
       }
       const balances = Object.entries(account?.balances || {});
@@ -384,9 +390,9 @@
       const total = verified.reduce((n, [, b]) => n + b.points, 0);
       const points = box.querySelector('.bsh-social-points');
       const gamePoints = game.kick?.pontos;
-      points.textContent = !verified.length && Number.isFinite(gamePoints) ? fmtNumber(gamePoints) + ' pts no jogo' : verified.length ? fmtNumber(total) + ' pts' : 'Pontos —';
+      setSocialText(points, !verified.length && Number.isFinite(gamePoints) ? fmtNumber(gamePoints) + ' pts no jogo' : verified.length ? fmtNumber(total) + ' pts' : 'Pontos —');
       points.title = balances.length ? balances.map(([channel, b]) => channel + ': ' + (b.status === 'verified' ? fmtNumber(b.points) : 'indisponível')).join('\n') : 'Aguardando saldo confirmado pela Kick';
-      box.querySelector('.bsh-social-channels').textContent = verified.length ? verified.length + (verified.length === 1 ? ' canal' : ' canais') + (verified.length < balances.length ? ' · parcial' : '') : Number.isFinite(gamePoints) ? 'Saldo informado pelo jogo' : 'Sem saldo confirmado';
+      setSocialText(box.querySelector('.bsh-social-channels'), verified.length ? verified.length + (verified.length === 1 ? ' canal' : ' canais') + (verified.length < balances.length ? ' · parcial' : '') : Number.isFinite(gamePoints) ? 'Saldo informado pelo jogo' : 'Sem saldo confirmado');
     },
 
     isHudActive(i) {
