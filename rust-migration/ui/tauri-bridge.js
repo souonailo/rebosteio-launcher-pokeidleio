@@ -185,7 +185,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.35',
+    appVersion: '2.0.37',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {
@@ -211,6 +211,13 @@
       }
     }
   };
+
+  // Sincroniza a instância atual na inicialização
+  invoke('instance_get').then(info => {
+    if (info && typeof info.id === 'number') {
+      window.pokeAPI.instanceId = info.id;
+    }
+  }).catch(() => {});
 
   // O launcher carrega as credenciais uma única vez durante sua inicialização.
 

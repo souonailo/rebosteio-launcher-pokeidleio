@@ -341,7 +341,7 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
   // Polling keeps the confirmed buff visible without replacing its DOM text.
   PioBattleHud.update(panel, 0, { ...fakeState, kick: null });
   socialEvents.kick({ accounts: [{ status: 'authenticated' }] });
-  const expiresAt = Date.now() + 5400000;
+  const expiresAt = Date.now() + 5430000;
   const confirmed = { status: 'authenticated', activeRedemption: {
     status: 'confirmed', reward: { key: 'exp' }, expiresAt
   } };

@@ -9,8 +9,9 @@
   try { namesHidden = localStorage.getItem(privacyKey) === '1'; } catch {}
   let sidebarCollapsed = false;
   try { sidebarCollapsed = localStorage.getItem('hubSidebarCollapsed') !== '0'; /* PIO: recolhido por padrão */ } catch {}
-  const accountLabel = i => `Conta ${String(i + 1).padStart(2, '0')}`;
-  const displayName = r => namesHidden ? accountLabel(r.i) : (r.name || `Conta ${r.i + 1}`);
+  const accountOffset = () => (typeof window !== 'undefined' && window.pokeAPI?.instanceId > 1) ? (window.pokeAPI.instanceId - 1) * 4 : 0;
+  const accountLabel = i => `Conta ${String(i + 1 + accountOffset()).padStart(2, '0')}`;
+  const displayName = r => namesHidden ? accountLabel(r.i) : (r.name || `Conta ${r.i + 1 + accountOffset()}`);
   const fmtCompact = (n) => {
     n = +n || 0; const a = Math.abs(n), sg = n < 0 ? '-' : '';
     if (a >= 1e9) return sg + (a / 1e9).toFixed(a >= 1e10 ? 0 : 1).replace('.0','') + 'bi';
@@ -629,7 +630,7 @@
     const markup = arr.map(r => {
       const a=r.a||{}, lead=getLead(r), spr=pokeSprite(lead);
       return `<article class="leaf-list-card" data-i="${r.i}">
-        <div class="leaf-list-identity"><span class="leaf-list-index">${String(r.i+1).padStart(2,'0')}</span><div class="avatar">${spr?`<img src="${spr}" width="48" height="48" alt="" loading="lazy" onerror="this.remove()">`:ico('user')}</div>
+        <div class="leaf-list-identity"><span class="leaf-list-index">${String(r.i + 1 + accountOffset()).padStart(2,'0')}</span><div class="avatar">${spr?`<img src="${spr}" width="48" height="48" alt="" loading="lazy" onerror="this.remove()">`:ico('user')}</div>
           <div class="leaf-list-person"><div class="name">${escH(displayName(r))}</div><div class="sub">${stateStatus(r)[1]}${r.level?' · Nv '+escH(r.level):''}${lead?' · '+escH(lead.name):''}</div></div><span class="leaf-list-state ${stateStatus(r)[0]}">${stateStatus(r)[1]}</span></div>
         <div class="leaf-list-hunt"><span>Caça atual</span><b>${escH(prettyHunt(r.hunt)||'Aguardando dados')}</b></div>
         <div class="leaf-list-stats"><div class="leaf-list-cell" title="${(r.equippedBall && r.equippedBall.name) ? `${escH(r.equippedBall.name)}: ${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}` : `Bolas: ${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}`}"><div class="label">Bolas</div><div class="value">${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}</div></div>

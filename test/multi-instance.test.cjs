@@ -25,6 +25,11 @@ for (const relPath of ['index.html', 'rust-migration/ui/index.html']) {
   assert.ok(html.includes('instanceOffset'), `instanceOffset deve ser calculado em ${relPath}`);
   assert.ok(html.includes('syncInstanceBadge'), `syncInstanceBadge deve existir em ${relPath}`);
 
+  // Validação do loop da instância 2: os inputs precisam manter data-i de 0 a 3, com slot exibido de 5 a 8
+  assert.ok(html.includes('data-i="${i}"'), `Os inputs devem mapear para índice local 0..3 em ${relPath}`);
+  assert.ok(html.includes('slotNum = instanceOffset + i + 1'), `slotNum deve calcular offset para exibição em ${relPath}`);
+  assert.ok(html.includes('const famProxy = (accounts[0] && accounts[0].proxy) || {};'), `famProxy deve usar índice local 0 em ${relPath}`);
+
   // Sintaxe JS de todos os scripts
   for (const script of html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
     new vm.Script(script[1], { filename: relPath });
@@ -74,6 +79,7 @@ assert.ok(vbsContent.includes('WScript.Arguments'), 'launch-rust.vbs deve encami
 for (const shellPath of ['src/ui/pokeleaf-shell.js', 'rust-migration/ui/src/ui/pokeleaf-shell.js']) {
   const shellContent = fs.readFileSync(path.join(root, shellPath), 'utf8');
   assert.ok(shellContent.includes('data-old="newInstanceBtn"'), `pokeleaf-shell deve conter data-old="newInstanceBtn" em ${shellPath}`);
+  assert.ok(shellContent.includes('accountOffset'), `pokeleaf-shell deve calcular accountOffset em ${shellPath}`);
 }
 
 console.log('PASS: multi-instance contract, UI elements, API bridges, Rust commands and batch launchers.');

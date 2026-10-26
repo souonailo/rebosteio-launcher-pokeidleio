@@ -1,3 +1,11 @@
+## 2.0.37 — Correção de Execução e Mapeamento de Contas na Nova Instância
+
+- **Correção no modal de Treinadores**: corrigido o mapeamento de credenciais na instância secundária. O formulário gerava índices deslocados (4 a 7), que eram descartados na normalização e salvavam credenciais vazias no armazenamento isolado (`pionailo-instancia-N`). Os campos agora mantêm o índice local de 0 a 3, exibindo visualmente os slots correspondentes (ex.: 05 a 08).
+- **Execução e login de contas**: restaurada a capacidade de executar e logar contas na nova instância via "Logar equipe", autologin nativo e modo Headless/Blaster.
+- **Identificação visual coerente**: nomes padrão nos painéis exibem "Treinador 5 a 8" e etiquetas no PokeLeaf shell exibem "Conta 05 a 08".
+- **Sincronização no bridge Tauri**: `instanceId` é consultado e sincronizado imediatamente na inicialização do bridge.
+- **Suporte no launcher .bat**: `Abrir Nova Instancia.bat` passa a priorizar o binário em `target/release` antes de `debug`.
+
 ## 2.0.36 — Buff Kick por conta
 
 - Cada conta pode escolher seu próprio buff para acompanhamento e resgate automático; a preferência global anterior é preservada como padrão.

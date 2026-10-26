@@ -1,6 +1,6 @@
 {
   "name": "piorebosteio",
-  "version": "2.0.36",
+  "version": "2.0.37",
   "description": "PIO Rebosteio — launcher Rust/Tauri para Poke Idle IO com quatro contas no Windows",
   "main": "main.js",
   "author": "souonailo",

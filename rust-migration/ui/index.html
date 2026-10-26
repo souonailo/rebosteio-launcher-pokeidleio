@@ -3550,7 +3550,7 @@
     };
     let lang = ['en', 'es'].includes(lsGet('lang')) ? lsGet('lang') : 'pt';
     const t = (k) => (I18N[lang][k] != null ? I18N[lang][k] : I18N.pt[k]);
-    const defName = (i) => t('trainer') + ' ' + (i + 1);
+    const defName = (i) => t('trainer') + ' ' + (i + 1 + ((typeof appInstanceId === 'number' && appInstanceId > 1) ? (appInstanceId - 1) * 4 : 0));
     const shownAccountName = (i, name) => lsGet('hideAccountNames') === '1' ? 'Conta ' + String(i + 1).padStart(2, '0') : name;
 
     const ACOR = [
@@ -4471,7 +4471,7 @@
         const instanceOffset = (typeof appInstanceId === 'number' && appInstanceId > 1) ? (appInstanceId - 1) * 4 : 0;
         const startAcc = instanceOffset + f * 4;
         const endAcc = startAcc + 4;
-        const famProxy = (accounts[startAcc] && accounts[startAcc].proxy) || {};
+        const famProxy = (accounts[0] && accounts[0].proxy) || {};
         if (typeof appInstanceId === 'number' && appInstanceId > 1) {
           const mTitle = document.querySelector('#modal h2');
           if (mTitle) mTitle.textContent = `${t('mH2')} — Instância ${appInstanceId} (Contas ${String(startAcc + 1).padStart(2, '0')} a ${String(endAcc).padStart(2, '0')})`;
@@ -4521,16 +4521,17 @@
         pFields('type').onchange = syncProxy;
         pFields('host').oninput = syncProxy;
 
-        for (let i = startAcc; i < endAcc; i++) {
+        for (let i = 0; i < 4; i++) {
+          const slotNum = instanceOffset + i + 1;
           const c = accounts[i] || blank();
           const row = document.createElement('div');
           row.className = 'acc-account';
           row.innerHTML = `
-          <div class="acc-row"><span class="acc-slot">${String(i + 1).padStart(2, '0')}</span>
-            <input data-i="${i}" data-f="name" aria-label="${t('mName')} ${i + 1}" placeholder="${t('mName')}">
-            <input data-i="${i}" data-f="email" aria-label="${t('mEmail')} ${i + 1}" placeholder="${t('mEmail')}">
-            <input data-i="${i}" data-f="senha" type="password" aria-label="${t('mPass')} ${i + 1}" placeholder="${t('mPass')}">
-            <button class="acc-del" title="${t('accClear')}" aria-label="${t('accClear')} ${i + 1}">🗑</button><button class="acc-wipe" title="${t('accWipe')}" aria-label="${t('accWipe')} ${i + 1}">🧹</button>
+          <div class="acc-row"><span class="acc-slot">${String(slotNum).padStart(2, '0')}</span>
+            <input data-i="${i}" data-f="name" aria-label="${t('mName')} ${slotNum}" placeholder="${t('mName')}">
+            <input data-i="${i}" data-f="email" aria-label="${t('mEmail')} ${slotNum}" placeholder="${t('mEmail')}">
+            <input data-i="${i}" data-f="senha" type="password" aria-label="${t('mPass')} ${slotNum}" placeholder="${t('mPass')}">
+            <button class="acc-del" title="${t('accClear')}" aria-label="${t('accClear')} ${slotNum}">🗑</button><button class="acc-wipe" title="${t('accWipe')}" aria-label="${t('accWipe')} ${slotNum}">🧹</button>
           </div>
           <input type="hidden" data-proxy="type">
           <input type="hidden" data-proxy="host">
@@ -4540,7 +4541,7 @@
           const [vn, ve, vs] = row.querySelectorAll('input[data-f]');
           vn.value = c.name || ''; ve.value = c.email || ''; vs.value = c.senha || '';
           row.querySelector('.acc-del').onclick = async () => {
-            const accountName = (typeof tabNames !== 'undefined' && tabNames[i]) || accounts[i]?.name || (typeof stName === 'function' ? stName(i) : `Conta ${i + 1}`);
+            const accountName = (typeof tabNames !== 'undefined' && tabNames[i]) || accounts[i]?.name || (typeof stName === 'function' ? stName(i) : `Conta ${slotNum}`);
             const hasCreds = Boolean((ve.value || '').trim() || (vs.value || '').trim() || accounts[i]?.email || accounts[i]?.senha);
             if (hasCreds) {
               const confirmMsg = lang === 'en'
@@ -10346,6 +10347,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
             badge.title = `Instância ${id} (Contas ${((id - 1) * 4) + 1} a ${id * 4})`;
             elVer.appendChild(badge);
           }
+          grid.querySelectorAll('.name').forEach((el, i) => { if (!accounts[i]?.name) el.textContent = shownAccountName(i, defName(i)); });
         }
       };
       if (window.pokeAPI && typeof window.pokeAPI.instanceId === 'number' && window.pokeAPI.instanceId > 1) {
