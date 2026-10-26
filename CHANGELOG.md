@@ -1,3 +1,7 @@
+## 2.0.36 — Buff Kick por conta
+
+- Cada conta pode escolher seu próprio buff para acompanhamento e resgate automático; a preferência global anterior é preservada como padrão.
+
 ## 2.0.35 — Correção do Sistema Kick, Headless e Battle HUD
 
 - **Persistência de identidade vinculada**: o login retornado pelo jogo é salvo e mantido nas configurações de cada conta; telemetrias parciais não apagam o usuário vinculado (apenas desvinculação explícita limpa a identidade).

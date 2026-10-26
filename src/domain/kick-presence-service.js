@@ -498,11 +498,13 @@ class KickPresenceManager {
 
       return {
         masterEnabled: this.masterEnabled,
-        accounts: this.accounts.map(a => ({
+        claimPriority: parsed.claimPriority || 'exp',
+        accounts: this.accounts.map((a, i) => ({
           username: a.username,
           token: a.token,
           enabled: a.enabled,
-          channelPoints: { ...a.channelPoints }
+          channelPoints: { ...a.channelPoints },
+          claimPriority: parsed.accounts?.[i]?.claimPriority || parsed.claimPriority || 'exp'
         }))
       };
     } catch {
@@ -531,11 +533,13 @@ class KickPresenceManager {
 
       const toSave = {
         masterEnabled: this.masterEnabled,
-        accounts: this.accounts.map(a => ({
+        claimPriority: data.claimPriority || 'exp',
+        accounts: this.accounts.map((a, i) => ({
           username: a.username,
           token: a.token,
           enabled: a.enabled,
-          channelPoints: { ...a.channelPoints }
+          channelPoints: { ...a.channelPoints },
+          claimPriority: data.accounts?.[i]?.claimPriority || data.claimPriority || 'exp'
         }))
       };
 

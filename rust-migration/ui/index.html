@@ -3249,7 +3249,7 @@
           </div>
           <label class="kick-toggle-label"><input type="checkbox" id="kickAutoClaimToggle"><span class="kick-toggle-text"><b>Resgatar automaticamente</b><small>Gasta pontos no buff escolhido, uma vez por consulta.</small></span></label>
           <div style="display:flex;align-items:center;gap:8px;">
-            <label for="kickAutoClaimPriority" style="font-size:12px;color:var(--color-text-secondary);">Buff acompanhado:</label>
+            <label for="kickAutoClaimPriority" style="font-size:12px;color:var(--color-text-secondary);">Buff da conta selecionada:</label>
             <select id="kickAutoClaimPriority" style="background:var(--color-bg-elevated);color:var(--color-text-primary);border:1px solid var(--border-subtle);border-radius:6px;padding:4px 8px;font-size:12px;">
               <option value="exp">+15% EXP (300 pts)</option>
               <option value="catch">+15% Capture (500 pts)</option>
@@ -5232,7 +5232,7 @@
         if (bal.length) {
           bal.sort((x, y) => y[1].points - x[1].points);
           const [slug, v] = bal[0];
-          const prio = (typeof kickBonusConfig !== 'undefined' && kickBonusConfig.claimPriority) || undefined;
+          const prio = (typeof kickBonusConfig !== 'undefined' && kickAccountPriority(0)) || undefined;
           const sel = window.KickRewardStatus ? window.KickRewardStatus.selected(prio) : [];
           const buffs = sel.filter(r => r.cost > 0).map(r => Math.floor(v.points / r.cost) + '× ' + r.label);
           const idade = v.checkedAt ? Date.now() - v.checkedAt : 0;
@@ -9171,6 +9171,7 @@
                     enabled: saved.accounts[i].enabled !== false,
                     channelPoints: saved.accounts[i].channelPoints || {},
                     linkedUsername: saved.accounts[i].linkedUsername || '',
+                    claimPriority: saved.accounts[i].claimPriority || saved.claimPriority || 'exp',
                     gameLinked: !!saved.accounts[i].gameLinked
                   };
                 }
@@ -9202,6 +9203,10 @@
       setTimeout(() => { if (kickBonusStatusBar) kickBonusStatusBar.style.display = 'none'; }, 4000);
     }
 
+    function kickAccountPriority(index) {
+      return kickBonusConfig.accounts[index]?.claimPriority || kickBonusConfig.claimPriority || 'exp';
+    }
+
     function renderKickRewardSummary(channels) {
       const ready = [], known = [];
       const redemption = document.getElementById('kickRedemptionStatus');
@@ -9211,7 +9216,7 @@
         : !kickBonusConfig.masterEnabled || kickBonusConfig.accounts[kickSelectedAccount]?.enabled === false ? 'Automático pausado: acompanhamento desativado nesta conta.'
         : lastRedemption?.status && lastRedemption.status !== 'off' ? lastRedemption.message : 'Automático ativo: aguardando próxima consulta.';
       channels.forEach(channel => {
-        const status = KickRewardStatus.forBalance(kickVerifiedBalance(channel.login.toLowerCase()), kickBonusConfig.claimPriority);
+        const status = KickRewardStatus.forBalance(kickVerifiedBalance(channel.login.toLowerCase()), kickAccountPriority(kickSelectedAccount));
         if (status.known) known.push(channel);
         if (status.affordable.length) ready.push({ channel, status });
       });
@@ -9223,7 +9228,7 @@
       if (summary && summary.textContent !== text) summary.textContent = text;
       if (details) details.textContent = ready.length
         ? ready.map(r => `@${r.channel.login}: ${r.status.label}`).join(' · ')
-        : `${kickBonusConfig.masterEnabled ? 'Atualização a cada 60 s.' : 'Ative a integração para atualizar automaticamente.'} ${KickRewardStatus.selected(kickBonusConfig.claimPriority).map(r => `${r.label}: ${r.cost.toLocaleString('pt-BR')} pts`).join(' / ')}.`;
+        : `${kickBonusConfig.masterEnabled ? 'Atualização a cada 60 s.' : 'Ative a integração para atualizar automaticamente.'} ${KickRewardStatus.selected(kickAccountPriority(kickSelectedAccount)).map(r => `${r.label}: ${r.cost.toLocaleString('pt-BR')} pts`).join(' / ')}.`;
     }
 
     function renderKickStreamersList() {
@@ -9285,7 +9290,7 @@
         const balance = kickVerifiedBalance(loginLower);
         const points = balance?.points ?? null;
 
-        const rewardStatus = KickRewardStatus.forBalance(balance, kickBonusConfig.claimPriority);
+        const rewardStatus = KickRewardStatus.forBalance(balance, kickAccountPriority(kickSelectedAccount));
         const rewardClass = rewardStatus.className;
         const rewardLabel = rewardStatus.label;
 
@@ -9336,7 +9341,7 @@
         kickAutoClaimToggle.disabled = !window.__TAURI_INTERNALS__;
         kickAutoClaimToggle.title = window.__TAURI_INTERNALS__ ? '' : 'Resgate automático disponível na versão Rust.';
       }
-      if (kickAutoClaimPriority) kickAutoClaimPriority.value = kickBonusConfig.claimPriority;
+      if (kickAutoClaimPriority) kickAutoClaimPriority.value = kickAccountPriority(kickSelectedAccount);
 
       const isRunning = kickBonusConfig.masterEnabled && kickPointsState.accounts.some(a => a.status === 'authenticated');
       if (kickGlobalStatusPill) {
@@ -9535,15 +9540,17 @@
 
     if (kickAutoClaimPriority) {
       kickAutoClaimPriority.onchange = async () => {
-        const previous = kickBonusConfig.claimPriority;
-        kickBonusConfig.claimPriority = kickAutoClaimPriority.value;
+        const index = kickSelectedAccount;
+        const account = kickBonusConfig.accounts[index];
+        const previous = account.claimPriority;
+        account.claimPriority = kickAutoClaimPriority.value;
         kickAutoClaimPriority.disabled = true;
         renderKickStreamersList();
         try {
           if (!kickConfigReady || !window.pokeAPI?.kickSaveCreds || !(await window.pokeAPI.kickSaveCreds(kickBonusConfig))) throw Error('save');
         } catch {
-          kickBonusConfig.claimPriority = previous;
-          kickAutoClaimPriority.value = previous;
+          account.claimPriority = previous;
+          if (kickSelectedAccount === index) kickAutoClaimPriority.value = kickAccountPriority(index);
           showKickFeedback('Falha ao salvar. O buff escolhido mantém a configuração anterior.', true);
         } finally {
           kickAutoClaimPriority.disabled = false;

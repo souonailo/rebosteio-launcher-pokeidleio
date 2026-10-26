@@ -596,7 +596,8 @@ impl KickServiceManager {
             return;
         }
         state["redemption"] = json!({"status":"waiting_points","message":"Automático ativo: aguardando saldo e recompensa disponíveis."});
-        let priority = config["claimPriority"].as_str().unwrap_or("exp");
+        let priority = config["accounts"][index]["claimPriority"].as_str()
+            .or_else(|| config["claimPriority"].as_str()).unwrap_or("exp");
         let candidate = state["balances"].as_object().into_iter().flatten().find_map(|(slug, b)| {
             let r = crate::kick_rewards::eligible(b, priority, now())?;
             let pts = b.get("points")?.as_u64()?;
