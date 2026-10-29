@@ -185,7 +185,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.37',
+    appVersion: '2.0.43',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {
@@ -237,6 +237,9 @@
     const panel = grid && grid.children[index];
     if (panel && window.PioBattleHud && typeof window.PioBattleHud.update === 'function') {
       window.PioBattleHud.update(panel, index, state);
+    }
+    if (typeof window.__pgFeedState === 'function') {
+      window.__pgFeedState(index, state);
     }
     // Dispara console-message para o index.html (alimenta estatísticas globais, Simples e cards)
     const targetWv = (panel && panel.querySelector('webview')) ||
@@ -529,7 +532,23 @@
         if (idx >= 0) {
           if (window.PioBattleHud?.isBlasterActive(idx)) {
             if (code === window.READ_STATE) return window.stCache?.[idx]?.d || null;
-            throw new Error('Esta ação requer abrir o jogo; conta em modo headless');
+            if (code === window.PIO_COLETA || (typeof code === 'string' && (code.includes('rotom_sniper_logs') || code.includes('xpVivo')))) {
+              return window.getPioHeadlessColeta ? window.getPioHeadlessColeta(idx) : (window.stCache?.[idx]?.d || null);
+            }
+            if (code === window.PIO_CARD || (typeof code === 'string' && code.includes('sessao-hunt:'))) {
+              return window.getPioHeadlessCard ? window.getPioHeadlessCard(idx) : null;
+            }
+            if (code === window.DEP_JS || (typeof code === 'string' && code.includes('/api/game/depot'))) {
+              return {};
+            }
+            if (typeof code === 'string' && code.includes('/api/game/used-balls')) {
+              return { pokemons: [] };
+            }
+            if (typeof code === 'string' && code.includes('/api/characters/me')) {
+              const d = window.stCache?.[idx]?.d;
+              return d ? { character: { id: d.cid, name: d.name, level: d.level, gold: d.gold, diamonds: d.diamonds } } : null;
+            }
+            return null;
           }
           return window.pokeAPI.webviewEval(idx, code);
         }

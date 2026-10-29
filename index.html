@@ -3789,7 +3789,7 @@
               dtPush();
               if (cardsOn) {
                 clearTimeout(cardsRefreshTimer);
-                cardsRefreshTimer = setTimeout(() => { if (cardsOn) refreshCards(); }, 250);
+                cardsRefreshTimer = setTimeout(() => { if (cardsOn) refreshCards(); }, 1200);
               }
               // --- Watchdog event-driven: substitui o polling READ_ALERTS de 6s ---
               lastPush[i] = Date.now();
@@ -8778,7 +8778,7 @@
     // Alertas via coletor: shiny, pokemon derrubado e inventario baixo (contagem exata do jogo).
     const READ_ALERTS = `(()=>{const P=window.__poke;if(!P||!P.ws)return null;const ws=P.ws,api=P.api||{};const cat={};const doc=api['/game/items.json']||api['/assets/items.json'];if(doc&&doc.items)doc.items.forEach(it=>{cat[it.id]=it;if(it.name){cat[it.name]=it;cat[String(it.name).toLowerCase()]=it;}});let balls=0;const bm=ws.balls;if(bm&&bm.counts){const counts=bm.counts||{},catB={};(bm.catalog||[]).forEach(b=>{catB[String(b.id)]=b;});const auto=(P.automation||(P.estado&&P.estado.automation)||{}),autoIds=Array.isArray(auto.ballIds)?auto.ballIds:(Array.isArray(P.autoBallIds)?P.autoBallIds:[]);let eqId=null;if(autoIds.length>0){const wsId=autoIds.find(id=>(+counts[id]||0)>0);eqId=wsId!=null?wsId:autoIds[0];}if(eqId==null&&P.lastBallId!=null&&counts[P.lastBallId]!=null)eqId=P.lastBallId;if(eqId==null&&typeof document!=='undefined'){try{const onBtn=document.querySelector('#auto-ball-opts .auto-chip.on,#caidos-bolas .caidos-bola.on');if(onBtn){const img=onBtn.querySelector('img'),src=(img&&img.src)||'';const mId=/ball-poke/i.test(src)?1:/ball-great/i.test(src)?2:/ball-super/i.test(src)?3:/ball-ultra/i.test(src)?4:/ball-beast/i.test(src)?5:0;if(mId)eqId=mId;}}catch(x){}}if(eqId==null){const vIds=Object.keys(counts).filter(id=>(+counts[id]||0)>0&&!(catB[id]&&catB[id].infinite));if(vIds.length>0)eqId=vIds[0];else{const anyId=Object.keys(counts).find(id=>(+counts[id]||0)>0);eqId=anyId!=null?anyId:(Object.keys(counts)[0]||1);}}const bB=catB[String(eqId)]||{},qB=+counts[eqId]||0;balls=(bB.infinite||(qB>=999999&&!bB.priceGold))?999999:qB;}let potions=0,revives=0,lootSellQty=0;const inv=(ws.inventory&&ws.inventory.items)||[];const BP=['strange pheromone','feromonio','feromônio','boss token','token boss','boss ticket','ticket boss','rare pokémon picture','rare pokemon picture'];const uLk=Array.isArray(window.__pgSellLock)?window.__pgSellLock:[];const protS=new Set(BP.concat(uLk).map(x=>String(x).toLowerCase().trim()));inv.forEach(it=>{const itm=cat[it.itemId]||{};const c=itm.category;if(c==='heal'||c==='potion')potions+=it.quantity;else if(c==='revive')revives+=it.quantity;else if(String(c||'').toLowerCase()==='loot'){const nm=String(itm.name||'').toLowerCase().trim();if(!protS.has(nm)&&!nm.includes('pheromone')&&!nm.includes('feromon')&&!nm.includes('boss token')&&!nm.includes('token boss')&&!nm.includes('boss ticket')&&!nm.includes('ticket boss'))lootSellQty+=it.quantity;}});const S=P.sess||{};const ch=(api['/api/characters/me']&&api['/api/characters/me'].character)||{};let lootGold=0;for(const id in (S.drops||{})){const dd=S.drops[id];const itm=cat[id]||cat[dd.name]||cat[String(dd.name||'').toLowerCase()]||{};lootGold+=(dd.qty||0)*((itm.npcPrice)||0);}const hasBalls=!!(bm&&bm.counts),hasInv=!!(ws.inventory&&ws.inventory.items),live=!!(ch.id||hasBalls||hasInv)&&!((P.meMiss||0)>=2&&!(P.sock&&P.sock.readyState===1));
 let gLucro=null,gKills=0,gXp=0,gCaps=0;
-try{const nK=(ch.name||P.nick||(P.estado&&P.estado.nick)||'').toLowerCase();const raw=nK?localStorage.getItem('sessao-hunt:'+nK):null;if(raw){const gs=JSON.parse(raw);if(gs&&typeof gs==='object'){gKills=+gs.abates||0;gXp=+gs.xpTreinador||0;gCaps=+gs.capturas||0;let gast=0;const cB=(ws.balls&&ws.balls.catalog)||[];const pB=id=>{const b=cB.find(x=>x.id===+id);if(b&&b.priceGold!=null)return+b.priceGold||0;if(+id===1)return 5;if(+id===2)return 20;if(+id===3)return 50;if(+id===4)return 130;return 0;};const PC={200:50,201:150,202:400,203:800,204:1500,205:600,206:2500};for(const bId in (gs.bolas||{}))gast+=(+gs.bolas[bId]||0)*pB(bId);for(const pId in (gs.pocoes||{}))gast+=(+gs.pocoes[pId]||0)*((cat[+pId]&&cat[+pId].npcPrice)||PC[+pId]||0);for(const rId in (gs.revives||{}))gast+=(+gs.revives[rId]||0)*((cat[+rId]&&cat[+rId].npcPrice)||PC[+rId]||0);gLucro=(+gs.gold||0)-gast;}}}catch(x){}
+try{let nK=(ch.name||P.nick||(P.estado&&(P.estado.nick||(P.estado.eu&&P.estado.eu.nick)))||'').toLowerCase();if(!nK){try{const rawNick=localStorage.getItem('nick');if(rawNick)nK=String(rawNick).toLowerCase().trim();}catch(e){}}let raw=nK?localStorage.getItem('sessao-hunt:'+nK):null;if(!raw){try{for(let k=0;k<localStorage.length;k++){const key=localStorage.key(k);if(key&&key.startsWith('sessao-hunt:')){raw=localStorage.getItem(key);if(raw)break;}}}catch(e){}}if(raw){const gs=JSON.parse(raw);if(gs&&typeof gs==='object'){gKills=+gs.abates||0;gXp=+gs.xpTreinador||0;gCaps=+gs.capturas||0;let gast=0;const cB=(ws.balls&&ws.balls.catalog)||[];const pB=id=>{const b=cB.find(x=>x.id===+id);if(b&&b.priceGold!=null)return+b.priceGold||0;if(+id===1)return 5;if(+id===2)return 20;if(+id===3)return 50;if(+id===4)return 130;return 0;};const PC={200:50,201:150,202:400,203:800,204:1500,205:600,206:2500};for(const bId in (gs.bolas||{}))gast+=(+gs.bolas[bId]||0)*pB(bId);for(const pId in (gs.pocoes||{}))gast+=(+gs.pocoes[pId]||0)*((cat[+pId]&&cat[+pId].npcPrice)||PC[+pId]||0);for(const rId in (gs.revives||{}))gast+=(+gs.revives[rId]||0)*((cat[+rId]&&cat[+rId].npcPrice)||PC[+rId]||0);gLucro=(+gs.gold||0)-gast;}}}catch(x){}
 /* resumo de uma hunt encerrada: o app grava isso no log e usa pra exportar (drop por kill etc) */
 const resumo=(X)=>{if(!X||!X.start||!X.kills)return null;let lg=0;const dr=[];for(const id in (X.drops||{})){const dd=X.drops[id];const itm=cat[id]||cat[dd.name]||cat[String(dd.name||'').toLowerCase()]||{};const g=(dd.qty||0)*((itm.npcPrice)||0);lg+=g;dr.push({id:+id||0,n:dd.name||'',q:dd.qty||0,g});}
 return {start:X.start,end:X.end||Date.now(),slug:X.slug||'',kills:X.kills||0,xp:X.xp||0,caps:X.captures||0,sf:X.shinyN||0,sc:X.shinyCapN||0,balls:X.balls||0,pots:X.supN||0,loot:lg,sell:X.sellG||0,sup:(X.supGold||0),drops:dr};};
@@ -9475,9 +9475,25 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     const parseEco = v => {
       if (v == null) return 0;
       if (typeof v === 'number') return v;
-      const s = String(v).replace(/\\/h/i, '').replace(/\\s+/g, '').replace(/\\./g, '').replace(',', '.');
+      let s = String(v).trim().replace(/\\/h/i, '').replace(/\\s+/g, '');
+      if (!s) return 0;
+      const suf = s.match(/^(-?[0-9]+(?:[.,][0-9]+)?)\s*([kmb])$/i);
+      if (suf) {
+        const mult = suf[2].toLowerCase() === 'k' ? 1e3 : suf[2].toLowerCase() === 'm' ? 1e6 : 1e9;
+        return Math.round(parseFloat(suf[1].replace(',', '.')) * mult);
+      }
+      if (s.includes('.') && s.includes(',')) {
+        s = s.replace(/\\./g, '').replace(',', '.');
+      } else if (s.includes('.')) {
+        const parts = s.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+          s = s.replace(/\\./g, '');
+        }
+      } else if (s.includes(',')) {
+        s = s.replace(',', '.');
+      }
       const m = s.match(/-?[0-9]+(\\.[0-9]+)?/);
-      return m ? +m[0] : 0;
+      return m ? Math.round(+m[0]) : 0;
     };
     const ws = P.ws || (P.ws = {}), api = P.api || {};
     const S = P.sess || (P.sess = { start: Date.now(), kills: 0, xp: 0, balls: 0, captures: 0, drops: {}, shinyN: 0, shinySeen: {}, shinyCapN: 0, faintN: 0, sellG: 0, supGold: 0, supN: 0, gold: 0, slug: '', hp: {} });
@@ -9536,14 +9552,29 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
 
     let gameSess = null;
     try {
-      let nKey = (ch.name || P.nick || (P.estado && P.estado.nick) || '').toLowerCase();
+      let nKey = (ch.name || P.nick || (P.estado && (P.estado.nick || (P.estado.eu && P.estado.eu.nick))) || '').toLowerCase();
       if (!nKey && typeof localStorage !== 'undefined') {
         try {
           const sL = JSON.parse(localStorage.getItem('sessao') || 'null');
           if (sL && sL.nick) nKey = sL.nick.toLowerCase();
+          if (!nKey) {
+            const rawNick = localStorage.getItem('nick');
+            if (rawNick) nKey = String(rawNick).toLowerCase().trim();
+          }
         } catch (e) {}
       }
-      const raw = nKey ? localStorage.getItem('sessao-hunt:' + nKey) : null;
+      let raw = nKey ? localStorage.getItem('sessao-hunt:' + nKey) : null;
+      if (!raw && typeof localStorage !== 'undefined') {
+        try {
+          for (let k = 0; k < localStorage.length; k++) {
+            const key = localStorage.key(k);
+            if (key && key.startsWith('sessao-hunt:')) {
+              raw = localStorage.getItem(key);
+              if (raw) break;
+            }
+          }
+        } catch (e) {}
+      }
       let gs = raw ? JSON.parse(raw) : null;
       let ecoDom = null;
       if (typeof document !== 'undefined') {
@@ -9559,9 +9590,9 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const cV = document.querySelector('[data-kpi="capturas"] .eco-kpi-v');
           const cH = document.querySelector('[data-kpi="capturas"] .eco-kpi-h');
           const tEl = plc.querySelector('.eco-tempo');
-          if (lV && kV) {
+          if (lV || xH || kV) {
             ecoDom = {
-              lucro: parseEco(lV.textContent),
+              lucro: parseEco(lV ? lV.textContent : 0),
               gph: parseEco(lH ? lH.textContent : 0),
               gastos: Math.abs(parseEco(lSub ? lSub.textContent : 0)),
               xp: parseEco(xV ? xV.textContent : 0),
@@ -9572,6 +9603,27 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
               capH: parseEco(cH ? cH.textContent : 0),
               tempo: tEl ? tEl.textContent : ''
             };
+          }
+        }
+        const sPainel = document.getElementById('sessao-painel');
+        if (sPainel) {
+          const sXphEl = document.getElementById('sessao-xp-treinador-h');
+          const sXpEl = sPainel.querySelector('[data-k="xpTreinador"]');
+          const sGoldEl = sPainel.querySelector('[data-k="gold"]');
+          const sGoldHEl = document.getElementById('sessao-gold-h');
+          const sAbatesEl = sPainel.querySelector('[data-k="abates"]');
+          const sAbatesHEl = document.getElementById('sessao-abates-h');
+          const sCapsEl = sPainel.querySelector('[data-k="capturas"]');
+          if (sXphEl || sXpEl) {
+            ecoDom = Object.assign(ecoDom || {}, {
+              xp: parseEco(sXpEl ? sXpEl.textContent : (ecoDom && ecoDom.xp)),
+              xph: parseEco(sXphEl ? sXphEl.textContent : (ecoDom && ecoDom.xph)),
+              lucro: parseEco(sGoldEl ? sGoldEl.textContent : (ecoDom && ecoDom.lucro)),
+              gph: parseEco(sGoldHEl ? sGoldHEl.textContent : (ecoDom && ecoDom.gph)),
+              kills: parseEco(sAbatesEl ? sAbatesEl.textContent : (ecoDom && ecoDom.kills)),
+              kph: parseEco(sAbatesHEl ? sAbatesHEl.textContent : (ecoDom && ecoDom.kph)),
+              caps: parseEco(sCapsEl ? sCapsEl.textContent : (ecoDom && ecoDom.caps)),
+            });
           }
         }
       }
@@ -9623,15 +9675,14 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         }
 
         if (ecoDom) {
-          gLucro = ecoDom.lucro;
-          if (ecoDom.gph) gGph = ecoDom.gph;
-          if (ecoDom.gastos) gGastos = ecoDom.gastos;
-          if (ecoDom.xp) gXp = ecoDom.xp;
-          if (ecoDom.xph) gXph = ecoDom.xph;
-          if (ecoDom.kills) gKills = ecoDom.kills;
-          if (ecoDom.kph) gKph = ecoDom.kph;
-          if (ecoDom.caps) gCaps = ecoDom.caps;
-          if (ecoDom.tempo) {
+          if (ecoDom.xph > 0) gXph = ecoDom.xph;
+          if (ecoDom.gph > 0) gGph = ecoDom.gph;
+          if (ecoDom.kph > 0) gKph = ecoDom.kph;
+          if (ecoDom.xp > 0 && !gXp) gXp = ecoDom.xp;
+          if (ecoDom.lucro != null && !gLucro) gLucro = ecoDom.lucro;
+          if (ecoDom.kills > 0 && !gKills) gKills = ecoDom.kills;
+          if (ecoDom.caps > 0 && !gCaps) gCaps = ecoDom.caps;
+          if (ecoDom.tempo && !gSeconds) {
             const hm = ecoDom.tempo.match(/(?:(\\d+)h)?\\s*(\\d+)m/);
             const p = ecoDom.tempo.split(':').map(Number);
             gSeconds = hm ? (+hm[1] || 0) * 3600 + (+hm[2] || 0) * 60 : p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : (p.length === 2 ? p[0] * 60 + p[1] : gSeconds);

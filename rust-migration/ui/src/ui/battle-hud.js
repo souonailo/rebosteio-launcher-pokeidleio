@@ -884,6 +884,8 @@
       if (xphValEl) {
         const xphFormatted = formatCompact(a.xph || 0);
         if (xphValEl.textContent !== xphFormatted) xphValEl.textContent = xphFormatted;
+        const xphFull = `${fmtNumber(a.xph || 0)}/h`;
+        if (xphValEl.getAttribute('title') !== xphFull) xphValEl.setAttribute('title', xphFull);
       }
 
       const shiniesValEl = hud.querySelector('.bsh-val-shinies');
@@ -960,8 +962,17 @@
       if (panel) {
         PioBattleHud.update(panel, index, state);
       }
+      state = window.PioInventory ? window.PioInventory.project(state) : state;
       if (typeof window.stCache !== 'undefined') {
         window.stCache[index] = { t: Date.now() + 15000, d: state };
+      }
+      const targetWv = (panel && panel.querySelector('webview')) ||
+                       (typeof webviews !== 'undefined' && webviews[index]);
+      if (targetWv) {
+        const msgStr = '__PGST__' + JSON.stringify(state);
+        const evt = new CustomEvent('console-message', { detail: { message: msgStr } });
+        evt.message = msgStr;
+        targetWv.dispatchEvent(evt);
       }
     });
   }

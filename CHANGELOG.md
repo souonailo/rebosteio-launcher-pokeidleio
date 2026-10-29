@@ -1,3 +1,83 @@
+## 2.0.43 — Correção de Histórico de Capturas, Shinies, Pedras e Persistência de VIP/Passe em Headless
+
+- **Preservação de Histórico e Drops contra Reset em Pacotes de Estado (`cheio: true`)**:
+  - No cliente Headless nativo Rust (`game_headless.rs`), pacotes de sincronização periódica, mudança de hunt ou troca de inventário contendo `cheio: true` estavam executando limpeza destrutiva de `catch_log`, `shiny_log`, `drops` e `raw_drops`.
+  - Corrigido o ciclo de vida do estado: mensagens `cheio: true` agora atualizam exclusivamente o catálogo e mapeamento de itens e pokémons, preservando integralmente o histórico de capturas, encontros com shinies e drops acumulados durante toda a sessão (limpeza de métricas reservada unicamente a eventos explícitos `t == "reset"`).
+- **Extração e Persistência de Dias Restantes de VIP e Passe em Headless (`vipDias` e `passeDias`)**:
+  - O Headless Rust (`HeadlessState`) passa a rastrear `vip_ate`, `passe_vip_ate`, `vip_dias`, `passe_dias` e `boost_xp`, calculando dinamicamente os dias restantes com base no timestamp epoch do servidor em tempo real.
+  - Corrigida a função `getPioHeadlessColeta` no `index.html`, que possuía campos `vipDias: null`, `passeDias: null` e `boostXp: null` hardcoded, sobrescrevendo `pioUltimo` a cada 10 segundos e apagando a exibição de VIP e Passe da barra superior após alternar de WebView para Headless. Os valores agora persistem continuamente e mantêm fallback para leituras anteriores (`antes`).
+- **Sincronização Imediata de Capturas e Drops (`__pgFeedState` e `autodex/capturas.csv`)**:
+  - `getPioHeadlessColeta` agora sintetiza o histórico de capturas ativas a partir de `st.catchLog`, permitindo que o gravador contínuo de capturas registre cada novo pokémon capturado no arquivo `autodex/capturas.csv` mesmo com o jogo rodando em modo Headless.
+  - Implementado hook direto `window.__pgFeedState` disparado pelo Tauri Bridge em cada atualização nativa do Blaster, alimentando instantaneamente `mergeLogs`, `accumHist` e `pioDropsTrack` sem depender de listeners de eventos DOM assíncronos.
+- **Deduplicação de Chaves de Drops em Pedras e Raros**:
+  - Eliminada a duplicação na leitura de drops de `d.drops` no `pioDropsTrack`, que somava a chave numérica (ID) e a chave por extenso (Nome), garantindo contagem exata e registro fidedigno no histórico de pedras (`pioPedras`), raros (`pioRaros`) e no resumo da sessão.
+
+## 2.0.42 — Calibração do Ritmo de XP da Meta de Nível pela Sessão Ativa
+
+- **Priorização do Ritmo da Sessão Ativa (`ritmoSessao` vs `ritmo 6 h`)**:
+  - Corrigido o cálculo de tempo estimado (ETA) e previsão de chegada para metas de nível nos cards (`#cards`) e no painel de Metas (`pioMetasPanel`).
+  - O launcher estava forçando a média móvel histórica de 6 horas (`ritmo 6 h`), que misturava snapshots passados de paradas, cidades ou taxas descalibradas (exibindo 118M/h e superestimando em 33,7 dias o que leva 13,3 dias no ritmo atual de ~300M/h).
+  - O cálculo agora prioriza diretamente o ritmo medido da sessão corrente da hunt (`ritmoSessao`) a partir de 30 segundos de amostragem ativa. A média de 6 horas permanece ativa como fallback para contas ociosas e é exibida no tooltip para comparação transparente (`Média histórica 6 h (com paradas)`).
+  - O indicador de tempo para o próximo nível (`prox`) também passa a utilizar o ritmo ativo imediato da sessão em vez de aguardar 30 minutos.
+
+## 2.0.41 — Correção de Telemetria de XP/h com Multiplicadores do Treinador e Sincronização
+
+- **Prioridade e Precisão do XP de Treinador (`xpTreinador` vs `xp`)**:
+  - Nos pacotes WebSocket de abate (`morte` e `bossMorto`), o servidor do PokeIdle envia o XP base do monstro (`xp`) e o XP real concedido ao treinador já amplificado pelos bônus ativos (`xpTreinador` com VIP, XP Boost, Clã e Região).
+  - Corrigida a inversão de precedência no cliente Headless nativo Rust (`game_headless.rs`), no serviço Headless JS (`game-headless-service.js`) e no injetor de gameplay WebView (`launcher_gameplay.js`), que priorizavam `xp` antes de `xpTreinador` e descartavam os multiplicadores (gerando taxas base como 65M/h em vez dos 296M/h reais).
+  - Aplicado piso mínimo de amostragem (`MS_MINIMO_RITMO = 60s`) no cálculo de ritmo de sessão em Rust, alinhando com a regra interna do cliente oficial do jogo e prevenindo picos artificiais no primeiro minuto de farm.
+- **Sincronização de Sessão e Ritmo no WebView (`READ_STATE` e `PIO_CARD`)**:
+  - Adicionado fallback para identificação da conta via `localStorage.getItem('nick')` e varredura dinâmica de chaves `sessao-hunt:*`, garantindo leitura imediata da sessão gravada pelo jogo mesmo quando o estado em memória ainda não indexou o apelido.
+  - Extração resiliente dos valores renderizados nos componentes da interface do jogo (`#sessao-painel`, `#sessao-xp-treinador-h`, `#eco-placar`), priorizando a taxa oficial do cliente em tempo de execução.
+  - Parser numérico (`parseEco`) aprimorado para decodificar com fidelidade sufixos (`k`, `m`, `b`) e formatações com separadores de milhar e decimais.
+- **Detalhamento no Battle HUD**:
+  - Adicionado tooltip nativo (`title`) no indicador de `EXP / hora` do Battle HUD (`.bsh-val-xph`), exibindo o número exato sem abreviação (ex.: `296.381.103/h`) ao passar o mouse sobre a métrica compacta (`296M`).
+
+## 2.0.40 — Contador e Estimativa de Horas para Meta de Nível
+
+- **Contador Interativo de Meta de Nível nos Cards (`#cards`)**:
+  - Adicionado campo interativo (`<input type="number">`) diretamente no cabeçalho de cada conta no Modo Simples (`🎯 meta Nv [X]`), permitindo definir e alterar o nível desejado sem abrir modais adicionais.
+  - Salvamento automático imediato no `localStorage` (`PIO_ALVO_KEY`), disparado ao alterar o valor ou ao pressionar a tecla `Enter`.
+  - Sincronização bidirecional em tempo real entre os cards de contas e a tabela do painel de Metas (`pioMetasPanel`).
+- **Cálculo Preciso de Horas Restantes (ETA) até o Nível Meta**:
+  - Estimativa dinâmica de horas baseada na curva matemática exata do treinador no PokeIdle (`pioXpAte`), calculando o XP faltante a partir do XP acumulado real.
+  - Formatação inteligente com destaque em horas para todos os intervalos:
+    - Menos de 1 hora: minutos e fração de hora (ex.: `45 min (~0,8 h)`).
+    - Até 48 horas: horas e minutos decompostos junto do total de horas (ex.: `14h30m (~14,5 h)`).
+    - Mais de 48 horas: dias e total de horas estimadas (ex.: `2,5 dias (~60 h)`).
+  - Reconhecimento automático de meta concluída com etiqueta e ícone de comemoração (`atingida 🎉`).
+  - Fallback responsivo de ritmo: utiliza a média móvel de 6 horas quando estabilizada ou o ritmo medido da sessão corrente a partir de 30 segundos, exibindo estimativa instantânea mesmo em contas recém-iniciadas em headless.
+  - Tooltip explicativo completo ao passar o mouse, detalhando XP que falta, ritmo de XP/h utilizado, tempo estimado e previsão de chegada (data e hora).
+  - Tag de resumo de meta adicionada ao rodapé de cada card ao lado dos Shinies e Drops.
+
+## 2.0.39 — Estabilidade de Rolagem no Modo Simples e Resolução de Moedas e Drops Headless
+
+- **Estabilidade de Rolagem no Modo Simples**:
+  - Eliminado o snap/puxão automático para o topo da tela ao rolar o dashboard. O redesenho do painel agora rastreia o scroll do usuário e não destrói o DOM enquanto o usuário estiver interagindo ou rolando a visualização.
+  - O valor de rolagem vertical (`scrollTop`) é restaurado com fidelidade imediatamente e via ciclo de renderização (`requestAnimationFrame` e timeout de layout).
+  - O timer de atualização contínua (`cardsRefreshTimer`) foi calibrado de 250ms para 1200ms durante o combate para evitar reinjeção desnecessária da árvore DOM.
+- **Rastreamento de Gemas e Diamantes em Modo Headless**:
+  - Extração correta do objeto de treinador (`estado.eu` ou `estado`) no cliente Headless nativo em Rust (`game_headless.rs`) e Electron (`game-headless-service.js`), garantindo contagem separada de `gemas` (`orbs`) e `diamantes` para todas as contas secundárias.
+  - Integração no `getPioHeadlessColeta` para expor distintamente gemas e diamantes nos cards de contas e no totalizador geral.
+- **Resolução de Itens e Drops de Pedras e Raros**:
+  - Dicionário canônico de itens integrado aos clientes headless para resolver drops enviados pelo jogo somente com ID numérico (ex.: `53` para Fire Stone, `109` para Rock Stone, `70000+` para itens raros e fragmentos).
+  - Classificação no Modo Simples (`pioTipoItem`) agora identifica drops numéricos e nomes resolvidos, alimentando corretamente os contadores de "Pedras" e "Raros" nos cards e tabelas.
+  - Estabilidade de `sess.st` na projeção de inventário (`PioInventory.project`) para evitar falsos resets de sessão entre ticks de telemetria.
+
+## 2.0.38 — Telemetria Completa em Modo Headless (Master Blaster)
+
+- **Telemetria de contas em tempo real**: Contas em modo Headless/Blaster agora alimentam com precisão todas as métricas do Modo Simples e painéis do launcher sem exigir janela do jogo aberta.
+- **Rastreamento de Pedras, Raros, Kills, Gold e XP**:
+  - Implementado acumulador de XP de treinador, registro de capturas com IVs (`catch_log`), histórico de aparições de shiny (`shiny_log`) e inventário de pedras/drops raros no cliente Headless nativo em Rust (`game_headless.rs`) e serviço Electron (`game-headless-service.js`).
+  - Projeção de inventário unificada (`PioInventory.project`) sintetiza estrutura de bolsas (`bag` com Pokébolas e Revive) e métricas de sessão completas (`sess`) a partir dos mapas do servidor.
+- **Integração das rotinas de coleta do Modo Simples**:
+  - `pioColetarContas` e `refreshCards` agora utilizam coletores dedicados para instâncias headless (`getPioHeadlessColeta` e `getPioHeadlessCard`), alimentando as tabelas `SB.today`, `SB.pioPedras`, `SB.pioRaros` e cards de contas sem falhas de `executeJavaScript`.
+  - Tratamento no bridge Tauri e Electron para executar consultas seguras de estado (`PIO_COLETA`, `PIO_CARD`, `DEP_JS`, `/api/characters/me`) em webviews sem interface gráfica.
+- **Painéis de Últimas Capturas e Aparições de Shiny**:
+  - Alimentação contínua de `mergeLogs` com sanitização adequada de logs (`stSane`), exibindo capturas com IV/potência e shinies avistados/derrotados/capturados de todas as contas headless.
+- **Compatibilidade total nos runtimes Tauri e Electron**:
+  - Disparo de eventos `__PGST__` / `console-message` em ambos os ambientes garante atualização instantânea do HUD e do cache de telemetria sem discrepâncias.
+
 ## 2.0.37 — Correção de Execução e Mapeamento de Contas na Nova Instância
 
 - **Correção no modal de Treinadores**: corrigido o mapeamento de credenciais na instância secundária. O formulário gerava índices deslocados (4 a 7), que eram descartados na normalização e salvavam credenciais vazias no armazenamento isolado (`pionailo-instancia-N`). Os campos agora mantêm o índice local de 0 a 3, exibindo visualmente os slots correspondentes (ex.: 05 a 08).

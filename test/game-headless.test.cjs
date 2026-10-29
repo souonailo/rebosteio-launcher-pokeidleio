@@ -94,11 +94,12 @@ test('PokeIdleHeadlessClient - handshake, telemetry, combat and lifecycle', asyn
     ev: [
       { k: 'spawn', shiny: true, nome: 'Articuno' },
       { k: 'bola', ballId: 3 },
-      { k: 'morte', quem: 'selvagem', xp: 500, shiny: true, drops: [{ itemId: 70000, nome: 'Bronze Boss Token', qtd: 2 }] },
+      { k: 'morte', quem: 'selvagem', xp: 500, xpTreinador: 2280, shiny: true, drops: [{ itemId: 70000, nome: 'Bronze Boss Token', qtd: 2 }] },
       { k: 'capturado', pokemon: { shiny: true, nome: 'Articuno', speciesId: 144 } }
     ]
   });
 
+  assert.equal(latestUpdate.a.xp, 2280); // prioritizes xpTreinador (2280) over unmultiplied base xp (500)
   assert.equal(latestUpdate.a.shinyFound >= 1, true);
   assert.equal(latestUpdate.a.shinyCap, 1);
   assert.equal(latestUpdate.a.kills, 6);
@@ -107,6 +108,13 @@ test('PokeIdleHeadlessClient - handshake, telemetry, combat and lifecycle', asyn
   assert.equal(latestUpdate.balls, 79);
   assert.equal(latestUpdate.invMap[70000], 5);
   assert.equal(latestUpdate.rawDrops[70000].qty, 2);
+  assert.equal(latestUpdate.drops[70000].qty, 2);
+  assert.equal(latestUpdate.drops[70000].name, 'Bronze Boss Token');
+  assert.equal(latestUpdate.shinyLog.length >= 2, true);
+  assert.equal(latestUpdate.catchLog.length >= 1, true);
+  assert.equal(latestUpdate.catchLog[0].n, 'Articuno');
+  assert.equal(latestUpdate.catchLog[0].sid, 144);
+  assert.equal(latestUpdate.catchLog[0].sh, true);
 
   // 4. Teste de comandos
   client.throwBall(2);

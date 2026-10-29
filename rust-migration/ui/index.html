@@ -3781,7 +3781,7 @@
               dtPush();
               if (cardsOn) {
                 clearTimeout(cardsRefreshTimer);
-                cardsRefreshTimer = setTimeout(() => { if (cardsOn) refreshCards(); }, 250);
+                cardsRefreshTimer = setTimeout(() => { if (cardsOn) refreshCards(); }, 1200);
               }
               // --- Watchdog event-driven: substitui o polling READ_ALERTS de 6s ---
               lastPush[i] = Date.now();
@@ -5079,6 +5079,18 @@
     const pioHa = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'agora' : m < 60 ? 'há ' + m + ' min' : 'há ' + Math.floor(m / 60) + 'h' + String(m % 60).padStart(2, '0'); };
     const pioNum = n => n == null || !isFinite(n) ? '—' : Math.abs(n) >= 1e9 ? (n / 1e9).toFixed(2).replace('.', ',') + ' bi' : Math.abs(n) >= 1e6 ? (n / 1e6).toFixed(1).replace('.', ',') + ' mi' : Math.round(n).toLocaleString('pt-BR');
     const pioEsc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const pioFmtHoras = h => {
+      if (!isFinite(h) || !(h > 0)) return '—';
+      if (h < 1) {
+        const min = Math.max(1, Math.round(h * 60));
+        return min + ' min (~' + h.toFixed(1).replace('.', ',') + ' h)';
+      }
+      const hi = Math.floor(h), mr = Math.round((h - hi) * 60);
+      if (h < 48) {
+        return hi + 'h' + (mr > 0 ? String(mr).padStart(2, '0') + 'm' : '') + ' (~' + h.toFixed(1).replace('.', ',') + ' h)';
+      }
+      return (h / 24).toFixed(1).replace('.', ',') + ' dias (~' + Math.round(h) + ' h)';
+    };
     // Aviso rápido na faixa do topo (área do grid que nunca fica sob os painéis do jogo).
     function pioToast(msg, nivel) {
       let el = document.getElementById('pioToast');
@@ -5186,11 +5198,11 @@
       return { xph, gDia, desdeXp: fx ? fx.t : null, desdeG: fg ? fg.t : null };
     }
     function pioEta(falta, porHora) {
-      if (!(falta > 0)) return 'atingida';
+      if (!(falta > 0)) return 'atingida 🎉';
       if (!(porHora > 0)) return 'sem ritmo ainda';
-      const t = Date.now() + falta / porHora * 3600000;
-      const dias = (t - Date.now()) / 86400000;
-      return pioHora(t) + ' (' + (dias >= 1 ? dias.toFixed(1).replace('.', ',') + ' dias' : Math.round(dias * 24) + ' h') + ')';
+      const horas = falta / porHora;
+      const t = Date.now() + horas * 3600000;
+      return pioHora(t) + ' (' + pioFmtHoras(horas) + ')';
     }
     function pioRenderMetas() {
       const alvo = pioAlvo();
@@ -5202,23 +5214,41 @@
         const meta = Number(alvo[c]) || 1000;
         const faltaXp = pioXpAte(meta) - (a.xp || 0);
         const faltaG = (Number(alvo.gemas) || 1000) - (a.gemas || 0);
+        const sessL = pioLeitura[c - 1], s0 = sessL && sessL.sess;
+        const sXph = (s0 && s0.ms >= 30000 && s0.xp > 0) ? Math.round(s0.xp / (s0.ms / 3600000)) : null;
+        const xphEfetivo = (sXph != null && sXph > 0) ? sXph : (r.xph != null ? r.xph : null);
+        const fonteXp = (sXph != null && sXph > 0) ? 'sessão' : (r.xph != null ? '6 h' : 'medindo');
         linhas += '<tr><td>' + c + ' · ' + pioEsc(a.nick || '') + '</td><td>' + (a.level ?? '—') + '</td>' +
-          '<td><input data-pio-alvo="' + c + '" type="number" min="1" value="' + meta + '" style="width:62px"></td>' +
-          '<td>' + (r.xph != null ? pioNum(r.xph) + '/h' : 'medindo') + '</td><td>' + pioNum(Math.max(0, faltaXp)) + '</td>' +
-          '<td>' + (r.xph != null ? pioEta(faltaXp, r.xph) : 'medindo (1 h)') + '</td>' +
+          '<td><input data-pio-alvo="' + c + '" type="number" min="1" max="10000" value="' + meta + '" style="width:62px"></td>' +
+          '<td>' + (xphEfetivo != null ? pioNum(xphEfetivo) + '/h (' + fonteXp + ')' : 'medindo') + '</td><td>' + pioNum(Math.max(0, faltaXp)) + '</td>' +
+          '<td>' + (xphEfetivo != null ? pioEta(faltaXp, xphEfetivo) : 'medindo') + '</td>' +
           '<td>' + (a.gemas ?? '—') + '</td><td>' + (r.gDia != null ? pioNum(r.gDia) + '/dia' : 'medindo (6 h)') + '</td>' +
           '<td>' + (r.gDia != null ? pioEta(faltaG, r.gDia / 24) : '—') + '</td></tr>';
       }
       const th = 'style="text-align:left;color:#d6b278;padding:3px 6px;border-bottom:1px solid #a47746"';
       pioPainel('pioMetasPanel', '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b style="color:#ffe3a2">Metas</b>' +
         '<span>Meta de gemas <input id="pioAlvoGemas" type="number" min="1" value="' + (Number(alvo.gemas) || 1000) + '" style="width:70px"> <button data-pio-fechar>×</button></span></div>' +
-        '<table style="border-collapse:collapse;width:100%"><tr><th ' + th + '>Conta</th><th ' + th + '>Nível</th><th ' + th + '>Meta</th><th ' + th + '>XP/h (6 h)</th><th ' + th + '>XP que falta</th><th ' + th + '>Chega em</th>' +
+        '<table style="border-collapse:collapse;width:100%"><tr><th ' + th + '>Conta</th><th ' + th + '>Nível</th><th ' + th + '>Meta</th><th ' + th + '>XP/h</th><th ' + th + '>XP que falta</th><th ' + th + '>Chega em</th>' +
         '<th ' + th + '>Gemas</th><th ' + th + '>Ritmo (72 h)</th><th ' + th + '>Meta de gemas em</th></tr>' + (linhas || '<tr><td colspan="9">Aguardando a primeira leitura das contas.</td></tr>') + '</table>' +
-        '<div style="margin-top:6px;opacity:.75">Fotos a cada 10 min guardadas por 3 dias. XP/h usa as últimas 6 h; gemas, as últimas 72 h.</div>');
+        '<div style="margin-top:6px;opacity:.75">Fotos a cada 10 min guardadas por 3 dias. XP/h usa as últimas 6 h (ou sessão se recente); gemas, as últimas 72 h.</div>');
       const p = document.getElementById('pioMetasPanel');
-      p.querySelectorAll('[data-pio-alvo]').forEach(inp => inp.onchange = () => { const al = pioLer(PIO_ALVO_KEY, {}); al[inp.dataset.pioAlvo] = Math.max(1, Number(inp.value) || 1000); pioGravar(PIO_ALVO_KEY, al); pioRenderMetas(); });
+      p.querySelectorAll('[data-pio-alvo]').forEach(inp => inp.onchange = () => {
+        const al = pioLer(PIO_ALVO_KEY, {});
+        al[inp.dataset.pioAlvo] = Math.max(1, Math.min(10000, Number(inp.value) || 1000));
+        pioGravar(PIO_ALVO_KEY, al);
+        pioRenderMetas();
+        cdHtmlAnt = '';
+        if (cardsOn) refreshCards(true);
+      });
       const g = document.getElementById('pioAlvoGemas');
-      if (g) g.onchange = () => { const al = pioLer(PIO_ALVO_KEY, {}); al.gemas = Math.max(1, Number(g.value) || 1000); pioGravar(PIO_ALVO_KEY, al); pioRenderMetas(); };
+      if (g) g.onchange = () => {
+        const al = pioLer(PIO_ALVO_KEY, {});
+        al.gemas = Math.max(1, Number(g.value) || 1000);
+        pioGravar(PIO_ALVO_KEY, al);
+        pioRenderMetas();
+        cdHtmlAnt = '';
+        if (cardsOn) refreshCards(true);
+      };
     }
     window.pioAbrirMetas = () => pioAbrir('pioMetasPanel', pioRenderMetas);
 
@@ -5262,9 +5292,21 @@
     const PIO_CARD = `(() => {
       const P = window.__poke || {}, ws = P.ws || {}, viv = (window.estado && (window.estado.eu || window.estado)) || {}, est = P.estado || {};
       let sL = null; try { sL = JSON.parse(localStorage.getItem('sessao') || 'null'); } catch (e) { }
-      const nicks = [viv.nick, est.nick, P.nick, sL && sL.nick].filter(Boolean).map(n => String(n).toLowerCase());
+      let nickRaw = null; try { nickRaw = localStorage.getItem('nick'); } catch (e) { }
+      const nicks = [viv.nick, est.nick, P.nick, sL && sL.nick, nickRaw].filter(Boolean).map(n => String(n).toLowerCase());
       let gs = null;
       for (const n of nicks) { try { const r = localStorage.getItem('sessao-hunt:' + n); if (r) { gs = JSON.parse(r); break; } } catch (e) { } }
+      if (!gs && typeof localStorage !== 'undefined') {
+        try {
+          for (let k = 0; k < localStorage.length; k++) {
+            const key = localStorage.key(k);
+            if (key && key.startsWith('sessao-hunt:')) {
+              const r = localStorage.getItem(key);
+              if (r) { gs = JSON.parse(r); break; }
+            }
+          }
+        } catch (e) { }
+      }
       let sess = null;
       if (gs && typeof gs === 'object') {
         const cB = (ws.balls && ws.balls.catalog) || [];
@@ -5285,9 +5327,36 @@
     })()`;
     const pioLeitura = {}; // última leitura PIO_CARD por conta (o nome pioCard já é o desenho dos quadros)
     // ----- PIO: registro de drops raros e pedras (com origem: drop da hunt ou compra do Sniper) -----
+    const PIO_STATIC_ITEMS = {
+      2: "Ancient Stone", 5: "Beast Ball", 23: "Cocoon Stone", 28: "Crystal Stone", 31: "Darkness Stone",
+      40: "Earth Stone", 45: "Enigma Stone", 49: "Feather Stone", 53: "Fire Stone", 66: "Heart Stone",
+      71: "Ice Stone", 76: "Leaf Stone", 87: "Metal Stone", 106: "Punch Stone", 109: "Rock Stone",
+      133: "Thunder Stone", 139: "Venom Stone", 142: "Water Stone", 209: "Sun Stone",
+      40530: "AoE TM Disk Piece", 40575: "AoE TM Disk", 59194: "TM Disk Piece",
+      59200: "Normal-Type TM Disk", 59201: "Fire-Type TM Disk", 59202: "Water-Type TM Disk",
+      59203: "Grass-Type TM Disk", 59204: "Electric-Type TM Disk", 59205: "Ice-Type TM Disk",
+      59206: "Fighting-Type TM Disk", 59207: "Poison-Type TM Disk", 59208: "Ground-Type TM Disk",
+      59209: "Flying-Type TM Disk", 59210: "Psychic-Type TM Disk", 59211: "Bug-Type TM Disk",
+      59212: "Rock-Type TM Disk", 59213: "Ghost-Type TM Disk", 59214: "Dragon-Type TM Disk",
+      59215: "Dark-Type TM Disk", 59216: "Steel-Type TM Disk", 59247: "Fairy-Type TM Disk",
+      70000: "Bronze Boss Token", 70011: "Key Fragment", 70012: "Shiny Stone Fragment", 70013: "Bicycle Fragment",
+      70020: "Normal Shiny Stone", 70021: "Fire Shiny Stone", 70022: "Water Shiny Stone",
+      70023: "Grass Shiny Stone", 70024: "Electric Shiny Stone", 70025: "Ice Shiny Stone",
+      70026: "Fighting Shiny Stone", 70027: "Poison Shiny Stone", 70028: "Ground Shiny Stone",
+      70029: "Flying Shiny Stone", 70030: "Psychic Shiny Stone", 70031: "Bug Shiny Stone",
+      70032: "Rock Shiny Stone", 70033: "Ghost Shiny Stone", 70034: "Dragon Shiny Stone",
+      70035: "Dark Shiny Stone", 70036: "Steel Shiny Stone", 70037: "Fairy Shiny Stone",
+      70080: "Common Bicycle", 70081: "Uncommon Bicycle", 70082: "Rare Bicycle",
+      70083: "Mythic Bicycle", 70084: "Legendary Bicycle", 999999: "Diamantes"
+    };
     const PIO_RARO_RE = /boss token|key fragment|fragmento de chave|shiny stone|bicicleta|bike|mega stone|fragmento de mega|tm disk|pe[çc]a de tm|mystic ticket|safari ticket|ovo shiny|shiny egg/i;
     function pioTipoItem(nome) {
-      const n = String(nome || '');
+      let n = String(nome || '').trim();
+      if (/^\d+$/.test(n)) {
+        const num = Number(n);
+        if (itensCache && itensCache[num] && itensCache[num].n) n = itensCache[num].n;
+        else if (PIO_STATIC_ITEMS[num]) n = PIO_STATIC_ITEMS[num];
+      }
       if (PIO_RARO_RE.test(n)) return 'raro';
       if (/\bstone\b/i.test(n) && !/fragment|fragmento/i.test(n)) return 'pedra';
       return null;
@@ -5322,7 +5391,11 @@
     function pioDropsTrack(conta, d) {
       if (!d || !d.sess) return;
       const st = d.sess.st, cur = {};
-      for (const [k, v] of Object.entries(d.drops || {})) { const nm = (v && v.name) || k; cur[nm] = (cur[nm] || 0) + (+(v && v.qty) || 0); }
+      for (const [k, v] of Object.entries(d.drops || {})) {
+        if (/^\d+$/.test(k) && v && v.name && d.drops[v.name]) continue;
+        const nm = (v && v.name) || k;
+        cur[nm] = (cur[nm] || 0) + (+(v && v.qty) || 0);
+      }
       const ult = pioDropsUlt[conta];
       pioDropsUlt[conta] = { st, cur };
       if (!ult) return; // primeira leitura depois de abrir: vira base (não conta a sessão restaurada)
@@ -5408,6 +5481,138 @@
     })()`;
     const pioEstado = {};
     const pioSniperUlt = {};
+    window.getPioHeadlessColeta = function(i) {
+      const conta = i + 1;
+      const antes = (typeof pioUltimo !== 'undefined' && pioUltimo[conta]) || {};
+      const st = (window.stCache && window.stCache[i] && window.stCache[i].d) || {};
+      const a = st.a || {};
+      const drops = st.drops || st.rawDrops || {};
+      const noCentro = st.inCenter === true || st.hunt === 'centro';
+      const xpVivo = st.xp != null ? st.xp : (a.xpg != null ? a.xpg : (antes.xp != null ? antes.xp : null));
+      const gemasVivo = st.gemas != null ? st.gemas : (st.orbs != null ? st.orbs : (st.diamonds != null ? st.diamonds : (antes.gemas != null ? antes.gemas : 0)));
+      const diamantesVivo = st.diamonds != null ? st.diamonds : (st.diamantes != null ? st.diamantes : (antes.diamantes != null ? antes.diamantes : null));
+      const sessSt = st.sessStart || (antes.sess && antes.sess.st) || (st._sessStart || (st._sessStart = Date.now()));
+
+      const nowMs = Date.now();
+      let vipDias = st.vipDias != null ? st.vipDias : null;
+      if (vipDias == null && st.vipAte && st.vipAte > nowMs) {
+        vipDias = Math.max(1, Math.ceil((st.vipAte - nowMs) / 86400000));
+      }
+      if (vipDias == null && antes.vipDias != null) {
+        vipDias = antes.vipDias;
+      }
+
+      let passeDias = st.passeDias != null ? st.passeDias : null;
+      const passeAte = st.passeVipAte || (st.passe && st.passe.vipAte);
+      if (passeDias == null && passeAte && passeAte > nowMs) {
+        passeDias = Math.max(1, Math.ceil((passeAte - nowMs) / 86400000));
+      }
+      if (passeDias == null && antes.passeDias != null) {
+        passeDias = antes.passeDias;
+      }
+
+      let boostXp = st.boostXp || antes.boostXp || (vipDias ? '+50%' : null);
+
+      const catchLog = Array.isArray(st.catchLog) ? st.catchLog : [];
+      const capturas = catchLog.map(c => ({
+        id: c.id || ('cl_' + (c.t || Date.now()) + '_' + (c.sid || c.n || '')),
+        t: c.t || Date.now(),
+        especie: c.sid || 0,
+        nome: c.n || '',
+        modo: 'headless',
+        minutos: Math.round((a.seconds || 0) / 60),
+        bolas: a.balls || 0
+      }));
+
+      let rankCatch = null;
+      try {
+        const aut = JSON.parse(localStorage.getItem('pio-autodex-v021') || 'null');
+        rankCatch = aut && aut.rankCatch ? aut.rankCatch : null;
+      } catch (x) {}
+
+      return {
+        nick: st.name || tabNames[i] || ('Conta ' + conta),
+        level: st.level != null ? st.level : (antes.level != null ? antes.level : null),
+        xp: xpVivo,
+        gemas: gemasVivo,
+        ouro: st.gold != null ? st.gold : (antes.ouro != null ? antes.ouro : null),
+        diamantes: diamantesVivo,
+        sockOk: !!st.live,
+        noCentro,
+        slug: noCentro ? '' : (st.hunt || ''),
+        lastKillT: Date.now(),
+        alertas: [],
+        erros: [],
+        bosses: [],
+        capturas,
+        sess: st.sess || {
+          st: sessSt,
+          k: a.kills || 0,
+          g: st.sessionGold != null ? st.sessionGold : (st.gold || 0),
+          v: 0,
+          s: a.supplyGold || 0,
+          c: a.captures || 0,
+          sf: a.shinyFound || 0,
+          sc: a.shinyCap || 0
+        },
+        atrasos: [],
+        atrasosSniper: [],
+        oculto: false,
+        xpNivel: null,
+        xpProximo: null,
+        drops,
+        boostXp,
+        vipDias,
+        passeDias,
+        topCatch: null,
+        rankCatch,
+        sniper: []
+      };
+    };
+
+    window.__pgFeedState = function(i, d) {
+      try {
+        if (!d) return;
+        mergeLogs(i, d);
+        accumHist(i, d);
+        if (typeof pioDropsTrack === 'function') {
+          const dColeta = window.getPioHeadlessColeta ? window.getPioHeadlessColeta(i) : null;
+          if (dColeta) pioDropsTrack(i + 1, dColeta);
+        }
+      } catch (e) {
+        console.error('Error in __pgFeedState', e);
+      }
+    };
+
+    window.getPioHeadlessCard = function(i) {
+      const st = (window.stCache && window.stCache[i] && window.stCache[i].d) || {};
+      const a = st.a || {};
+      const team = st.team || [];
+      const ld = team.find(p => p && p.ld) || team[0] || null;
+      const noCentro = st.inCenter === true || st.hunt === 'centro';
+      return {
+        t: Date.now(),
+        sess: {
+          ms: (a.seconds || 0) * 1000,
+          xp: a.xpg != null ? a.xpg : (a.xp || 0),
+          gold: st.sessionGold != null ? st.sessionGold : (st.gold || 0),
+          gastos: a.supplyGold || 0,
+          abates: a.kills || 0,
+          capturas: a.captures || 0,
+          shV: a.shinyFound || 0,
+          shP: a.shinyCap || 0
+        },
+        hunt: noCentro ? 'Centro' : (st.hunt || ''),
+        ativo: ld ? {
+          nome: ld.name || '',
+          nivel: ld.level || 0,
+          shiny: !!ld.shiny,
+          ivt: ld.ivTotal != null ? ld.ivTotal : (ld.iv != null ? ld.iv : null),
+          q: ld.quality != null ? ld.quality : (ld.q != null ? ld.q : null)
+        } : null
+      };
+    };
+
     let pioColetando = false;
     async function pioColetar() {
       if (typeof webviews === 'undefined' || pioColetando) return; // uma leitura por vez: duas em paralelo contariam drops e XP em dobro
@@ -5419,7 +5624,11 @@
         if (!webviews[i]) continue;
         const conta = i + 1;
         let d = null;
-        try { d = await webviews[i].executeJavaScript(PIO_COLETA); } catch (e) { d = null; }
+        if (window.PioBattleHud?.isBlasterActive(i)) {
+          d = window.getPioHeadlessColeta ? window.getPioHeadlessColeta(i) : null;
+        } else {
+          try { d = await webviews[i].executeJavaScript(PIO_COLETA); } catch (e) { d = null; }
+        }
         if (!d || typeof d !== 'object') continue;
         const antes = pioUltimo[conta];
         pioUltimo[conta] = { ...d, t: Date.now() };
@@ -5720,7 +5929,7 @@
       d.a = a;
       d.name = String(d.name || '').slice(0, 40); d.cid = String(d.cid || '').slice(0, 60); d.hunt = String(d.hunt || '').slice(0, 60);
       if (d.activeId) d.activeId = String(d.activeId).slice(0, 60);
-      ['catchLog', 'usedList', 'team', 'chatShares', 'allPokes'].forEach(k => d[k] = (Array.isArray(d[k]) ? d[k] : []).slice(0, k === 'allPokes' ? 2000 : (k === 'usedList' ? 3000 : 120))
+      ['catchLog', 'shinyLog', 'usedList', 'team', 'chatShares', 'allPokes'].forEach(k => d[k] = (Array.isArray(d[k]) ? d[k] : []).slice(0, k === 'allPokes' ? 2000 : (k === 'usedList' ? 3000 : 120))
         .map(e => { if (e && typeof e === 'object') { for (const p2 in e) if (typeof e[p2] === 'string') e[p2] = e[p2].slice(0, 80); } return e; }));
       d.kills = num(d.kills != null ? d.kills : a.kills);
       d.xp = num(d.xp != null ? d.xp : (a.xpg != null ? a.xpg : a.xp));
@@ -5729,6 +5938,8 @@
       d.gph = num(d.gph != null ? d.gph : a.gph);
       d.xph = num(d.xph != null ? d.xph : a.xph);
       d.kph = num(d.kph != null ? d.kph : a.kph);
+      if (d.shinyN === undefined && a.shinyFound !== undefined) d.shinyN = a.shinyFound;
+      if (d.shinyCapN === undefined && a.shinyCap !== undefined) d.shinyCapN = a.shinyCap;
       ['gold', 'diamonds', 'balls', 'potions', 'revives', 'shinyEnc', 'level', 'shinyN', 'faintN', 'shinyCapN', 'sessStart'].forEach(k => d[k] = num(d[k]));
       if (d.equippedBall && typeof d.equippedBall === 'object') { d.equippedBall = { id: d.equippedBall.id != null ? d.equippedBall.id : null, name: String(d.equippedBall.name || '').slice(0, 40), qty: num(d.equippedBall.qty), infinite: !!d.equippedBall.infinite }; }
       d.live = !!d.live;
@@ -10509,9 +10720,25 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     const parseEco = v => {
       if (v == null) return 0;
       if (typeof v === 'number') return v;
-      const s = String(v).replace(/\\/h/i, '').replace(/\\s+/g, '').replace(/\\./g, '').replace(',', '.');
+      let s = String(v).trim().replace(/\\/h/i, '').replace(/\\s+/g, '');
+      if (!s) return 0;
+      const suf = s.match(/^(-?[0-9]+(?:[.,][0-9]+)?)\\s*([kmb])$/i);
+      if (suf) {
+        const mult = suf[2].toLowerCase() === 'k' ? 1e3 : suf[2].toLowerCase() === 'm' ? 1e6 : 1e9;
+        return Math.round(parseFloat(suf[1].replace(',', '.')) * mult);
+      }
+      if (s.includes('.') && s.includes(',')) {
+        s = s.replace(/\\./g, '').replace(',', '.');
+      } else if (s.includes('.')) {
+        const parts = s.split('.');
+        if (parts.length > 2 || (parts.length === 2 && parts[1].length === 3)) {
+          s = s.replace(/\\./g, '');
+        }
+      } else if (s.includes(',')) {
+        s = s.replace(',', '.');
+      }
       const m = s.match(/-?[0-9]+(\\.[0-9]+)?/);
-      return m ? +m[0] : 0;
+      return m ? Math.round(+m[0]) : 0;
     };
     const ws = P.ws || (P.ws = {}), api = P.api || {};
     const S = P.sess || (P.sess = { start: Date.now(), kills: 0, xp: 0, balls: 0, captures: 0, drops: {}, shinyN: 0, shinySeen: {}, shinyCapN: 0, faintN: 0, sellG: 0, supGold: 0, supN: 0, gold: 0, slug: '', hp: {} });
@@ -10570,14 +10797,29 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
 
     let gameSess = null;
     try {
-      let nKey = (ch.name || P.nick || (P.estado && P.estado.nick) || '').toLowerCase();
+      let nKey = (ch.name || P.nick || (P.estado && (P.estado.nick || (P.estado.eu && P.estado.eu.nick))) || '').toLowerCase();
       if (!nKey && typeof localStorage !== 'undefined') {
         try {
           const sL = JSON.parse(localStorage.getItem('sessao') || 'null');
           if (sL && sL.nick) nKey = sL.nick.toLowerCase();
+          if (!nKey) {
+            const rawNick = localStorage.getItem('nick');
+            if (rawNick) nKey = String(rawNick).toLowerCase().trim();
+          }
         } catch (e) {}
       }
-      const raw = nKey ? localStorage.getItem('sessao-hunt:' + nKey) : null;
+      let raw = nKey ? localStorage.getItem('sessao-hunt:' + nKey) : null;
+      if (!raw && typeof localStorage !== 'undefined') {
+        try {
+          for (let k = 0; k < localStorage.length; k++) {
+            const key = localStorage.key(k);
+            if (key && key.startsWith('sessao-hunt:')) {
+              raw = localStorage.getItem(key);
+              if (raw) break;
+            }
+          }
+        } catch (e) {}
+      }
       let gs = raw ? JSON.parse(raw) : null;
       let ecoDom = null;
       if (typeof document !== 'undefined') {
@@ -10593,9 +10835,9 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const cV = document.querySelector('[data-kpi="capturas"] .eco-kpi-v');
           const cH = document.querySelector('[data-kpi="capturas"] .eco-kpi-h');
           const tEl = plc.querySelector('.eco-tempo');
-          if (lV && kV) {
+          if (lV || xH || kV) {
             ecoDom = {
-              lucro: parseEco(lV.textContent),
+              lucro: parseEco(lV ? lV.textContent : 0),
               gph: parseEco(lH ? lH.textContent : 0),
               gastos: Math.abs(parseEco(lSub ? lSub.textContent : 0)),
               xp: parseEco(xV ? xV.textContent : 0),
@@ -10606,6 +10848,27 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
               capH: parseEco(cH ? cH.textContent : 0),
               tempo: tEl ? tEl.textContent : ''
             };
+          }
+        }
+        const sPainel = document.getElementById('sessao-painel');
+        if (sPainel) {
+          const sXphEl = document.getElementById('sessao-xp-treinador-h');
+          const sXpEl = sPainel.querySelector('[data-k="xpTreinador"]');
+          const sGoldEl = sPainel.querySelector('[data-k="gold"]');
+          const sGoldHEl = document.getElementById('sessao-gold-h');
+          const sAbatesEl = sPainel.querySelector('[data-k="abates"]');
+          const sAbatesHEl = document.getElementById('sessao-abates-h');
+          const sCapsEl = sPainel.querySelector('[data-k="capturas"]');
+          if (sXphEl || sXpEl) {
+            ecoDom = Object.assign(ecoDom || {}, {
+              xp: parseEco(sXpEl ? sXpEl.textContent : (ecoDom && ecoDom.xp)),
+              xph: parseEco(sXphEl ? sXphEl.textContent : (ecoDom && ecoDom.xph)),
+              lucro: parseEco(sGoldEl ? sGoldEl.textContent : (ecoDom && ecoDom.lucro)),
+              gph: parseEco(sGoldHEl ? sGoldHEl.textContent : (ecoDom && ecoDom.gph)),
+              kills: parseEco(sAbatesEl ? sAbatesEl.textContent : (ecoDom && ecoDom.kills)),
+              kph: parseEco(sAbatesHEl ? sAbatesHEl.textContent : (ecoDom && ecoDom.kph)),
+              caps: parseEco(sCapsEl ? sCapsEl.textContent : (ecoDom && ecoDom.caps)),
+            });
           }
         }
       }
@@ -10656,16 +10919,15 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           gKph = Math.round(gKills / horas);
         }
 
-        if (ecoDom && !(gs && typeof gs === 'object')) { // PIO: placar da Economia só quando não há sessão da hunt (evita alternar 1 min / 23 min)
-          gLucro = ecoDom.lucro;
-          if (ecoDom.gph) gGph = ecoDom.gph;
-          if (ecoDom.gastos) gGastos = ecoDom.gastos;
-          if (ecoDom.xp) gXp = ecoDom.xp;
-          if (ecoDom.xph) gXph = ecoDom.xph;
-          if (ecoDom.kills) gKills = ecoDom.kills;
-          if (ecoDom.kph) gKph = ecoDom.kph;
-          if (ecoDom.caps) gCaps = ecoDom.caps;
-          if (ecoDom.tempo) {
+        if (ecoDom) {
+          if (ecoDom.xph > 0) gXph = ecoDom.xph;
+          if (ecoDom.gph > 0) gGph = ecoDom.gph;
+          if (ecoDom.kph > 0) gKph = ecoDom.kph;
+          if (ecoDom.xp > 0 && !gXp) gXp = ecoDom.xp;
+          if (ecoDom.lucro != null && !gLucro) gLucro = ecoDom.lucro;
+          if (ecoDom.kills > 0 && !gKills) gKills = ecoDom.kills;
+          if (ecoDom.caps > 0 && !gCaps) gCaps = ecoDom.caps;
+          if (ecoDom.tempo && !gSeconds) {
             const hm = ecoDom.tempo.match(/(?:(\\d+)h)?\\s*(\\d+)m/);
             const p = ecoDom.tempo.split(':').map(Number);
             gSeconds = hm ? (+hm[1] || 0) * 3600 + (+hm[2] || 0) * 60 : p.length === 3 ? p[0] * 3600 + p[1] * 60 + p[2] : (p.length === 2 ? p[0] * 60 + p[1] : gSeconds);
@@ -11547,6 +11809,14 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     // ===== Modo Cartas: dashboard ultra leve (jogo invisivel a ~1fps, farm continua no servidor) =====
     const cardsEl = document.getElementById('cards');
     const cardsBtn = document.getElementById('cardsBtn');
+    let cardsUserScrollingUntil = 0;
+    let lastSavedScrollTop = 0;
+    if (cardsEl) {
+      cardsEl.addEventListener('scroll', () => {
+        lastSavedScrollTop = cardsEl.scrollTop;
+        cardsUserScrollingUntil = Date.now() + 1500;
+      }, { passive: true });
+    }
     let dhist = [];                      // amostras {t,g,x} da ultima hora pros sparklines
     let dsort = { k: '', d: -1 }; // ordem fixa; ordenar somente por clique
     let cdAccountOrder = [];
@@ -12447,7 +12717,12 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       return ' <span title="' + esc(cap(best.k)) + ': ' + ncs(best.gph) + '/h ' + t('cdBetterTip') + '" style="color:#f2c665;cursor:help">\u2197</span>';
     };
     async function refreshCards(force) {
-      if (!cardsOn || (cdBusy && Date.now() - cdBusy < 8000)) return; // nao destroi o DOM durante o gesto, mas destrava sozinho se o mouseup se perder
+      if (!cardsOn || (cdBusy && Date.now() - cdBusy < 8000)) return;
+      if (!force && Date.now() < cardsUserScrollingUntil) {
+        clearTimeout(cardsRefreshTimer);
+        cardsRefreshTimer = setTimeout(() => { if (cardsOn) refreshCards(); }, 1000);
+        return;
+      } // nao destroi o DOM durante o gesto, mas destrava sozinho se o mouseup se perder
       // Guarda do tick: com foco num campo do painel, o redesenho passivo espera (nao apagar o que
       // o usuario digita). Mudou um select/checkbox, o handler chama com force: sem ele, o foco
       // que fica no campo segurava o redesenho pra sempre (bug do "filtro nao aplica").
@@ -12478,7 +12753,12 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         const a = d.a || {};
         ativos++;
         pioD[i] = d;
-        try { const pc2 = await webviews[i].executeJavaScript(PIO_CARD); if (pc2) pioLeitura[i] = pc2; } catch (e) { }
+        if (window.PioBattleHud?.isBlasterActive(i)) {
+          const pc2 = window.getPioHeadlessCard ? window.getPioHeadlessCard(i) : null;
+          if (pc2) pioLeitura[i] = pc2;
+        } else {
+          try { const pc2 = await webviews[i].executeJavaScript(PIO_CARD); if (pc2) pioLeitura[i] = pc2; } catch (e) { }
+        }
         // PIO: ouro/h só conta com 1 h de hunt; XP/h vem da sessão do jogo (a mesma do painel Economia, com boosts).
         const pioR = typeof pioRitmo === 'function' ? pioRitmo(i + 1) : {};
         if (!(+a.xph > 0) && pioR && pioR.xph != null) a.xph = Math.round(pioR.xph);
@@ -12587,12 +12867,35 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const xn = pioXpAte(lvl), xpx = pioXpAte(lvl + 1);
           const pct = xpx > xn ? Math.max(0, Math.min(100, (xp - xn) / (xpx - xn) * 100)) : 0;
           const xph = +z.xph || 0, meta = Number(alvo[r.i + 1]) || (main ? 2000 : 1000);
-          // Previsões pelo ritmo real das últimas 6 h (XP total do treinador, já com paradas e Centro). O XP/h da sessão
-          // oscila demais logo após um reset ou ida ao Centro; fica só como reserva enquanto não houver 1 h de histórico.
-          const r6 = pioRitmo(r.i + 1).xph, ritmo = r6 > 0 ? r6 : xph, fonteRitmo = r6 > 0 ? 'ritmo 6 h: ' + nc(r6) + '/h' : 'ritmo da sessão';
-          const ritmoProx = z.seg >= 1800 && xph > 0 ? xph : ritmo;
+          // Previsões: prioriza o ritmo da sessão ativa da hunt atual (quando estável a partir de 30 s).
+          // A média histórica de 6 h (com paradas e Centro) é usada como fallback e exibida no tooltip para comparação.
+          const r6 = pioRitmo(r.i + 1).xph;
+          const ritmoSessao = (z.seg >= 30 && xph > 0) ? xph : 0;
+          const ritmo = ritmoSessao > 0 ? ritmoSessao : ((r6 != null && r6 > 0) ? r6 : 0);
+          const fonteRitmo = ritmoSessao > 0 ? 'sessão (' + tsec(z.seg) + '): ' + nc(ritmoSessao) + '/h' : ((r6 != null && r6 > 0) ? 'ritmo 6 h: ' + nc(r6) + '/h' : 'aguardando ritmo');
+          const ritmoProx = ritmoSessao > 0 ? ritmoSessao : ritmo;
           const prox = ritmoProx > 0 && xpx > xp ? tsec((xpx - xp) / ritmoProx * 3600) : '—';
-          const falta = pioXpAte(meta) - xp, etaMeta = ritmo > 0 && falta > 0 ? (falta / ritmo >= 48 ? (falta / ritmo / 24).toFixed(1).replace('.', ',') + ' dias' : Math.round(falta / ritmo) + ' h') : (falta <= 0 ? 'atingida' : '—');
+          const falta = pioXpAte(meta) - xp;
+          let etaMeta = '—', horasMeta = 0, tooltipMeta = '';
+          if (falta <= 0) {
+            etaMeta = 'atingida 🎉';
+            tooltipMeta = '🎯 Meta Nv ' + nf(meta) + ' já atingida!\n• XP acumulado: ' + nf(xp) + '\n• XP da meta: ' + nf(pioXpAte(meta));
+          } else if (ritmo > 0) {
+            horasMeta = falta / ritmo;
+            etaMeta = pioFmtHoras(horasMeta);
+            const tPrev = new Date(Date.now() + horasMeta * 3600000);
+            tooltipMeta = '🎯 Meta Nv ' + nf(meta) + '\n'
+              + '• Falta: ' + pioNum(falta) + ' XP (' + nf(falta) + ' XP)\n'
+              + '• Ritmo: ' + fonteRitmo + '\n'
+              + (ritmoSessao > 0 && r6 != null && r6 > 0 ? '• Média histórica 6 h (com paradas): ' + nc(r6) + '/h (' + pioFmtHoras(falta / r6) + ')\n' : '')
+              + '• Tempo estimado: ' + pioFmtHoras(horasMeta) + '\n'
+              + '• Chegada prevista: ' + pioHora(tPrev);
+          } else {
+            etaMeta = 'sem ritmo ainda';
+            tooltipMeta = '🎯 Meta Nv ' + nf(meta) + '\n'
+              + '• Falta: ' + pioNum(falta) + ' XP (' + nf(falta) + ' XP)\n'
+              + '• Aguardando ritmo de XP da conta (histórico ou sessão)';
+          }
           const kph = +z.kph || 0, cap = +z.caps || 0, kills = +z.abates || 0;
           const umACada = kph > 0 ? (3600 / kph).toFixed(1).replace('.', ',') + ' s' : '—';
           const capCada = cap > 0 ? Math.round(kills / cap) : null;
@@ -12603,8 +12906,11 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const ses = pioDropsSessao(r.i + 1);
           const kpi = (lbl, v, sub, destaque) => '<div style="min-width:0"><div style="font-size:10px;color:var(--cd-muted, #7d8590);text-transform:uppercase">' + lbl + '</div><div style="font-size:' + (destaque ? 20 : 16) + 'px;font-weight:800;color:' + (destaque ? cor : 'var(--cd-text, #e6edf3)') + '">' + v + '</div><div style="font-size:10.5px;color:var(--cd-muted, #8b949e)">' + sub + '</div></div>';
           return '<div style="border:1px solid ' + cor + ';border-left:4px solid ' + cor + ';border-radius:10px;padding:9px 11px;min-width:0">'
-            + '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap"><span class="cd-dot" style="background:' + r.dot + '"></span><b style="font-size:14px">' + esc(r.name) + '</b>'
-            + '<span style="color:' + cor + ';font-weight:800">Nv ' + nf(lvl) + '</span><span style="color:var(--cd-muted, #8b949e);font-size:11px">próximo nível em ' + prox + ' · meta ' + nf(meta) + ': <span title="' + fonteRitmo + '">' + etaMeta + '</span></span>'
+            + '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="cd-dot" style="background:' + r.dot + '"></span><b style="font-size:14px">' + esc(r.name) + '</b>'
+            + '<span style="color:' + cor + ';font-weight:800">Nv ' + nf(lvl) + '</span>'
+            + '<span style="color:var(--cd-muted, #8b949e);font-size:11px;display:inline-flex;align-items:center;gap:4px">próximo nível em ' + prox + ' · '
+            + '<label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer" title="Clique para alterar e salvar a meta de nível desta conta">🎯 meta Nv <input type="number" min="1" max="10000" data-cd-meta="' + (r.i + 1) + '" value="' + meta + '" class="cd-inp" style="width:56px;height:18px;padding:0 3px;font-size:11px;font-weight:800;text-align:center;color:' + cor + ';border-color:' + cor + '66;border-radius:4px" title="Meta de nível da conta ' + (r.i + 1) + ' (salva automaticamente)">:</label> '
+            + '<b style="color:' + (falta <= 0 ? 'var(--cd-positive, #3fb950)' : cor) + '" title="' + pioEsc(tooltipMeta) + '">' + etaMeta + '</b></span>'
             + '<span style="margin-left:auto;font-size:11px"><span title="Gemas" style="display:inline-block;filter:hue-rotate(150deg) saturate(1.6)">💎</span> ' + nf(u.gemas) + (u.diamantes != null ? ' · <span title="Diamantes">💎</span> ' + nf(u.diamantes) : '') + (u.vipDias ? ' · VIP ' + u.vipDias + 'd' : '') + (u.passeDias ? ' · Passe ' + u.passeDias + 'd' : '') + '</span></div>'
             + '<div style="height:5px;background:var(--cd-border, #30363d);border-radius:3px;margin:5px 0"><div style="height:5px;width:' + pct.toFixed(1) + '%;background:' + cor + ';border-radius:3px"></div></div>'
             + '<div style="font-size:11.5px;color:var(--cd-secondary, #adbac7);margin-bottom:6px">' + esc(huntTxt) + ' · ⏱ ' + tsec(z.seg) + (z.fonte === 'grid' ? ' <span title="Sessão do jogo indisponível nesta leitura: números do grid, sem bônus de XP" style="color:' + pioCorWarn + '">(grid)</span>' : '') + (u.boostXp ? ' · <span style="color:' + pioCorMain + '">XP ' + esc(u.boostXp) + '</span>' : '') + '</div>'
@@ -12619,6 +12925,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
             + '<span style="color:' + pioCorShiny + '">✨ ' + nf(z.shV) + ' / ' + nf(z.shP) + '</span>'
             + '<span style="color:' + pioCorOuro + '">Raros: ' + (ses.raros.length ? ses.raros.map(x => nf(x.q) + '× ' + esc(x.n)).join(', ') : '0') + '</span>'
             + '<span>Pedras: ' + nf(ses.pedras) + '</span>'
+            + '<span style="color:' + (falta <= 0 ? 'var(--cd-positive, #3fb950)' : pioCorOuro) + '" title="' + pioEsc(tooltipMeta) + '">🎯 <b>Meta Nv ' + nf(meta) + ':</b> ' + etaMeta + (falta > 0 ? ' <span style="opacity:.85">(' + pioNum(falta) + ' XP)</span>' : '') + '</span>'
             + '<span style="margin-left:auto;' + (rev < 100 ? 'color:' + pioCorWarn + ';font-weight:700' : '') + '">Revive ' + nf(rev) + '</span>'
             + bolas.map(b => '<span style="' + (b.qty < 500 ? 'color:' + pioCorWarn + ';font-weight:700' : '') + '">' + esc(String(b.name).replace(' Ball', '')) + ' ' + nf(b.qty) + '</span>').join('')
             + '</div></div>';
@@ -12964,13 +13271,22 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       // altura ajustada rola por dentro, e sem isso o refresh de 4s jogava tudo pro topo)
       if (h === cdHtmlAnt) return; // mesma tela: nao destroi e recria o DOM a toa
       cdHtmlAnt = h;
-      const st0 = cardsEl.scrollTop, rolagem = {};
+      const targetScroll = Math.max(cardsEl.scrollTop, lastSavedScrollTop || 0);
+      const rolagem = {};
       cardsEl.querySelectorAll('.cd-it').forEach(it => {
         const box = it.querySelector('.cd-sec, .cd-kpis');
         if (box && box.scrollTop) rolagem[it.dataset.s] = box.scrollTop;
       });
       cardsEl.innerHTML = h;
-      cardsEl.scrollTop = st0;
+      cardsEl.scrollTop = targetScroll;
+      requestAnimationFrame(() => {
+        cardsEl.scrollTop = targetScroll;
+        setTimeout(() => {
+          if (cardsEl.scrollTop < targetScroll) {
+            cardsEl.scrollTop = targetScroll;
+          }
+        }, 50);
+      });
 
       // config: engrenagem, checkboxes e arraste pra reordenar seções
       const gear = cardsEl.querySelector('#cdGear'); if (gear) gear.onclick = () => { cardsCfgOpen = !cardsCfgOpen; refreshCards(true); };
@@ -12989,6 +13305,23 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       const fcSh = cardsEl.querySelector('#cdFcSh'); if (fcSh) fcSh.onchange = () => { cdFC.sh = fcSh.checked ? 1 : 0; fcSave(); };
       const pjLv = cardsEl.querySelector('#cdPjLv'); if (pjLv) pjLv.onchange = () => { try { lsSet('cdPjLv', String(Math.max(1, Math.min(tlMax(), +pjLv.value || 500)))); } catch { } pjLv.blur(); cdHtmlAnt = ''; refreshCards(true); };
       const invF = cardsEl.querySelector('#cdInvF'); if (invF) invF.onchange = () => { try { lsSet('cdInvF', String(invF.value || '').slice(0, 30)); } catch { } invF.blur(); cdHtmlAnt = ''; refreshCards(true); };
+      // metas de nível das contas (salva automaticamente ao mudar ou teclar Enter)
+      cardsEl.querySelectorAll('input[data-cd-meta]').forEach(inp => {
+        const salvaMeta = () => {
+          const c = inp.dataset.cdMeta;
+          const v = Math.max(1, Math.min(10000, Number(inp.value) || 1000));
+          inp.value = v;
+          const al = pioLer(PIO_ALVO_KEY, {});
+          al[c] = v;
+          pioGravar(PIO_ALVO_KEY, al);
+          inp.blur();
+          cdHtmlAnt = '';
+          refreshCards(true);
+          if (document.getElementById('pioMetasPanel')?.classList.contains('show')) pioRenderMetas();
+        };
+        inp.onchange = salvaMeta;
+        inp.onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); salvaMeta(); } };
+      });
       // secao Hoje: metas e exportar CSV
       const gg = cardsEl.querySelector('#cdGoalG'); if (gg) gg.onchange = () => { goals.g = Math.max(0, +gg.value || 0); saveGoals(); gg.blur(); refreshCards(true); };
       const gc = cardsEl.querySelector('#cdGoalC'); if (gc) gc.onchange = () => { goals.c = Math.max(0, +gc.value || 0); saveGoals(); gc.blur(); refreshCards(true); };

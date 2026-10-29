@@ -26,3 +26,28 @@ test('a new snapshot does not inherit the previous equipped ball',()=>{
   const d=project({ballsKnown:true,inventoryKnown:true,ballMap:{1:40,4:12},invMap:{},automation:{},equippedBall:{id:1,name:'old'}});
   assert.equal(d.equippedBall.id,'4'); assert.equal(d.balls,12);
 });
+
+test('synthesizes bag, drops and session metrics for headless telemetry',()=>{
+  const s = {
+    ballsKnown: true,
+    inventoryKnown: true,
+    ballMap: { 1: 50, 4: 10 },
+    invMap: { 205: 12, 206: 3, 200: 5 },
+    rawDrops: { 100: { id: 100, name: 'Thunder Stone', qty: 2 } },
+    sessStart: 1234567,
+    a: { kills: 15, captures: 4, shinyFound: 1, shinyCap: 1, supplyGold: 100 },
+    catchLog: [{ n: 'Pikachu', t: 100 }],
+    shinyLog: [{ n: 'Pikachu', t: 100, def: 1 }]
+  };
+  const d = project(s);
+  assert.equal(d.bag.find(g => g.label === 'Pokébolas').total, 60);
+  assert.equal(d.bag.find(g => g.label === 'Revive').total, 15);
+  assert.equal(d.drops['100'].qty, 2);
+  assert.equal(d.sess.st, 1234567);
+  assert.equal(d.sess.k, 15);
+  assert.equal(d.sess.c, 4);
+  assert.equal(d.sess.sf, 1);
+  assert.equal(d.sess.sc, 1);
+  assert.equal(d.catchLog.length, 1);
+  assert.equal(d.shinyLog.length, 1);
+});

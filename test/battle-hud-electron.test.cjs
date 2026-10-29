@@ -19,6 +19,7 @@ app.on('web-contents-created', (_event, contents) => {
 
 const fakeAccounts = Array.from({ length: 4 }, (_, i) => ({ name: 'Conta ' + (i + 1), email: 'test' + i, senha: 'test' }));
 ipcMain.on('app:version', event => { event.returnValue = '1.5.64'; });
+ipcMain.on('instance:id', event => { event.returnValue = 1; });
 ipcMain.handle('creds:load', () => fakeAccounts);
 ipcMain.handle('creds:save', () => true);
 ipcMain.handle('errlog:write', (_event, origin, message) => errors.push(origin + ': ' + message));

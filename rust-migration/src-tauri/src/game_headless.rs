@@ -62,15 +62,35 @@ pub struct HeadlessState {
     pub inv_map: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     pub raw_drops: serde_json::Map<String, serde_json::Value>,
+    #[serde(default)]
+    pub drops: serde_json::Map<String, serde_json::Value>,
     pub gold: i64,
     pub diamonds: i64,
+    #[serde(default)]
+    pub gemas: i64,
     pub level: u32,
+    #[serde(default)]
+    pub xp: u64,
     pub active_id: Option<serde_json::Value>,
     pub team: Vec<PokemonTeamMember>,
     pub twitch: Option<serde_json::Value>,
     pub kick: Option<serde_json::Value>,
     pub a: HeadlessMetrics,
     pub sess_start: u64,
+    #[serde(default)]
+    pub catch_log: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub shiny_log: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub vip_ate: Option<u64>,
+    #[serde(default)]
+    pub passe_vip_ate: Option<u64>,
+    #[serde(default)]
+    pub vip_dias: Option<u32>,
+    #[serde(default)]
+    pub passe_dias: Option<u32>,
+    #[serde(default)]
+    pub boost_xp: Option<String>,
     #[serde(skip)]
     pub initial_gold: Option<i64>,
     #[serde(skip)]
@@ -105,15 +125,25 @@ impl HeadlessState {
             ball_map: Default::default(),
             inv_map: Default::default(),
             raw_drops: Default::default(),
+            drops: Default::default(),
             gold: 0,
             diamonds: 0,
+            gemas: 0,
             level: 0,
+            xp: 0,
             active_id: None,
             team: Vec::new(),
             twitch: None,
             kick: None,
             a: HeadlessMetrics::default(),
             sess_start: now_ms,
+            catch_log: Vec::new(),
+            shiny_log: Vec::new(),
+            vip_ate: None,
+            passe_vip_ate: None,
+            vip_dias: None,
+            passe_dias: None,
+            boost_xp: None,
             initial_gold: None,
             session_gold: 0,
             start_time: Some(std::time::Instant::now()),
@@ -230,9 +260,10 @@ impl GameHeadlessManager {
             if let Some(st) = state.start_time {
                 state.a.seconds = st.elapsed().as_secs();
                 if state.a.seconds > 0 {
-                    state.a.xph = (state.a.xp * 3600) / state.a.seconds;
-                    state.a.kph = (state.a.kills as u64 * 3600) / state.a.seconds;
-                    state.a.gph = (state.session_gold.max(0) as u64 * 3600) / state.a.seconds;
+                    let seconds = state.a.seconds.max(60);
+                    state.a.xph = (state.a.xp * 3600) / seconds;
+                    state.a.kph = (state.a.kills as u64 * 3600) / seconds;
+                    state.a.gph = (state.session_gold.max(0) as u64 * 3600) / seconds;
                 }
             }
 
@@ -462,9 +493,31 @@ impl GameHeadlessManager {
                             }
                             state.a.seconds = start_time.elapsed().as_secs();
                             if state.a.seconds > 0 {
-                                state.a.xph = (state.a.xp * 3600) / state.a.seconds;
-                                state.a.kph = (state.a.kills as u64 * 3600) / state.a.seconds;
-                                state.a.gph = (state.session_gold.max(0) as u64 * 3600) / state.a.seconds;
+                                let seconds = state.a.seconds.max(60);
+                                state.a.xph = (state.a.xp * 3600) / seconds;
+                                state.a.kph = (state.a.kills as u64 * 3600) / seconds;
+                                state.a.gph = (state.session_gold.max(0) as u64 * 3600) / seconds;
+                            }
+                            let cur_now_ms = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_millis() as u64)
+                                .unwrap_or(0);
+                            if let Some(vip_ate) = state.vip_ate {
+                                state.vip_dias = if vip_ate > cur_now_ms {
+                                    Some((((vip_ate - cur_now_ms) as f64 / 86_400_000.0).ceil() as u32).max(1))
+                                } else {
+                                    None
+                                };
+                            }
+                            if let Some(passe_vip_ate) = state.passe_vip_ate {
+                                state.passe_dias = if passe_vip_ate > cur_now_ms {
+                                    Some((((passe_vip_ate - cur_now_ms) as f64 / 86_400_000.0).ceil() as u32).max(1))
+                                } else {
+                                    None
+                                };
+                            }
+                            if state.vip_dias.is_some() && state.boost_xp.is_none() {
+                                state.boost_xp = Some("+50%".into());
                             }
                             let _ = app_handle.emit("blaster:update", json!({
                                 "index": index,
@@ -646,6 +699,83 @@ fn update_player_location(player: &serde_json::Value, state: &mut HeadlessState)
     true
 }
 
+pub fn resolve_headless_item_name(id: Option<u64>, current_name: &str) -> String {
+    if !current_name.trim().is_empty() {
+        return current_name.to_string();
+    }
+    match id {
+        Some(2) => "Ancient Stone".into(),
+        Some(5) => "Beast Ball".into(),
+        Some(23) => "Cocoon Stone".into(),
+        Some(28) => "Crystal Stone".into(),
+        Some(31) => "Darkness Stone".into(),
+        Some(40) => "Earth Stone".into(),
+        Some(45) => "Enigma Stone".into(),
+        Some(49) => "Feather Stone".into(),
+        Some(53) => "Fire Stone".into(),
+        Some(66) => "Heart Stone".into(),
+        Some(71) => "Ice Stone".into(),
+        Some(76) => "Leaf Stone".into(),
+        Some(87) => "Metal Stone".into(),
+        Some(106) => "Punch Stone".into(),
+        Some(109) => "Rock Stone".into(),
+        Some(133) => "Thunder Stone".into(),
+        Some(139) => "Venom Stone".into(),
+        Some(142) => "Water Stone".into(),
+        Some(209) => "Sun Stone".into(),
+        Some(40530) => "AoE TM Disk Piece".into(),
+        Some(40575) => "AoE TM Disk".into(),
+        Some(59194) => "TM Disk Piece".into(),
+        Some(59200) => "Normal-Type TM Disk".into(),
+        Some(59201) => "Fire-Type TM Disk".into(),
+        Some(59202) => "Water-Type TM Disk".into(),
+        Some(59203) => "Grass-Type TM Disk".into(),
+        Some(59204) => "Electric-Type TM Disk".into(),
+        Some(59205) => "Ice-Type TM Disk".into(),
+        Some(59206) => "Fighting-Type TM Disk".into(),
+        Some(59207) => "Poison-Type TM Disk".into(),
+        Some(59208) => "Ground-Type TM Disk".into(),
+        Some(59209) => "Flying-Type TM Disk".into(),
+        Some(59210) => "Psychic-Type TM Disk".into(),
+        Some(59211) => "Bug-Type TM Disk".into(),
+        Some(59212) => "Rock-Type TM Disk".into(),
+        Some(59213) => "Ghost-Type TM Disk".into(),
+        Some(59214) => "Dragon-Type TM Disk".into(),
+        Some(59215) => "Dark-Type TM Disk".into(),
+        Some(59216) => "Steel-Type TM Disk".into(),
+        Some(59247) => "Fairy-Type TM Disk".into(),
+        Some(70000) => "Bronze Boss Token".into(),
+        Some(70011) => "Key Fragment".into(),
+        Some(70012) => "Shiny Stone Fragment".into(),
+        Some(70013) => "Bicycle Fragment".into(),
+        Some(70020) => "Normal Shiny Stone".into(),
+        Some(70021) => "Fire Shiny Stone".into(),
+        Some(70022) => "Water Shiny Stone".into(),
+        Some(70023) => "Grass Shiny Stone".into(),
+        Some(70024) => "Electric Shiny Stone".into(),
+        Some(70025) => "Ice Shiny Stone".into(),
+        Some(70026) => "Fighting Shiny Stone".into(),
+        Some(70027) => "Poison Shiny Stone".into(),
+        Some(70028) => "Ground Shiny Stone".into(),
+        Some(70029) => "Flying Shiny Stone".into(),
+        Some(70030) => "Psychic Shiny Stone".into(),
+        Some(70031) => "Bug Shiny Stone".into(),
+        Some(70032) => "Rock Shiny Stone".into(),
+        Some(70033) => "Ghost Shiny Stone".into(),
+        Some(70034) => "Dragon Shiny Stone".into(),
+        Some(70035) => "Dark Shiny Stone".into(),
+        Some(70036) => "Steel Shiny Stone".into(),
+        Some(70037) => "Fairy Shiny Stone".into(),
+        Some(70080) => "Common Bicycle".into(),
+        Some(70081) => "Uncommon Bicycle".into(),
+        Some(70082) => "Rare Bicycle".into(),
+        Some(70083) => "Mythic Bicycle".into(),
+        Some(70084) => "Legendary Bicycle".into(),
+        Some(999999) => "Diamantes".into(),
+        _ => String::new(),
+    }
+}
+
 fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool {
     state.auto_depot.observe(m);
     state.daily_pass.observe(m, crate::daily_pass::now_ms());
@@ -658,7 +788,8 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
     if t == "reset" || t == "disconnected" || t == "telemetry_gap" {
         state.live = false;
         state.balls_known = false; state.inventory_known = false;
-        state.ball_map.clear(); state.inv_map.clear(); state.raw_drops.clear(); state.ball_catalog.clear();
+        state.ball_map.clear(); state.inv_map.clear(); state.raw_drops.clear(); state.drops.clear(); state.ball_catalog.clear();
+        state.catch_log.clear(); state.shiny_log.clear();
         state.automation = json!({}); state.last_ball_id = None;
         state.twitch = None; state.kick = None;
         return true;
@@ -670,11 +801,13 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         let full = t == "welcome" || player.get("cheio").and_then(|v| v.as_bool()) == Some(true);
         if full {
             changed = true;
-            state.cid.clear();
-            state.ball_map.clear(); state.inv_map.clear(); state.raw_drops.clear();
+            if t == "welcome" {
+                state.cid.clear();
+                state.ball_catalog.clear();
+                state.last_ball_id = None;
+            }
+            state.ball_map.clear(); state.inv_map.clear();
             state.balls_known = false; state.inventory_known = false;
-            state.automation = json!({}); state.last_ball_id = None;
-            if t == "welcome" { state.ball_catalog.clear(); }
         }
         if let Some(id) = player.get("id") {
             state.cid = id.as_str().map(str::to_owned).or_else(||id.as_u64().map(|n|n.to_string())).unwrap_or_default();
@@ -703,6 +836,67 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             state.ball_catalog = catalog.clone(); changed = true;
         }
 
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let trainer_eu = player.get("eu").unwrap_or(player);
+
+        let vip_ate_val = trainer_eu.get("vipAte")
+            .or_else(|| player.get("vipAte"))
+            .or_else(|| data.get("vipAte"))
+            .or_else(|| m.get("vipAte"))
+            .or_else(|| player.get("loja").and_then(|l| l.get("vipAte")))
+            .or_else(|| data.get("estado").and_then(|e| e.get("vipAte")))
+            .and_then(|v| v.as_u64());
+        if let Some(ate) = vip_ate_val {
+            state.vip_ate = Some(ate);
+            state.vip_dias = if ate > now_ms {
+                Some((((ate - now_ms) as f64 / 86_400_000.0).ceil() as u32).max(1))
+            } else {
+                None
+            };
+            changed = true;
+        }
+
+        let passe_obj = player.get("passe")
+            .or_else(|| data.get("passe"))
+            .or_else(|| m.get("passe"))
+            .or_else(|| trainer_eu.get("passe"))
+            .or_else(|| data.get("estado").and_then(|e| e.get("passe")));
+        let passe_ate_val = passe_obj
+            .and_then(|p| p.get("vipAte"))
+            .and_then(|v| v.as_u64());
+        if let Some(ate) = passe_ate_val {
+            state.passe_vip_ate = Some(ate);
+            state.passe_dias = if ate > now_ms {
+                Some((((ate - now_ms) as f64 / 86_400_000.0).ceil() as u32).max(1))
+            } else {
+                None
+            };
+            changed = true;
+        }
+
+        let boost_val = trainer_eu.get("boostXp")
+            .or_else(|| player.get("boostXp"))
+            .or_else(|| data.get("boostXp"))
+            .or_else(|| trainer_eu.get("bonusXp").and_then(|b| b.get("tr")))
+            .or_else(|| player.get("bonusXp").and_then(|b| b.get("tr")));
+        if let Some(bv) = boost_val {
+            if let Some(s) = bv.as_str() {
+                state.boost_xp = Some(s.to_string());
+                changed = true;
+            } else if let Some(n) = bv.as_f64() {
+                if n > 1.0 {
+                    state.boost_xp = Some(format!("+{}%", ((n - 1.0) * 100.0).round() as u64));
+                    changed = true;
+                }
+            }
+        } else if state.vip_dias.is_some() && state.boost_xp.is_none() {
+            state.boost_xp = Some("+50%".into());
+            changed = true;
+        }
+
         for (key, target) in [("twitch", &mut state.twitch), ("kick", &mut state.kick)] {
             let value = player.get(key)
                 .or_else(|| data.get(key))
@@ -725,23 +919,33 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
     if t == "welcome" {
         state.live = true;
         if let Some(est) = data.get("estado").or_else(|| m.get("estado")) {
-            if let Some(nick) = est.get("nick").or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
+            let trainer = est.get("eu").unwrap_or(est);
+            if let Some(nick) = trainer.get("nick").or_else(|| trainer.get("nome")).or_else(|| est.get("nick")).or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
                 state.name = nick.to_string();
             }
-            if let Some(gold) = est.get("gold").and_then(|v| v.as_i64()) {
+            if let Some(gold) = trainer.get("gold").or_else(|| est.get("gold")).and_then(|v| v.as_i64()) {
                 state.gold = gold;
                 if state.initial_gold.is_none() {
                     state.initial_gold = Some(gold);
                 }
             }
-            if let Some(diamonds) = est.get("diamonds").or_else(|| est.get("diamantes")).or_else(|| est.get("gems")).or_else(|| est.get("gemas")).and_then(|v| v.as_i64()) {
+            if let Some(diamonds) = trainer.get("diamonds").or_else(|| trainer.get("diamantes")).or_else(|| est.get("diamonds")).or_else(|| est.get("diamantes")).and_then(|v| v.as_i64()) {
                 state.diamonds = diamonds;
             }
-            if let Some(lvl) = est.get("level").or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
+            if let Some(gemas) = trainer.get("orbs").or_else(|| trainer.get("gemas")).or_else(|| trainer.get("gems")).or_else(|| est.get("orbs")).or_else(|| est.get("gemas")).or_else(|| est.get("gems")).and_then(|v| v.as_i64()) {
+                state.gemas = gemas;
+            }
+            if let Some(lvl) = trainer.get("level").or_else(|| trainer.get("trainerLevel")).or_else(|| est.get("level")).or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
                 state.level = lvl as u32;
             }
+            if let Some(xp) = trainer.get("xp").or_else(|| trainer.get("exp")).or_else(|| trainer.get("trainerXp")).or_else(|| est.get("xp")).or_else(|| est.get("exp")).or_else(|| est.get("trainerXp")).and_then(|v| v.as_u64()) {
+                state.xp = xp;
+            } else if state.xp == 0 && state.level > 0 {
+                let n = (state.level.saturating_sub(1)) as u64;
+                state.xp = 50 * n * (n + 1) * (2 * n + 1) / 6 - 150 * n * (n + 1) / 2 + 200 * n;
+            }
             update_player_location(est, state);
-            if let Some(act) = est.get("activeId").or_else(|| est.get("activePokemonId")) {
+            if let Some(act) = trainer.get("activeId").or_else(|| trainer.get("activePokemonId")).or_else(|| est.get("activeId")).or_else(|| est.get("activePokemonId")) {
                 state.active_id = Some(act.clone());
             }
 
@@ -785,57 +989,98 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             changed = true;
         }
     } else if t == "batalha" {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
         if let Some(evs) = data.get("ev").or_else(|| m.get("ev")).and_then(|v| v.as_array()) {
             for ev in evs {
                 let k = ev.get("k").or_else(|| ev.get("t")).and_then(|v| v.as_str()).unwrap_or("");
                 if k == "spawn" && ev.get("shiny").and_then(|v| v.as_bool()).unwrap_or(false) {
                     state.a.shiny_found += 1;
+                    let name = ev.get("nome").or_else(|| ev.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                    let sid = ev.get("speciesId").or_else(|| ev.get("pokeId")).or_else(|| ev.get("sid")).and_then(|v| v.as_u64()).unwrap_or(0);
+                    state.shiny_log.push(json!({
+                        "n": name,
+                        "sid": sid,
+                        "def": 0,
+                        "t": now_ms
+                    }));
+                    if state.shiny_log.len() > 30 {
+                        state.shiny_log.remove(0);
+                    }
                     changed = true;
                 } else if k == "morte"
                     && ev.get("quem").and_then(|v| v.as_str()).unwrap_or("") == "selvagem"
                 {
                     state.a.kills += 1;
                     let xp = ev
-                        .get("xp")
-                        .or_else(|| ev.get("xpTreinador"))
+                        .get("xpTreinador")
+                        .or_else(|| ev.get("xp"))
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     state.a.xp += xp;
+                    if xp > 0 {
+                        state.xp += xp;
+                    }
+                    if ev.get("shiny").and_then(|v| v.as_bool()).unwrap_or(false) {
+                        let name = ev.get("nome").or_else(|| ev.get("name")).and_then(|v| v.as_str()).unwrap_or("");
+                        let sid = ev.get("speciesId").or_else(|| ev.get("pokeId")).or_else(|| ev.get("sid")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        state.shiny_log.push(json!({
+                            "n": name,
+                            "sid": sid,
+                            "def": 1,
+                            "t": now_ms
+                        }));
+                        if state.shiny_log.len() > 30 {
+                            state.shiny_log.remove(0);
+                        }
+                    }
                     if let Some(ouro) = ev.get("ouro").or_else(|| ev.get("gold")).and_then(|v| v.as_i64()) {
                         state.session_gold += ouro;
                     }
                     if let Some(drops) = ev.get("drops").or_else(|| ev.get("loot")).and_then(|v| v.as_array()) {
                         for drop_item in drops {
-                            let item_id = drop_item
+                            let item_id_num = drop_item
                                 .get("itemId")
                                 .or_else(|| drop_item.get("id"))
-                                .and_then(|v| v.as_u64())
-                                .map(|n| n.to_string());
+                                .and_then(|v| v.as_u64());
+                            let item_id = item_id_num.map(|n| n.to_string());
                             let qty = drop_item
                                 .get("qtd")
                                 .or_else(|| drop_item.get("qty"))
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(1);
-                            let name = drop_item
+                            let raw_name = drop_item
                                 .get("nome")
                                 .or_else(|| drop_item.get("name"))
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
-                            let drop_key = item_id.clone().unwrap_or_else(|| name.to_string());
+                            let name = resolve_headless_item_name(item_id_num, raw_name);
+                            let drop_key = if !name.is_empty() {
+                                name.clone()
+                            } else {
+                                item_id.clone().unwrap_or_default()
+                            };
                             if !drop_key.is_empty() {
                                 let current_drop = state
                                     .raw_drops
                                     .get(&drop_key)
                                     .and_then(|v| v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64()))
                                     .unwrap_or(0);
-                                state.raw_drops.insert(
-                                    drop_key,
-                                    json!({
-                                        "id": item_id.as_deref().unwrap_or(""),
-                                        "name": name,
-                                        "qty": current_drop + qty
-                                    }),
-                                );
+                                let drop_entry = json!({
+                                    "id": item_id.as_deref().unwrap_or(""),
+                                    "name": name,
+                                    "qty": current_drop + qty
+                                });
+                                state.raw_drops.insert(drop_key.clone(), drop_entry.clone());
+                                state.drops.insert(drop_key.clone(), drop_entry.clone());
+                                if let Some(ref id_str) = item_id {
+                                    if id_str != &drop_key {
+                                        state.raw_drops.insert(id_str.clone(), drop_entry.clone());
+                                        state.drops.insert(id_str.clone(), drop_entry);
+                                    }
+                                }
                             }
                             if let Some(id_str) = item_id {
                                 let current_inv = state
@@ -852,11 +1097,14 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                     changed = true;
                 } else if k == "bossMorto" {
                     let xp = ev
-                        .get("xp")
-                        .or_else(|| ev.get("xpTreinador"))
+                        .get("xpTreinador")
+                        .or_else(|| ev.get("xp"))
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     state.a.xp += xp;
+                    if xp > 0 {
+                        state.xp += xp;
+                    }
                     if let Some(drops) = ev.get("drops").or_else(|| ev.get("loot")).and_then(|v| v.as_array()) {
                         for drop_item in drops {
                             let item_id = drop_item
@@ -869,26 +1117,36 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                 .or_else(|| drop_item.get("qty"))
                                 .and_then(|v| v.as_u64())
                                 .unwrap_or(1);
-                            let name = drop_item
+                            let raw_name = drop_item
                                 .get("nome")
                                 .or_else(|| drop_item.get("name"))
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
-                            let drop_key = item_id.clone().unwrap_or_else(|| name.to_string());
+                            let name = resolve_headless_item_name(item_id.as_deref().and_then(|s| s.parse().ok()), raw_name);
+                            let drop_key = if !name.is_empty() {
+                                name.clone()
+                            } else {
+                                item_id.clone().unwrap_or_default()
+                            };
                             if !drop_key.is_empty() {
                                 let current_drop = state
                                     .raw_drops
                                     .get(&drop_key)
                                     .and_then(|v| v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64()))
                                     .unwrap_or(0);
-                                state.raw_drops.insert(
-                                    drop_key,
-                                    json!({
-                                        "id": item_id.as_deref().unwrap_or(""),
-                                        "name": name,
-                                        "qty": current_drop + qty
-                                    }),
-                                );
+                                let drop_entry = json!({
+                                    "id": item_id.as_deref().unwrap_or(""),
+                                    "name": name,
+                                    "qty": current_drop + qty
+                                });
+                                state.raw_drops.insert(drop_key.clone(), drop_entry.clone());
+                                state.drops.insert(drop_key.clone(), drop_entry.clone());
+                                if let Some(ref id_str) = item_id {
+                                    if id_str != &drop_key {
+                                        state.raw_drops.insert(id_str.clone(), drop_entry.clone());
+                                        state.drops.insert(id_str.clone(), drop_entry);
+                                    }
+                                }
                             }
                             if let Some(id_str) = item_id {
                                 let current_inv = state
@@ -909,13 +1167,67 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                     changed = true;
                 } else if k == "capturado" {
                     state.a.captures += 1;
-                    if ev
-                        .get("pokemon")
+                    let pk = ev.get("pokemon");
+                    let is_shiny = pk
                         .and_then(|p| p.get("shiny"))
                         .and_then(|v| v.as_bool())
-                        .unwrap_or(false)
-                    {
+                        .unwrap_or(false);
+                    if is_shiny {
                         state.a.shiny_cap += 1;
+                    }
+                    let pk_name = pk
+                        .and_then(|p| p.get("nome").or_else(|| p.get("name")))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("?");
+                    let pk_sid = pk
+                        .and_then(|p| p.get("speciesId").or_else(|| p.get("pokeId")).or_else(|| p.get("sid")))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
+                    if is_shiny {
+                        state.shiny_log.push(json!({
+                            "n": pk_name,
+                            "sid": pk_sid,
+                            "cap": 1,
+                            "t": now_ms
+                        }));
+                        if state.shiny_log.len() > 30 {
+                            state.shiny_log.remove(0);
+                        }
+                    }
+                    let ivs_obj = pk.and_then(|p| p.get("ivs")).filter(|v| v.is_object());
+                    let iv_total = if let Some(ivs) = ivs_obj {
+                        let hp = ivs.get("hp").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let atk = ivs.get("atk").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let def = ivs.get("def").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let spa = ivs.get("spAtk").or_else(|| ivs.get("spa")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        let spd = ivs.get("spDef").or_else(|| ivs.get("spd")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        let spe = ivs.get("speed").or_else(|| ivs.get("spe")).or_else(|| ivs.get("vel")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        hp + atk + def + spa + spd + spe
+                    } else {
+                        pk.and_then(|p| p.get("ivTotal").or_else(|| p.get("iv")))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0)
+                    };
+                    let quality = pk
+                        .and_then(|p| p.get("quality").or_else(|| p.get("q")))
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(0.0);
+                    let potencia = pk.and_then(|p| p.get("potencia")).and_then(|v| v.as_i64());
+
+                    state.catch_log.push(json!({
+                        "id": pk.and_then(|p| p.get("id")).cloned(),
+                        "n": pk_name,
+                        "sid": pk_sid,
+                        "iv": iv_total,
+                        "ivs": ivs_obj.cloned(),
+                        "q": quality,
+                        "potencia": potencia,
+                        "sh": is_shiny,
+                        "fx": false,
+                        "t": now_ms
+                    }));
+                    if state.catch_log.len() > 50 {
+                        state.catch_log.remove(0);
                     }
                     changed = true;
                 }
@@ -923,15 +1235,16 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         }
     } else if t == "estado" {
         let est = data.get("estado").unwrap_or(data);
-        if let Some(active) = est.get("activeId").or_else(|| est.get("activePokemonId")) {
+        let trainer = est.get("eu").unwrap_or(est);
+        if let Some(active) = trainer.get("activeId").or_else(|| trainer.get("activePokemonId")).or_else(|| est.get("activeId")).or_else(|| est.get("activePokemonId")) {
             state.active_id = Some(active.clone());
             for member in &mut state.team { member.ld = Some(member.id.as_ref() == Some(active)); }
             changed = true;
         }
-        if let Some(nick) = est.get("nick").or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
+        if let Some(nick) = trainer.get("nick").or_else(|| trainer.get("nome")).or_else(|| est.get("nick")).or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
             state.name = nick.to_string();
         }
-        if let Some(gold) = est.get("gold").and_then(|v| v.as_i64()) {
+        if let Some(gold) = trainer.get("gold").or_else(|| est.get("gold")).and_then(|v| v.as_i64()) {
             state.gold = gold;
             if let Some(init) = state.initial_gold {
                 let diff = gold - init;
@@ -943,12 +1256,20 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             }
             changed = true;
         }
-        if let Some(diamonds) = est.get("diamonds").or_else(|| est.get("diamantes")).or_else(|| est.get("gems")).or_else(|| est.get("gemas")).and_then(|v| v.as_i64()) {
+        if let Some(diamonds) = trainer.get("diamonds").or_else(|| trainer.get("diamantes")).or_else(|| est.get("diamonds")).or_else(|| est.get("diamantes")).and_then(|v| v.as_i64()) {
             state.diamonds = diamonds;
             changed = true;
         }
-        if let Some(lvl) = est.get("level").or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
+        if let Some(gemas) = trainer.get("orbs").or_else(|| trainer.get("gemas")).or_else(|| trainer.get("gems")).or_else(|| est.get("orbs")).or_else(|| est.get("gemas")).or_else(|| est.get("gems")).and_then(|v| v.as_i64()) {
+            state.gemas = gemas;
+            changed = true;
+        }
+        if let Some(lvl) = trainer.get("level").or_else(|| trainer.get("trainerLevel")).or_else(|| est.get("level")).or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
             state.level = lvl as u32;
+            changed = true;
+        }
+        if let Some(xp) = trainer.get("xp").or_else(|| trainer.get("exp")).or_else(|| trainer.get("trainerXp")).or_else(|| est.get("xp")).or_else(|| est.get("exp")).or_else(|| est.get("trainerXp")).and_then(|v| v.as_u64()) {
+            state.xp = xp;
             changed = true;
         }
         changed |= update_player_location(est, state);
@@ -1005,6 +1326,7 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             state.a.kills += 1;
             if let Some(xp) = data.get("xp").and_then(|v| v.as_u64()) {
                 state.a.xp += xp;
+                state.xp += xp;
             }
             if let Some(gold) = data.get("gold").and_then(|v| v.as_i64()) {
                 state.session_gold += gold;
@@ -1060,6 +1382,9 @@ mod tests {
         assert_eq!(value["a"]["ballsUsed"], 1);
         assert!(value["sessStart"].as_u64().unwrap() > 0);
         assert_eq!(value["activeId"], 2);
+        parse_game_message(&json!({"t":"batalha","ev":[{"k":"morte","quem":"selvagem","xp":100,"xpTreinador":456,"ouro":12}]}), &mut state);
+        let val2 = serde_json::to_value(&state).unwrap();
+        assert_eq!(val2["a"]["xpg"], 496); // 40 + 456 (xpTreinador prioritized over base xp 100)
         parse_game_message(&json!({"t":"disconnected"}), &mut state);
         assert!(!state.live);
     }
@@ -1104,6 +1429,168 @@ mod tests {
         // The hunt slug must still be preserved for reconnect
         assert_eq!(state.hunt, "larvitar");
         assert_eq!(state.last_hunt_slug, "larvitar");
+    }
+
+    #[test]
+    fn headless_telemetry_tracks_catch_log_shiny_log_drops_and_trainer_xp() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(
+            &json!({
+                "t": "welcome",
+                "estado": {
+                    "nick": "Fixture",
+                    "level": 10,
+                    "xp": 50000,
+                    "gold": 1000
+                }
+            }),
+            &mut state,
+        );
+        assert_eq!(state.xp, 50000);
+
+        // 1. Shiny spawn event
+        parse_game_message(
+            &json!({
+                "t": "batalha",
+                "ev": [
+                    { "k": "spawn", "shiny": true, "nome": "Pikachu", "speciesId": 25 }
+                ]
+            }),
+            &mut state,
+        );
+        assert_eq!(state.shiny_log.len(), 1);
+        assert_eq!(state.shiny_log[0]["n"], "Pikachu");
+        assert_eq!(state.shiny_log[0]["sid"], 25);
+        assert_eq!(state.shiny_log[0]["def"], 0);
+
+        // 2. Kill event with drop and shiny defeat
+        parse_game_message(
+            &json!({
+                "t": "batalha",
+                "ev": [
+                    {
+                        "k": "morte",
+                        "quem": "selvagem",
+                        "xp": 250,
+                        "ouro": 50,
+                        "shiny": true,
+                        "nome": "Pikachu",
+                        "speciesId": 25,
+                        "drops": [
+                            { "itemId": 100, "nome": "Thunder Stone", "qtd": 1 }
+                        ]
+                    }
+                ]
+            }),
+            &mut state,
+        );
+        assert_eq!(state.xp, 50250);
+        assert_eq!(state.a.xp, 250);
+        assert_eq!(state.shiny_log.len(), 2);
+        assert_eq!(state.shiny_log[1]["def"], 1);
+        assert_eq!(state.drops["100"]["name"], "Thunder Stone");
+        assert_eq!(state.drops["100"]["qty"], 1);
+        assert_eq!(state.raw_drops["100"]["qty"], 1);
+
+        // 3. Capture event with shiny and IVs
+        parse_game_message(
+            &json!({
+                "t": "batalha",
+                "ev": [
+                    {
+                        "k": "capturado",
+                        "pokemon": {
+                            "id": 999,
+                            "speciesId": 25,
+                            "nome": "Pikachu",
+                            "shiny": true,
+                            "quality": 1.45,
+                            "potencia": 4,
+                            "ivs": {
+                                "hp": 30, "atk": 25, "def": 28, "spAtk": 29, "spDef": 31, "speed": 32
+                            }
+                        }
+                    }
+                ]
+            }),
+            &mut state,
+        );
+        assert_eq!(state.shiny_log.len(), 3);
+        assert_eq!(state.shiny_log[2]["cap"], 1);
+        assert_eq!(state.catch_log.len(), 1);
+        assert_eq!(state.catch_log[0]["id"], 999);
+        assert_eq!(state.catch_log[0]["n"], "Pikachu");
+        assert_eq!(state.catch_log[0]["iv"], 175);
+        assert_eq!(state.catch_log[0]["q"], 1.45);
+        assert_eq!(state.catch_log[0]["potencia"], 4);
+        assert_eq!(state.catch_log[0]["sh"], true);
+    }
+
+    #[test]
+    fn headless_telemetry_extracts_trainer_eu_currencies_and_resolves_drop_names() {
+        let mut state = HeadlessState::new(1, "AltAccount".into());
+        parse_game_message(
+            &json!({
+                "t": "welcome",
+                "estado": {
+                    "eu": {
+                        "nick": "AltMaster",
+                        "gold": 45000,
+                        "diamonds": 120,
+                        "orbs": 35,
+                        "level": 15,
+                        "xp": 80000
+                    }
+                }
+            }),
+            &mut state,
+        );
+        assert_eq!(state.name, "AltMaster");
+        assert_eq!(state.gold, 45000);
+        assert_eq!(state.diamonds, 120);
+        assert_eq!(state.gemas, 35);
+        assert_eq!(state.level, 15);
+        assert_eq!(state.xp, 80000);
+
+        parse_game_message(
+            &json!({
+                "t": "estado",
+                "estado": {
+                    "eu": {
+                        "gold": 46000,
+                        "diamonds": 125,
+                        "gemas": 40
+                    }
+                }
+            }),
+            &mut state,
+        );
+        assert_eq!(state.gold, 46000);
+        assert_eq!(state.diamonds, 125);
+        assert_eq!(state.gemas, 40);
+
+        parse_game_message(
+            &json!({
+                "t": "batalha",
+                "ev": [
+                    {
+                        "k": "morte",
+                        "quem": "selvagem",
+                        "drops": [
+                            { "itemId": 53, "qtd": 1 },
+                            { "itemId": 109, "qtd": 2 }
+                        ]
+                    }
+                ]
+            }),
+            &mut state,
+        );
+        assert_eq!(state.drops["Fire Stone"]["qty"], 1);
+        assert_eq!(state.drops["Fire Stone"]["name"], "Fire Stone");
+        assert_eq!(state.drops["53"]["qty"], 1);
+        assert_eq!(state.drops["Rock Stone"]["qty"], 2);
+        assert_eq!(state.drops["Rock Stone"]["name"], "Rock Stone");
+        assert_eq!(state.drops["109"]["qty"], 2);
     }
 }
 
@@ -1170,5 +1657,73 @@ mod identity_tests {
         assert_eq!(s.cid,"43");
         parse_game_message(&json!({"t":"welcome","estado":{"nick":"Unknown"}}), &mut s);
         assert!(s.cid.is_empty());
+    }
+
+    #[test]
+    fn full_update_does_not_wipe_logs_or_drops_and_tracks_vip_pass() {
+        let mut s = HeadlessState::new(0, "Trainer".into());
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        let future_vip = now + 5 * 86_400_000;
+        let future_pass = now + 12 * 86_400_000;
+
+        // Welcome with VIP and Pass
+        parse_game_message(
+            &json!({
+                "t": "welcome",
+                "estado": {
+                    "id": 100,
+                    "nick": "Trainer",
+                    "vipAte": future_vip,
+                    "passe": {
+                        "vipAte": future_pass
+                    }
+                }
+            }),
+            &mut s,
+        );
+        assert_eq!(s.vip_dias, Some(5));
+        assert_eq!(s.passe_dias, Some(12));
+        assert_eq!(s.boost_xp, Some("+50%".into()));
+
+        // Simulate catch, shiny, and drop
+        parse_game_message(
+            &json!({
+                "t": "batalha",
+                "ev": [
+                    { "k": "spawn", "shiny": true, "nome": "Charmander", "speciesId": 4 },
+                    { "k": "morte", "quem": "selvagem", "drops": [{ "itemId": 109, "qtd": 3 }] },
+                    { "k": "capturado", "pokemon": { "id": 1, "speciesId": 4, "nome": "Charmander", "shiny": true } }
+                ]
+            }),
+            &mut s,
+        );
+        assert_eq!(s.shiny_log.len(), 2); // 1 spawn, 1 capturado
+        assert_eq!(s.catch_log.len(), 1);
+        assert_eq!(s.drops["109"]["qty"], 3);
+        assert_eq!(s.drops["Rock Stone"]["qty"], 3);
+
+        // Server sends 'estado' with 'cheio: true' (inventory sync / hunt change)
+        parse_game_message(
+            &json!({
+                "t": "estado",
+                "cheio": true,
+                "estado": {
+                    "cheio": true,
+                    "balls": { "1": 50 }
+                }
+            }),
+            &mut s,
+        );
+
+        // Logs and drops MUST NOT be cleared by cheio: true!
+        assert_eq!(s.shiny_log.len(), 2, "shiny_log must persist across cheio: true");
+        assert_eq!(s.catch_log.len(), 1, "catch_log must persist across cheio: true");
+        assert_eq!(s.drops["109"]["qty"], 3, "drops must persist across cheio: true");
+        assert_eq!(s.drops["Rock Stone"]["qty"], 3, "drops must persist across cheio: true");
+        assert_eq!(s.vip_dias, Some(5), "vip_dias must persist");
+        assert_eq!(s.passe_dias, Some(12), "passe_dias must persist");
     }
 }
