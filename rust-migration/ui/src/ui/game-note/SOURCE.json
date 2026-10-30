@@ -1,0 +1,18 @@
+{
+  "source": "https://pokeidle.io",
+  "retrievedAt": "2026-10-30T06:39:06.654Z",
+  "modules": [
+    "nota-pokemon.mjs",
+    "refino-stats.mjs",
+    "mistico.mjs",
+    "spawns-filtro.mjs",
+    "sprite-jogo.mjs",
+    "outland.mjs",
+    "megas.mjs",
+    "escala-hunt-level.mjs",
+    "cooldown-golpes.mjs",
+    "golpes-planilhas.mjs",
+    "formas.mjs"
+  ],
+  "species": 1315
+}

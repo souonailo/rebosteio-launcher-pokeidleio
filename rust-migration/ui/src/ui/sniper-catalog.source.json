@@ -1,0 +1,44 @@
+{
+  "source": "https://chromewebstore.google.com/detail/rotom-sniper-assistente-p/olccbpdjdkbfgondiiaicmlifhbcggmk",
+  "extensionVersion": "1.5.2",
+  "sourceFile": "items_db.js",
+  "sourceSha256": "d7c42bbdd05f1c42865eb71cbfb386ad8ec10198a8a84d8fd2ebd40aad8479eb",
+  "extractedArray": "POKEIDLE_ITEMS_DB",
+  "itemCount": 80,
+  "verifiedAt": "2026-10-30",
+  "usage": "Original catalog retained; verified additions use separate categories to preserve existing category rules. Aliases are display/search names only.",
+  "originalItemCount": 75,
+  "additions": {
+    "verifiedAt": "2026-10-30",
+    "gameVersion": "1.389.1",
+    "items": [
+      70014,
+      70015,
+      70017,
+      70090,
+      70095
+    ],
+    "sources": [
+      {
+        "url": "https://pokeidle.io/app.js?v=1.389.1",
+        "sha256": "d2472883ff055f1727dba2b6c7941dd95d5549fabf48c53f93b89453230541d0"
+      },
+      {
+        "url": "https://pokeidle.io/shared/ovo-shiny.mjs",
+        "sha256": "aa820ab323c0e336583e2af9af47ccd5e9373157ea6b19e8e4aa3a9de1bd36ba"
+      },
+      {
+        "url": "https://pokeidle.io/shared/mistico.mjs",
+        "sha256": "bfa191e5924604858b07869f9f798ace3b2575fc4cecf3259e728577c55e54a0"
+      },
+      {
+        "url": "https://pokeidle.io/shared/safari.mjs",
+        "sha256": "7ed6fa9753cfaa22f6026f767b7963fd6559d0995fb0a3a0e981abf8826e6d43"
+      },
+      {
+        "url": "https://pokeidle.io/shared/nome-zmove.mjs",
+        "sha256": "9c58bea1000949d9d18f401e8dce157a1b8d822607d2bd292249cba83d81378b"
+      }
+    ]
+  }
+}

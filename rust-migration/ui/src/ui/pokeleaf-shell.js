@@ -161,6 +161,7 @@
     <button class="leaf-tool-item" data-old="statsBtn"><span class="ico">↗</span><span>Resumo da conta</span></button>
     <button class="leaf-tool-item" data-old="accounts"><span class="ico">○</span><span>Treinadores</span></button>
     <div class="leaf-tool-sep"></div>
+    <button class="leaf-tool-item" data-old="sniperBtn" id="leafSniperBtn"><span class="ico">🎯</span><span>Auto-Sniper Central</span><span class="leaf-tool-badge" id="leafSniperBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSellBtn"><span class="ico">💰</span><span>Venda do Depot</span><span class="leaf-tool-badge" id="leafAutoSellBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSupplyBtn"><span class="ico">📦</span><span>Auto Supply</span><span class="leaf-tool-badge" id="leafAutoSupplyBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="dispatchHuntBtn"><span class="ico">🎯</span><span>Despachar Contas</span></button>
@@ -399,10 +400,27 @@
   }
   window.__syncKickBonusBadge = syncKickBonusBadge;
 
+  function syncSniperBadge() {
+    const badge = $('#leafSniperBadge');
+    if (!badge) return;
+    const st = window.PioSniperPanel?.getState();
+    const isOn = st && st.accounts && st.accounts.some(a => a.enabled);
+    if (!isOn) {
+      badge.textContent = 'OFF';
+      badge.classList.remove('is-on');
+    } else {
+      const activeCount = st.accounts.filter(a => a.enabled).length;
+      badge.textContent = activeCount === 4 ? 'ON' : `ON (${activeCount})`;
+      badge.classList.add('is-on');
+    }
+  }
+  window.__syncSniperBadge = syncSniperBadge;
+
   syncAutoSellBadge();
   syncAutoSupplyBadge();
   syncTwitchBonusBadge();
   syncKickBonusBadge();
+  syncSniperBadge();
 
   $('#leafToolsBtn').onclick = (e) => {
     e.stopPropagation();

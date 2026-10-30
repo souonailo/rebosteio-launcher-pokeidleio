@@ -1,0 +1,773 @@
+[
+  {
+    "id": 999999,
+    "name": "Diamantes",
+    "icon": "https://pokeidle.io/img/moeda-diamante.png",
+    "category": "diamante",
+    "categoryLabel": "Diamantes",
+    "type": "CAMBIO",
+    "npcPrice": 0
+  },
+  {
+    "id": 2,
+    "name": "Ancient Stone",
+    "icon": "/assets/stones/ancient_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "DRAGON",
+    "npcPrice": 0
+  },
+  {
+    "id": 23,
+    "name": "Cocoon Stone",
+    "icon": "cocoon_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "BUG",
+    "npcPrice": 0
+  },
+  {
+    "id": 28,
+    "name": "Crystal Stone",
+    "icon": "crystal_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ICE",
+    "npcPrice": 0
+  },
+  {
+    "id": 31,
+    "name": "Darkness Stone",
+    "icon": "darkness_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "DARK",
+    "npcPrice": 0
+  },
+  {
+    "id": 40,
+    "name": "Earth Stone",
+    "icon": "earth_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "GROUND",
+    "npcPrice": 0
+  },
+  {
+    "id": 45,
+    "name": "Enigma Stone",
+    "icon": "enigma_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "PSYCHIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 49,
+    "name": "Feather Stone",
+    "icon": "/assets/stones/feather_stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FLYING",
+    "npcPrice": 0
+  },
+  {
+    "id": 53,
+    "name": "Fire Stone",
+    "icon": "fire_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FIRE",
+    "npcPrice": 0
+  },
+  {
+    "id": 66,
+    "name": "Heart Stone",
+    "icon": "heart_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "NORMAL",
+    "npcPrice": 0
+  },
+  {
+    "id": 71,
+    "name": "Ice Stone",
+    "icon": "ice_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ICE",
+    "npcPrice": 0
+  },
+  {
+    "id": 76,
+    "name": "Leaf Stone",
+    "icon": "leaf_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "GRASS",
+    "npcPrice": 0
+  },
+  {
+    "id": 87,
+    "name": "Metal Stone",
+    "icon": "/assets/stones/metal_stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "STEEL",
+    "npcPrice": 0
+  },
+  {
+    "id": 106,
+    "name": "Punch Stone",
+    "icon": "punch_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FIGHTING",
+    "npcPrice": 0
+  },
+  {
+    "id": 109,
+    "name": "Rock Stone",
+    "icon": "rock_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ROCK",
+    "npcPrice": 0
+  },
+  {
+    "id": 209,
+    "name": "Sun Stone",
+    "icon": "/assets/stones/sun_stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FIRE",
+    "npcPrice": 0
+  },
+  {
+    "id": 133,
+    "name": "Thunder Stone",
+    "icon": "thunder_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ELECTRIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 139,
+    "name": "Venom Stone",
+    "icon": "venom_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "POISON",
+    "npcPrice": 0
+  },
+  {
+    "id": 142,
+    "name": "Water Stone",
+    "icon": "water_stone.gif",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "WATER",
+    "npcPrice": 0
+  },
+  {
+    "id": 70031,
+    "name": "Bug Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "BUG",
+    "npcPrice": 0
+  },
+  {
+    "id": 70035,
+    "name": "Dark Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "DARK",
+    "npcPrice": 0
+  },
+  {
+    "id": 70034,
+    "name": "Dragon Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "DRAGON",
+    "npcPrice": 0
+  },
+  {
+    "id": 70024,
+    "name": "Electric Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ELECTRIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 70037,
+    "name": "Fairy Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FAIRY",
+    "npcPrice": 0
+  },
+  {
+    "id": 70026,
+    "name": "Fighting Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FIGHTING",
+    "npcPrice": 0
+  },
+  {
+    "id": 70021,
+    "name": "Fire Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FIRE",
+    "npcPrice": 0
+  },
+  {
+    "id": 70029,
+    "name": "Flying Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "FLYING",
+    "npcPrice": 0
+  },
+  {
+    "id": 70033,
+    "name": "Ghost Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "GHOST",
+    "npcPrice": 0
+  },
+  {
+    "id": 70023,
+    "name": "Grass Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "GRASS",
+    "npcPrice": 0
+  },
+  {
+    "id": 70028,
+    "name": "Ground Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "GROUND",
+    "npcPrice": 0
+  },
+  {
+    "id": 70025,
+    "name": "Ice Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ICE",
+    "npcPrice": 0
+  },
+  {
+    "id": 70020,
+    "name": "Normal Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "NORMAL",
+    "npcPrice": 0
+  },
+  {
+    "id": 70027,
+    "name": "Poison Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "POISON",
+    "npcPrice": 0
+  },
+  {
+    "id": 70030,
+    "name": "Psychic Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "PSYCHIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 70032,
+    "name": "Rock Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "ROCK",
+    "npcPrice": 0
+  },
+  {
+    "id": 70036,
+    "name": "Steel Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "STEEL",
+    "npcPrice": 0
+  },
+  {
+    "id": 70022,
+    "name": "Water Shiny Stone",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "stone",
+    "categoryLabel": "Pedras",
+    "type": "WATER",
+    "npcPrice": 0
+  },
+  {
+    "id": 40575,
+    "name": "AoE TM Disk",
+    "icon": "/assets/items/tm_disk_aoe.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 40530,
+    "name": "AoE TM Disk Piece",
+    "icon": "/assets/items/tm_piece_aoe.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 59194,
+    "name": "TM Disk Piece",
+    "icon": "/assets/items/tm_disk_piece.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Fragmento de Z-Move"
+    ]
+  },
+  {
+    "id": 59200,
+    "name": "Normal-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "NORMAL",
+    "npcPrice": 0
+  },
+  {
+    "id": 59201,
+    "name": "Fire-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "FIRE",
+    "npcPrice": 0
+  },
+  {
+    "id": 59202,
+    "name": "Water-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "WATER",
+    "npcPrice": 0
+  },
+  {
+    "id": 59203,
+    "name": "Grass-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "GRASS",
+    "npcPrice": 0
+  },
+  {
+    "id": 59204,
+    "name": "Electric-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "ELECTRIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 59205,
+    "name": "Ice-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "ICE",
+    "npcPrice": 0
+  },
+  {
+    "id": 59206,
+    "name": "Fighting-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "FIGHTING",
+    "npcPrice": 0
+  },
+  {
+    "id": 59207,
+    "name": "Poison-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "POISON",
+    "npcPrice": 0
+  },
+  {
+    "id": 59208,
+    "name": "Ground-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "GROUND",
+    "npcPrice": 0
+  },
+  {
+    "id": 59209,
+    "name": "Flying-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "FLYING",
+    "npcPrice": 0
+  },
+  {
+    "id": 59210,
+    "name": "Psychic-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "PSYCHIC",
+    "npcPrice": 0
+  },
+  {
+    "id": 59211,
+    "name": "Bug-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "BUG",
+    "npcPrice": 0
+  },
+  {
+    "id": 59212,
+    "name": "Rock-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "ROCK",
+    "npcPrice": 0
+  },
+  {
+    "id": 59213,
+    "name": "Ghost-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "GHOST",
+    "npcPrice": 0
+  },
+  {
+    "id": 59214,
+    "name": "Dragon-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "DRAGON",
+    "npcPrice": 0
+  },
+  {
+    "id": 59215,
+    "name": "Dark-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "DARK",
+    "npcPrice": 0
+  },
+  {
+    "id": 59216,
+    "name": "Steel-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "STEEL",
+    "npcPrice": 0
+  },
+  {
+    "id": 59247,
+    "name": "Fairy-Type TM Disk",
+    "icon": "/assets/items/tm_disk_elemental.png",
+    "category": "tm",
+    "categoryLabel": "TMs",
+    "type": "FAIRY",
+    "npcPrice": 0
+  },
+  {
+    "id": 70012,
+    "name": "Shiny Stone Fragment",
+    "icon": "/img/itens/shiny-stone.png",
+    "category": "rare_loot",
+    "categoryLabel": "Loots Raros",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Fragmento de Shiny Stone"
+    ]
+  },
+  {
+    "id": 70011,
+    "name": "Key Fragment",
+    "icon": "/img/itens/fragmento-chave.png",
+    "category": "rare_loot",
+    "categoryLabel": "Loots Raros",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Fragmento de Chave"
+    ]
+  },
+  {
+    "id": 70000,
+    "name": "Bronze Boss Token",
+    "icon": "/assets/items/bronze_boss_token.png",
+    "category": "rare_loot",
+    "categoryLabel": "Loots Raros",
+    "type": null,
+    "npcPrice": 250000
+  },
+  {
+    "id": 70013,
+    "name": "Bicycle Fragment",
+    "icon": "/img/itens/fragmento-bicicleta.png",
+    "category": "rare_loot",
+    "categoryLabel": "Loots Raros",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Fragmento de Bicicleta"
+    ]
+  },
+  {
+    "id": 5,
+    "name": "Beast Ball",
+    "icon": "/img/ball-beast.png",
+    "category": "beast",
+    "categoryLabel": "Beast Balls",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 70040,
+    "name": "Common House",
+    "icon": "/img/itens/casa-comum.png",
+    "category": "casa",
+    "categoryLabel": "Casas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Casa Comum"
+    ]
+  },
+  {
+    "id": 70041,
+    "name": "Uncommon House",
+    "icon": "/img/itens/casa-incomum.png",
+    "category": "casa",
+    "categoryLabel": "Casas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Casa Incomum"
+    ]
+  },
+  {
+    "id": 70042,
+    "name": "Rare House",
+    "icon": "/img/itens/casa-rara.png",
+    "category": "casa",
+    "categoryLabel": "Casas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Casa Rara"
+    ]
+  },
+  {
+    "id": 70043,
+    "name": "Mythic House",
+    "icon": "/img/itens/casa-mitica.png",
+    "category": "casa",
+    "categoryLabel": "Casas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Casa Mítica"
+    ]
+  },
+  {
+    "id": 70044,
+    "name": "Legendary House",
+    "icon": "/img/itens/casa-lendaria.png",
+    "category": "casa",
+    "categoryLabel": "Casas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Casa Lendária"
+    ]
+  },
+  {
+    "id": 70060,
+    "name": "Founder Box",
+    "icon": "/img/itens/caixa-fundador.png",
+    "category": "box",
+    "categoryLabel": "Boxes",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 70061,
+    "name": "Co-Founder Box",
+    "icon": "/img/itens/caixa-cofundador.png",
+    "category": "box",
+    "categoryLabel": "Boxes",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 70080,
+    "name": "Common Bicycle",
+    "icon": "/img/itens/bicicleta-comum.png",
+    "category": "bicicleta",
+    "categoryLabel": "Bicicletas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Bicicleta Comum"
+    ]
+  },
+  {
+    "id": 70081,
+    "name": "Uncommon Bicycle",
+    "icon": "/img/itens/bicicleta-incomum.png",
+    "category": "bicicleta",
+    "categoryLabel": "Bicicletas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Bicicleta Incomum"
+    ]
+  },
+  {
+    "id": 70082,
+    "name": "Rare Bicycle",
+    "icon": "/img/itens/bicicleta-rara.png",
+    "category": "bicicleta",
+    "categoryLabel": "Bicicletas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Bicicleta Rara"
+    ]
+  },
+  {
+    "id": 70083,
+    "name": "Mythic Bicycle",
+    "icon": "/img/itens/bicicleta-mitica.png",
+    "category": "bicicleta",
+    "categoryLabel": "Bicicletas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Bicicleta Mítica"
+    ]
+  },
+  {
+    "id": 70084,
+    "name": "Legendary Bicycle",
+    "icon": "/img/itens/bicicleta-lendaria.png",
+    "category": "bicicleta",
+    "categoryLabel": "Bicicletas",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Bicicleta Lendária"
+    ]
+  },
+  {
+    "id": 70014,
+    "name": "Fragmento de MEGA Stone",
+    "icon": "",
+    "category": "fragment",
+    "categoryLabel": "Fragmentos de Mega e Ovo Shiny",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Mega Stone Fragment"
+    ]
+  },
+  {
+    "id": 70015,
+    "name": "Fragmento de MEGA Shiny Stone",
+    "icon": "",
+    "category": "fragment",
+    "categoryLabel": "Fragmentos de Mega e Ovo Shiny",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Mega Shiny Stone Fragment"
+    ]
+  },
+  {
+    "id": 70017,
+    "name": "Fragmento de Ovo Shiny",
+    "icon": "",
+    "category": "fragment",
+    "categoryLabel": "Fragmentos de Mega e Ovo Shiny",
+    "type": null,
+    "npcPrice": 0,
+    "aliases": [
+      "Shiny Egg Fragment"
+    ]
+  },
+  {
+    "id": 70090,
+    "name": "Mystic Ticket",
+    "icon": "",
+    "category": "ticket",
+    "categoryLabel": "Tickets",
+    "type": null,
+    "npcPrice": 0
+  },
+  {
+    "id": 70095,
+    "name": "Safari Ticket",
+    "icon": "",
+    "category": "ticket",
+    "categoryLabel": "Tickets",
+    "type": null,
+    "npcPrice": 0
+  }
+]

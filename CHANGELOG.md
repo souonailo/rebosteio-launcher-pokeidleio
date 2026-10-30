@@ -1,3 +1,49 @@
+## 2.0.50 — Identificação exata do item comprado em regras por categoria
+
+- Motor nativo Headless (`sniper.rs`) passa a resolver o nome exato do item pelo `itemId` no catálogo canônico (`SniperCatalog`) e pela confirmação do servidor (`marketComprado`), em vez de gravar o rótulo genérico da regra de categoria (ex.: grava `Cocoon Stone` em vez de `Pedras`).
+- Painel Central (`sniper-panel.js`) e Cockpit (`auto-sniper.js`) extraem automaticamente o nome real do item confirmado em `details` quando registros anteriores tiverem `targetName` preenchido com o nome da categoria (`Pedras`, `TMs`, `Casas`, `Boxes`, `Bicicletas`, etc.).
+
+## 2.0.49 — Histórico exclusivo de compras confirmadas no Sniper
+
+- Histórico do Cockpit in-game (`auto-sniper.js`) e do Painel Central (`sniper-panel.js`) passa a exibir exclusivamente compras confirmadas (`CONFIRMADO`), ocultando eventos intermediários ou recusados (`AGENDADO`, `DISPARADO`, `PROGRESSO`, `RECUSADO`, `PERDIDO`, `DIAGNOSTICO`, `INCERTO`, `SALDO_INSUFICIENTE`, `FALHA_ENVIO`).
+- Proteção contra expulsão por ruído no buffer de histórico: registros não confirmados não sobrescrevem compras confirmadas em `rotom_sniper_logs` (modo visual) nem em `AccountState.logs` no motor nativo Rust (`sniper.rs`).
+- Formatação completa das compras confirmadas no Painel Central e no Cockpit, preservando nome real do item/Pokémon, quantidade, vendedor (`@nick`), preço unitário/total em Coins ou Gemas e ID do anúncio (`#offerId`) com escape HTML.
+- Correção do falso `PERDIDO` 5 segundos após recusa ou durante sorteio ativo no preset `auto-sniper.js`.
+
+## 2.0.48 — Diagnóstico de compras e exclusões por categoria
+
+- Registro limitado de respostas não reconhecidas durante ordens pendentes, com contexto da oferta e preservação do bloqueio quando o resultado é incerto.
+- Compatibilidade com avisos de sorteio do mercado e correlação das confirmações; correção da leitura de item e moeda no pacote de ofertas.
+- Exclusão de itens em regras por categoria, incluindo pedras clássicas e shiny, aplicada no visual e no headless e preservada nos ajustes individuais e universais.
+- Catálogo inclui os fragmentos de MEGA Stone, MEGA Shiny Stone e Ovo Shiny, Mystic Ticket e Safari Ticket. Categorias existentes mantêm sua composição; pesquisa reconhece Fragmento de Z-Move e nomes em português.
+
+## 2.0.47 — Categorias, radares e varredura do Sniper
+
+- Regras por categoria de itens, incluindo Pedras (clássicas e shiny), TMs, itens raros, Beast Ball, casas, caixas e bicicletas, com quantidade total compartilhada por regra.
+- Painel expõe os radares independentes de qualquer shiny, potência 5 ou superior e nota mínima do mercado, cada um com tetos de Coins e Gemas; catálogo local com os 75 itens da extensão original 1.5.2.
+- Modo de varredura Original: ciclo de 3 segundos e consulta de Pokémon 700 ms depois, alternando menor preço em Coins, menor preço em Gemas e recentes. Modo adaptativo separado com intervalos configuráveis.
+- Configuração universal e individual inclui categorias, radares e varredura, com aplicação nos motores visual e headless. Novas opções não ativam compras automaticamente.
+
+## 2.0.46 — Central do Sniper e motor nativo headless
+
+- Painel em Ferramentas → Auto-Sniper Central, com regras de itens/Pokémon, limites em Coins e Gemas, ajustes individuais e aplicação nas quatro contas.
+- Histórico persistente por conta (até 500 registros), filtro, limpeza e importação explícita das regras do userscript existente.
+- Motor Rust no WebSocket headless: varredura, agendamento pelo relógio do servidor, saldo, confirmação de compra e limites individuais preservados após reconexão/reinício.
+- Transição visual/headless sincroniza progresso antes de iniciar; falha de persistência impede novas ordens. Ordens pendentes/incertas consomem limite preventivamente, sem serem apresentadas como compras confirmadas.
+- Configurações novas começam pausadas. Filtros importados não suportados, incluindo radar por nota, são rejeitados com erro; a extensão do navegador não é necessária para o modo headless.
+
+## 2.0.45 — Persistência das médias RMT
+
+- Última média válida preservada por item e moeda até uma nova leitura válida, inclusive após fechar webviews ou reiniciar o launcher.
+- Respostas vazias, preços inválidos e leituras parciais de outras contas não apagam valores anteriores. Datas por moeda impedem substituir um preço por uma leitura mais antiga.
+
+## 2.0.44 — Notas das capturas e Pedras com média RMT
+
+- Corrigida a atualização tardia de nota e potência no histórico, conciliando os campos dos coletores e preservando o ID da espécie.
+- Capturas do modo headless e histórico com atributos suficientes recebem nota pelo módulo público do jogo, acompanhado de catálogo local e origem registrada. Dados insuficientes continuam sem nota.
+- Pedras agora mostra sprites no topo e as quatro contas em linhas com identificação à direita, totais de hoje/7 dias e rolagem em telas estreitas.
+- Consulta somente de leitura das médias oficiais de vendas do RMT ao abrir a webview e o mercado, independente do Sniper. Preço ausente aparece como traço; estimativa líquida considera a taxa em Coins e o lote de cada pedra.
+
 ## 2.0.43 — Correção de Histórico de Capturas, Shinies, Pedras e Persistência de VIP/Passe em Headless
 
 - **Preservação de Histórico e Drops contra Reset em Pacotes de Estado (`cheio: true`)**:

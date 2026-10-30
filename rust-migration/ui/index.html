@@ -2616,11 +2616,25 @@
   <link rel="stylesheet" href="src/ui/auto-supply-individual.css">
   <link rel="stylesheet" href="src/ui/battle-hud.css">
   <link rel="stylesheet" href="src/ui/depot-settings.css">
+  <link rel="stylesheet" href="src/ui/sniper-panel.css">
   <script src="src/ui/runtime-performance.js"></script>
   <script src="src/ui/capture-value.js"></script>
   <script src="src/ui/auto-depot.js"></script>
   <script src="src/ui/kick-reward-status.js"></script>
   <script src="src/ui/catch-nota.js"></script>
+  <script src="src/ui/capture-notes.js"></script>
+  <script src="src/ui/market-prices.js"></script>
+  <script src="src/ui/stones-panel.js"></script>
+  <script src="src/ui/stone-icons.js"></script>
+  <style>
+    .pio-stones-scroll { overflow-x:auto; }
+    .pio-stones-table { min-width:560px; font-variant-numeric:tabular-nums; }
+    .pio-stones-table td, .pio-stones-table th { text-align:center; }
+    .pio-stones-table th:last-child { text-align:right; white-space:nowrap; }
+    .pio-stone-heading { display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .pio-stone-heading img { object-fit:contain; image-rendering:pixelated; }
+    .pio-stones-help { margin-top:8px; font-size:11px; color:var(--cd-secondary, #adbac7); }
+  </style>
   <script src="src/ui/game-hud-layout.js"></script>
   <script src="src/ui/center-scheduler.js"></script>
   <script src="src/ui/themes/pokemon/all-pokemon.js"></script>
@@ -2628,6 +2642,7 @@
   <script src="src/ui/kuromi-xp.js"></script>
   <script src="src/ui/inventory-state.js"></script>
   <script src="src/ui/battle-hud.js"></script>
+  <script src="src/ui/sniper-panel.js"></script>
 </head>
 
 <body>
@@ -2673,6 +2688,7 @@
         <button id="dittoBtn" title="Onde caçar com o Ditto (comum ou shiny) e em que pokémon virar, no seu nível">✨
           Ditto</button>
         <button id="scriptsBtn" title="Rode userscripts (IV calc e os seus) nos painéis">🧩 Scripts</button>
+        <button id="sniperBtn" title="Painel Central de Auto-Sniper (todas as contas e regras)">🎯 Sniper</button>
         <button id="autoSellBtn" title="Configurar venda automática do Depot">💰 Venda
           Automática</button>
         <button id="autoSupplyBtn" title="Reabastecimento automático de Pokébolas e Poções com verificação de saldo">📦
@@ -3855,6 +3871,7 @@
           // nota N= e potencia de cada captura, com a conta do proprio jogo (so roda no painel,
           // que e a origem onde /shared/*.mjs existe)
           wv.executeJavaScript('(' + PioCatchNota.installCatchNota.toString() + ')()').catch(() => { });
+          wv.executeJavaScript('(' + PioMarketPrices.install.toString() + ')()').catch(() => { });
           // senao quem estacionou na cidade de proposito seria mandado de volta
           try {
             const snv = sessSnap[i];
@@ -5365,12 +5382,20 @@
     if (!Array.isArray(pioDrops)) pioDrops = [];
     const pioDropsUlt = {};
     let pioPrecos = {};
+    let pioRmt = pioLer('pio-rmt-means-v1', { at:0, items:{} });
     /* Taxas do jogo (wiki do PokeIdle, out/2026): venda no mercado 15%, arredondada para baixo (5 gemas rendem 4);
        saque de gemas 10% (1000 gemas = US$ 9). pioPrecoItem devolve o preço bruto (mediana) e o líquido da venda. */
     const PIO_TAXA_VENDA = 0.15, PIO_TAXA_SAQUE = 0.10, PIO_GEMAS_POR_USD = 100;
     const pioLiquidoVenda = v => Math.floor((+v || 0) * (1 - PIO_TAXA_VENDA) + 1e-9);
     const pioGemasEmUsd = g => (+g || 0) * (1 - PIO_TAXA_SAQUE) / PIO_GEMAS_POR_USD;
-    function pioPrecoItem(nome) { const p = pioPrecos[String(nome || '').toLowerCase()]; if (!p) return null; const coinsBruto = p[2] || p[1] || 0, gemasBruto = p[4] || p[3] || 0;
+    function pioPrecoItem(nome) {
+      const mean = pioRmt.items?.[String(nome || '').toLowerCase()];
+      if (pioTipoItem(nome) === 'pedra') {
+        if (!(mean?.gold > 0)) return null;
+        const tax = pioRmt.taxGold ?? PIO_TAXA_VENDA;
+        return {coins:Math.floor(mean.gold * (1-tax)), gemas:0, coinsBruto:mean.gold, gemasBruto:0};
+      }
+      const p = pioPrecos[String(nome || '').toLowerCase()]; if (!p) return null; const coinsBruto = p[2] || p[1] || 0, gemasBruto = p[4] || p[3] || 0;
       return { coins: pioLiquidoVenda(coinsBruto), gemas: pioLiquidoVenda(gemasBruto), coinsBruto, gemasBruto }; }
     function pioRegistrarDrop(conta, nick, item, qtd, origem, extra = {}) {
       const tipo = pioTipoItem(item);
@@ -5715,6 +5740,25 @@
     const pioTcSemanas = {};
     // Preços do mercado: arquivo por dia (mínimo e mediana dos mínimos por hora), regravado de hora em hora.
     let pioPrecosUlt = 0;
+    let pioRmtBusy = false;
+    async function pioLerMediasRmt() {
+      if (pioRmtBusy || typeof webviews === 'undefined') return;
+      pioRmtBusy = true;
+      try {
+        for (const w of webviews) {
+          if (!w) continue;
+          try {
+            const snapshot = await w.executeJavaScript('window.__pioMarketPrices && window.__pioMarketPrices.at > ' + (Number(pioRmt.at) || 0) + ' ? JSON.parse(JSON.stringify(window.__pioMarketPrices)) : null');
+            if (snapshot?.at > (pioRmt.at || 0) && snapshot.items && typeof snapshot.items === 'object') {
+              pioRmt = PioMarketPrices.mergeSnapshots(pioRmt, snapshot);
+              lsSet('pio-rmt-means-v1', JSON.stringify(pioRmt));
+              refreshCards(true);
+            }
+          } catch {}
+        }
+      } finally { pioRmtBusy = false; }
+    }
+    setInterval(pioLerMediasRmt, 5000);
     async function pioPrecosHora() {
       if (Date.now() - pioPrecosUlt < 3600000 || typeof webviews === 'undefined') return;
       for (let i = 0; i < webviews.length; i++) {
@@ -10308,7 +10352,8 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         e.ivs = x.ivs && typeof x.ivs === 'object' ? { hp: +x.ivs.hp || 0, atk: +x.ivs.atk || 0, def: +x.ivs.def || 0, spAtk: +x.ivs.spAtk || 0, spDef: +x.ivs.spDef || 0, speed: +x.ivs.speed || 0 } : null;
         const calcIv = e.ivs ? (e.ivs.hp + e.ivs.atk + e.ivs.def + e.ivs.spAtk + e.ivs.spDef + e.ivs.speed) : 0;
         e.iv = +x.iv > 0 ? +x.iv : calcIv;
-        e.potencia = +x.potencia >= 1 && +x.potencia <= 5 ? +x.potencia : null; e.nota = x.nota != null && Number.isFinite(+x.nota) && +x.nota >= 0 && +x.nota <= 10 ? +x.nota : null;
+        e.sid = +x.sid || 0;
+        Object.assign(e, PioCaptureNotes.attributes(x));
         e.q = +x.q || 0; e.sh = !!x.sh; e.fx = !!x.fx;
       });
     } catch { }
@@ -10337,6 +10382,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         }
       });
       (r.catchLog || []).forEach(x => {
+        x = PioCaptureNotes.enrich({ ...x });
         const key = kCa(i, x);
         const ivsClean = x.ivs && typeof x.ivs === 'object' ? { hp: +x.ivs.hp || 0, atk: +x.ivs.atk || 0, def: +x.ivs.def || 0, spAtk: +x.ivs.spAtk || 0, spDef: +x.ivs.spDef || 0, speed: +x.ivs.speed || 0 } : null;
         const totIv = (+x.iv > 0) ? +x.iv : (ivsClean ? (ivsClean.hp + ivsClean.atk + ivsClean.def + ivsClean.spAtk + ivsClean.spDef + ivsClean.speed) : 0);
@@ -10345,6 +10391,11 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           (lc.t === +x.t && (lc.n === String(x.n || '').slice(0, 40) || (lc.id && x.id && lc.id === x.id)))
         ));
         if (exist) {
+          for (const field of ['nota', 'potencia', 'sid']) {
+            if (x[field] != null && (field !== 'sid' || +x[field] > 0) && exist[field] !== x[field]) {
+              exist[field] = x[field]; dirty = true;
+            }
+          }
           if (totIv > 0 && (!exist.iv || exist.iv === 0)) {
             exist.iv = totIv;
             dirty = true;
@@ -10362,7 +10413,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         }
         if (seenLog.has(key)) return;
         seenLog.add(key); dirty = true;
-        lifeCatch.push({ id: x.id || null, n: String(x.n || '').slice(0, 40), iv: totIv || 0, ivs: ivsClean, potencia: x.potencia != null ? +x.potencia : null, nota: x.nota != null ? +x.nota : null, q: +x.q || 0, sh: !!x.sh, fx: !!x.fx, t: +x.t || 0, p: i, acc, dot });
+        lifeCatch.push({ id: x.id || null, sid:+x.sid || 0, n: String(x.n || '').slice(0, 40), iv: totIv || 0, ivs: ivsClean, potencia: x.potencia, nota:x.nota, q: +x.q || 0, sh: !!x.sh, fx: !!x.fx, t: +x.t || 0, p: i, acc, dot });
       });
       if (r.allPokes && r.allPokes.length) {
         const usedIds = new Set();
@@ -10394,6 +10445,12 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       }
       retainSeenLogs();
     }
+
+    PioCaptureNotes.load().then(() => {
+      lifeCatch.forEach(PioCaptureNotes.enrich);
+      lsSet('lifeCatch', JSON.stringify(lifeCatch));
+      refreshCards(true);
+    }).catch(e => console.warn('Notas das capturas:', e.message));
 
     // ----- Farm parado: conta online mas os kills nao andam ha 10 min -----
     const lastK = [], lastKT = [], stallOn = [];
@@ -12932,19 +12989,10 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         });
         return pioSecAbre('var(--cd-positive, #3fb950)') + pioCab('👥', 'Contas', 'sessão de cada conta', 'var(--cd-positive, #3fb950)') + '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(520px,1fr));gap:10px">' + blocos.join('') + '</div></div>';
       };
-      SB.pioPedras = () => {
-        const hoje = pioDropsPorItem('pedra', 0), sem = pioDropsPorItem('pedra', 7);
-        const nomes = Object.keys(sem).sort((x, y) => (sem[y].valor || 0) - (sem[x].valor || 0));
-        if (!nomes.length) return pioSecAbre('#a5b0bc') + pioCab('🪨', 'Pedras', 'drops', '#a5b0bc') + '<div style="opacity:.7">Nenhuma pedra registrada ainda. O registro começa nesta versão.</div></div>';
-        const topo = nomes.reduce((b, n) => (hoje[n] && (!b || hoje[n].valor > hoje[b].valor)) ? n : b, null);
-        const linhas = nomes.map(n => { const h = hoje[n] || { qtd: 0, porConta: {}, valor: 0 }, s = sem[n], p = pioPrecoItem(n);
-          return '<tr' + (n === topo ? ' style="color:' + pioCorOuro + ';font-weight:700"' : '') + '><td>' + esc(n) + '</td>' + [1, 2, 3, 4].map(c => '<td>' + (h.porConta[c] ? nf(h.porConta[c]) : '·') + '</td>').join('')
-            + '<td><b>' + nf(h.qtd) + '</b></td><td>' + nf(s.qtd) + '</td><td>' + (p && p.coinsBruto ? pioNum(p.coinsBruto) : '—') + '</td><td>' + pioNum(h.valor) + '</td></tr>'; }).join('');
-        const tot = nomes.reduce((acc, n) => acc + ((hoje[n] && hoje[n].valor) || 0), 0);
-        return pioSecAbre('#a5b0bc') + pioCab('🪨', 'Pedras', 'drops de hoje e 7 dias', '#a5b0bc') + '<table class="cd-table"><thead><tr><th>Pedra</th><th>C1</th><th>C2</th><th>C3</th><th>C4</th><th>Hoje</th><th>7 dias</th><th>Mediana</th><th>Valor líquido hoje</th></tr></thead><tbody>'
-          + linhas + '</tbody><tfoot><tr><td>Total</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td style="color:' + pioCorOuro + '">' + pioNum(tot) + ' Coins</td></tr></tfoot></table>'
-          + '<div style="font-size:10.5px;opacity:.7;margin-top:4px">Mediana do mercado (fotos por hora do Sniper). Valor líquido: mediana menos 15% de taxa de venda, arredondado para baixo por unidade. Só drops; compras do Sniper ficam em Raros.</div></div>';
-      };
+      SB.pioPedras = () => pioSecAbre('#a5b0bc') + pioCab('🪨', 'Pedras', 'drops de hoje e 7 dias', '#a5b0bc')
+        + PioStonesPanel.render({ today:pioDropsPorItem('pedra',0), week:pioDropsPorItem('pedra',7),
+          accounts:[0,1,2,3].map(i => tabNames[i] || stName(i)), prices:pioRmt.items || {},
+          icons:PioStoneIcons, at:pioRmt.at, tax:pioRmt.taxGold ?? PIO_TAXA_VENDA }) + '</div>';
       SB.pioRaros = () => {
         const ev = pioDrops.filter(x => x.tipo === 'raro').slice(-40).reverse();
         const hoje = pioDropsPorItem('raro', 0), sem = pioDropsPorItem('raro', 7);
@@ -13479,7 +13527,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       // Internos (versoes revisadas para o grid): desligue as copias instaladas por link/codigo para nao rodar duas vezes.
       { id: 'pio-hunt', name: '/hunt (PIO): AoE calibrado e ritmo medido', file: 'hunt-pio.js', author: 'Liang · ajustes PIO' },
       { id: 'pio-autodex', name: 'AutoDex 0.2.7 (PIO): metas e Pokédex automática', file: 'autodex-pio.js', author: 'Dudu · ajustes PIO' },
-      { id: 'pio-sniper', name: 'Auto-Sniper v1.5.2.1 (PIO): ritmo adaptativo', file: 'auto-sniper.js', author: 'Dudu' }
+      { id: 'pio-sniper', name: 'Auto-Sniper (PIO): categorias e radares', file: 'auto-sniper.js', author: 'Dudu' }
     ];
     let scriptsOn = {}; try { scriptsOn = lsObj('scriptsOn'); } catch { }
     let userScripts = []; try { userScripts = lsArr('userScripts'); } catch { }
@@ -13663,15 +13711,43 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       try {
         let shim = ''; // API GM_* pedida pelo @grant; vazio = injecao crua, como antes
         try { shim = gmShim(s, code); } catch { shim = ''; }
-        wv.executeJavaScript('(()=>{const m=window.__pgUS=window.__pgUS||{},k=' + JSON.stringify(String(s.id)) + ';if(m[k])return 1;m[k]=1;return 0})()')
-          .then(ja => { if (!ja) wv.executeJavaScript('(async function(){' + shim + '\n' + code + '\n})().then(function(){})').catch(e => { try { window.pokeAPI.logError('userscript', String(s.name || s.id).slice(0, 60) + ': ' + String((e && e.message) || e).slice(0, 200)); } catch { } }); })
+        return wv.executeJavaScript('(()=>{const m=window.__pgUS=window.__pgUS||{},k=' + JSON.stringify(String(s.id)) + ';if(m[k])return 1;m[k]=1;return 0})()')
+          .then(ja => { if (!ja) return wv.executeJavaScript('(async function(){' + shim + '\n' + code + '\n})().then(function(){})').catch(e => { try { window.pokeAPI.logError('userscript', String(s.name || s.id).slice(0, 60) + ': ' + String((e && e.message) || e).slice(0, 200)); } catch { } }); })
           .catch(() => { });
       } catch { }
     };
     async function injectScripts(wv) {
       if (usNoLogin(wv)) { wv.__pgSemScripts = true; return; }
       wv.__pgSemScripts = false;
-      for (const s of allScripts()) { if (!scriptsOn[s.id]) continue; const code = await getScriptCode(s); if (code) runUS(wv, s, code); }
+      const wvIdx = webviews.indexOf(wv);
+      let preseedOk = true;
+      if (wvIdx >= 0 && window.PioSniperPanel && typeof window.PioSniperPanel.preseedVisualAccount === 'function') {
+        try {
+          const pRes = await window.PioSniperPanel.preseedVisualAccount(wvIdx, wv);
+          if (pRes && pRes.ok === false) preseedOk = false;
+        } catch (e) {
+          preseedOk = false;
+          console.warn('[injectScripts] preseedVisualAccount error:', e);
+        }
+      }
+      for (const s of allScripts()) {
+        if (!scriptsOn[s.id]) continue;
+        if (s.id === 'pio-sniper' && !preseedOk) {
+          console.warn('[injectScripts] Pulando injeção do pio-sniper devido a falha no preseed');
+          continue;
+        }
+        const code = await getScriptCode(s);
+        if (code) {
+          if (s.id === 'pio-sniper') {
+            await runUS(wv, s, code);
+          } else {
+            runUS(wv, s, code);
+          }
+        }
+      }
+      if (wvIdx >= 0 && window.PioSniperPanel && typeof window.PioSniperPanel.restoreConfiguredVisualAccount === 'function') {
+        window.PioSniperPanel.restoreConfiguredVisualAccount(wvIdx).catch(() => {});
+      }
     }
     async function applyScriptToAll(sid) {
       const s = allScripts().find(x => x.id === sid); if (!s) return;
@@ -13707,6 +13783,45 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     if (scOverlay) {
       const sb = document.getElementById('scriptsBtn');
       if (sb) sb.onclick = () => { renderScriptsList(); scOverlay.classList.add('show'); void syncGitHubScripts(); };
+      const sniperBtn = document.getElementById('sniperBtn');
+      if (sniperBtn) sniperBtn.onclick = () => { if (window.PioSniperPanel) window.PioSniperPanel.open({ opener: sniperBtn }); };
+      window.__PIO_SNIPER_INTEGRATION__ = {
+        getWebview: (idx) => webviews[idx],
+        getAllWebviews: () => webviews,
+        isAccountOff: (idx) => Boolean(off[idx]),
+        isScriptOn: (id) => Boolean(scriptsOn[id]),
+        setScriptOn: (id, on) => { scriptsOn[id] = Boolean(on); return saveScripts(true); },
+        isLoginUrl: (wv) => usNoLogin(wv),
+        ensurePresetLoaded: async (idx) => {
+          scriptsOn['pio-sniper'] = true;
+          saveScripts(true);
+          const wv = webviews[idx];
+          if (wv && !off[idx]) {
+            if (usNoLogin(wv)) {
+              wv.__pgSemScripts = true;
+              return { ok: false, reason: 'login_screen' };
+            }
+            const s = allScripts().find(x => x.id === 'pio-sniper');
+            if (s) {
+              const code = await getScriptCode(s);
+              if (code) {
+                await runUS(wv, s, code);
+                const start = Date.now();
+                while (Date.now() - start < 1500) {
+                  try {
+                    const ready = await wv.executeJavaScript('Boolean(window.PIOSniperStorage)');
+                    if (ready) return { ok: true, ready: true };
+                  } catch {}
+                  await new Promise(r => setTimeout(r, 40));
+                }
+                return { ok: false, error: 'Tempo limite aguardando PIOSniperStorage' };
+              }
+            }
+          }
+          return { ok: true };
+        },
+        injectScripts: async (wv) => injectScripts(wv)
+      };
       const scClose = document.getElementById('scClose');
       if (scClose) scClose.onclick = () => scOverlay.classList.remove('show');
       scOverlay.onclick = (e) => { if (e.target === scOverlay) scOverlay.classList.remove('show'); };

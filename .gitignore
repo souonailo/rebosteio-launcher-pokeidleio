@@ -96,6 +96,7 @@ tools/*
 !tools/mem-report.js
 !tools/mem-bench.js
 !tools/start-rust.ps1
+!tools/sync-capture-note.mjs
 !tools/update-source.ps1
 src/ui/themes/pokemon/**/*.json
 src/ui/themes/pokemon/**/*.md

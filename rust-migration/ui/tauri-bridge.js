@@ -107,11 +107,25 @@
     onKickGameLinked: (cb) => listen('kick:linked', (e) => cb(e.payload)),
 
     // 8. Modo Master Blaster (Headless Puro WebSocket)
-    blasterStart: (index, config) => invoke('blaster_start', { index, config }).catch(() => ({ ok: false })),
+    blasterStart: async (index, config) => {
+      if (window.PioSniperPanel && typeof window.PioSniperPanel.flush === 'function') {
+        try {
+          await window.PioSniperPanel.flush(index);
+        } catch (e) {
+          console.error('[Blaster] Flush do Sniper falhou:', e);
+          if (window.pokeAPI?.logError) window.pokeAPI.logError('BlasterSniperFlush', String(e));
+          return { ok: false, error: String(e) };
+        }
+      }
+      return invoke('blaster_start', { index, config }).catch(() => ({ ok: false }));
+    },
     blasterStop: async (index) => {
       await invoke('blaster_stop', { index });
       delete lastBounds[index];
       for (const el of registeredWebviews) if (el.__resolveIndex() === index) el.__syncBounds();
+      if (window.PioSniperPanel && typeof window.PioSniperPanel.restoreConfiguredVisualAccount === 'function') {
+        window.PioSniperPanel.restoreConfiguredVisualAccount(index).catch(() => {});
+      }
       return { ok: true };
     },
     blasterStatus: (index) => invoke('blaster_status', { index }).catch(() => ({ active: false })),
@@ -167,6 +181,9 @@
       lastVisibility[index] = false;
       delete lastBounds[index];
       try {
+        if (window.PioSniperPanel && typeof window.PioSniperPanel.flush === 'function') {
+          await window.PioSniperPanel.flush(index);
+        }
         await invoke('blaster_start', { index, config });
         return { ok: true };
       } catch (error) {
@@ -185,7 +202,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.43',
+    appVersion: '2.0.50',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {
@@ -209,7 +226,14 @@
         try { window.pokeAPI.logError('Instance', String(err)); } catch {}
         return false;
       }
-    }
+    },
+
+    // 11. Auto-Sniper Central (Mercado & Regras)
+    sniperGetState: () => invoke('sniper_get_state'),
+    sniperSave: (indices, settings) => invoke('sniper_save', { indices, settings }),
+    sniperClearHistory: (index) => invoke('sniper_clear_history', { index }),
+    sniperIngest: (index, logs, progress) => invoke('sniper_ingest', { index, logs, progress: progress || [] }),
+    onSniperUpdated: (cb) => listen('sniper:updated', (e) => cb(e.payload))
   };
 
   // Sincroniza a instância atual na inicialização
@@ -302,7 +326,8 @@
     '#menu.show',
     'body.leaf-settings-open #leafSettingsDrawer',
     '#stats.show',
-    '#ivCard.show'
+    '#ivCard.show',
+    '#sniperOverlay.show'
   ].join(', ');
 
   // Menus pequenos (popovers) so escondem o painel que eles cobrem; os demais continuam visiveis.

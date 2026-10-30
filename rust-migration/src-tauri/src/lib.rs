@@ -14,6 +14,7 @@ pub mod twitch_service;
 pub mod webview_manager;
 pub mod webview_memory;
 pub mod pio_arquivos;
+pub mod sniper;
 
 use std::fs;
 use std::path::PathBuf;
@@ -858,6 +859,10 @@ pub fn run() {
             app_version,
             auto_depot::auto_depot_get,
             auto_depot::auto_depot_set,
+            sniper::sniper_get_state,
+            sniper::sniper_save,
+            sniper::sniper_clear_history,
+            sniper::sniper_ingest,
             creds_load,
             creds_save,
             window_control,

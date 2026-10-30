@@ -267,6 +267,7 @@ impl GameHeadlessManager {
                 }
             }
 
+            crate::sniper::update_vip(index, state.vip_dias.is_some());
             let state_val = serde_json::to_value(&*state).unwrap_or_default();
             let _ = app.emit(
                 "st:push",
@@ -458,8 +459,12 @@ impl GameHeadlessManager {
                 };
 
                 let (mut write, mut read) = socket.split();
+                for cmd in crate::sniper::on_connect(index) {
+                    let _ = write.send(Message::Text(cmd.to_string().into())).await;
+                }
                 let mut ping_interval = tokio::time::interval(Duration::from_secs(25));
                 let mut sec_interval = tokio::time::interval(Duration::from_secs(1));
+                let mut sniper_interval = tokio::time::interval(Duration::from_millis(100));
                 let mut last_activity = Instant::now();
                 let mut user_stopped = false;
 
@@ -482,6 +487,18 @@ impl GameHeadlessManager {
                             }
                             if last_activity.elapsed() > Duration::from_secs(60) {
                                 break;
+                            }
+                        }
+                        _ = sniper_interval.tick() => {
+                            let cur_now_ms = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| d.as_millis() as u64)
+                                .unwrap_or(0);
+                            for cmd in crate::sniper::on_tick(index, cur_now_ms, Some(&app_handle)) {
+                                if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
+                                    crate::sniper::on_send_failure(index, &cmd);
+                                    break;
+                                }
                             }
                         }
                         _ = sec_interval.tick() => {
@@ -519,6 +536,7 @@ impl GameHeadlessManager {
                             if state.vip_dias.is_some() && state.boost_xp.is_none() {
                                 state.boost_xp = Some("+50%".into());
                             }
+                            crate::sniper::update_vip(index, state.vip_dias.is_some());
                             let _ = app_handle.emit("blaster:update", json!({
                                 "index": index,
                                 "state": &state
@@ -529,7 +547,14 @@ impl GameHeadlessManager {
                                 Some(Ok(Message::Text(txt))) => {
                                     last_activity = Instant::now();
                                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
+                                        for cmd in crate::sniper::on_message(index, &val, Some(&app_handle)) {
+                                            if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
+                                                crate::sniper::on_send_failure(index, &cmd);
+                                                break;
+                                            }
+                                        }
                                         if parse_game_message(&val, &mut state) {
+                                            crate::sniper::update_vip(index, state.vip_dias.is_some());
                                             let _ = app_handle.emit("blaster:update", json!({
                                                 "index": index,
                                                 "state": &state
@@ -556,6 +581,8 @@ impl GameHeadlessManager {
                     }
                 }
 
+                crate::sniper::on_disconnect(index, Some(&app_handle));
+
                 if user_stopped {
                     break 'reconnect_loop;
                 }
@@ -574,6 +601,7 @@ impl GameHeadlessManager {
                 );
             }
 
+            crate::sniper::on_disconnect(index, Some(&app_handle));
             parse_game_message(&json!({"t":"disconnected"}), &mut state);
             if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
                 m.states.write().await.insert(index, state.clone());
@@ -641,6 +669,8 @@ async fn connect_and_handshake(
                     }
                     if value["t"] == "welcome" {
                         parse_game_message(&value, state);
+                        crate::sniper::feed_welcome(index, &value);
+                        crate::sniper::update_vip(index, state.vip_dias.is_some());
                         return Ok(());
                     }
                 }

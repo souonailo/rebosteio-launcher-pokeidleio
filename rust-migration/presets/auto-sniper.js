@@ -106,9 +106,29 @@ if (readKey('rotom_sniper_enabled') === undefined) {
 // 5. Casas (Casas Comum, Incomum, Rara, Mítica, Lendária)
 // 6. Boxes (Founder Box e Co-Founder Box)
 // 7. Bicicletas (Bicicletas Comum, Incomum, Rara, Mítica, Lendária)
-const POKEIDLE_ITEMS_DB = [{"id": 999999, "name": "Diamantes", "icon": "https://pokeidle.io/img/moeda-diamante.png", "category": "diamante", "categoryLabel": "Diamantes", "type": "CAMBIO", "npcPrice": 0}, {"id": 2, "name": "Ancient Stone", "icon": "/assets/stones/ancient_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "DRAGON", "npcPrice": 0}, {"id": 23, "name": "Cocoon Stone", "icon": "cocoon_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "BUG", "npcPrice": 0}, {"id": 28, "name": "Crystal Stone", "icon": "crystal_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 31, "name": "Darkness Stone", "icon": "darkness_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "DARK", "npcPrice": 0}, {"id": 40, "name": "Earth Stone", "icon": "earth_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "GROUND", "npcPrice": 0}, {"id": 45, "name": "Enigma Stone", "icon": "enigma_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "PSYCHIC", "npcPrice": 0}, {"id": 49, "name": "Feather Stone", "icon": "/assets/stones/feather_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FLYING", "npcPrice": 0}, {"id": 53, "name": "Fire Stone", "icon": "fire_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 66, "name": "Heart Stone", "icon": "heart_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "NORMAL", "npcPrice": 0}, {"id": 71, "name": "Ice Stone", "icon": "ice_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 76, "name": "Leaf Stone", "icon": "leaf_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "GRASS", "npcPrice": 0}, {"id": 87, "name": "Metal Stone", "icon": "/assets/stones/metal_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "STEEL", "npcPrice": 0}, {"id": 106, "name": "Punch Stone", "icon": "punch_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "FIGHTING", "npcPrice": 0}, {"id": 109, "name": "Rock Stone", "icon": "rock_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ROCK", "npcPrice": 0}, {"id": 209, "name": "Sun Stone", "icon": "/assets/stones/sun_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 133, "name": "Thunder Stone", "icon": "thunder_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ELECTRIC", "npcPrice": 0}, {"id": 139, "name": "Venom Stone", "icon": "venom_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "POISON", "npcPrice": 0}, {"id": 142, "name": "Water Stone", "icon": "water_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "WATER", "npcPrice": 0}, {"id": 70031, "name": "Bug Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "BUG", "npcPrice": 0}, {"id": 70035, "name": "Dark Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "DARK", "npcPrice": 0}, {"id": 70034, "name": "Dragon Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "DRAGON", "npcPrice": 0}, {"id": 70024, "name": "Electric Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ELECTRIC", "npcPrice": 0}, {"id": 70037, "name": "Fairy Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FAIRY", "npcPrice": 0}, {"id": 70026, "name": "Fighting Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIGHTING", "npcPrice": 0}, {"id": 70021, "name": "Fire Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 70029, "name": "Flying Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FLYING", "npcPrice": 0}, {"id": 70033, "name": "Ghost Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GHOST", "npcPrice": 0}, {"id": 70023, "name": "Grass Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GRASS", "npcPrice": 0}, {"id": 70028, "name": "Ground Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GROUND", "npcPrice": 0}, {"id": 70025, "name": "Ice Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 70020, "name": "Normal Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "NORMAL", "npcPrice": 0}, {"id": 70027, "name": "Poison Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "POISON", "npcPrice": 0}, {"id": 70030, "name": "Psychic Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "PSYCHIC", "npcPrice": 0}, {"id": 70032, "name": "Rock Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ROCK", "npcPrice": 0}, {"id": 70036, "name": "Steel Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "STEEL", "npcPrice": 0}, {"id": 70022, "name": "Water Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "WATER", "npcPrice": 0}, {"id": 40575, "name": "AoE TM Disk", "icon": "/assets/items/tm_disk_aoe.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0}, {"id": 40530, "name": "AoE TM Disk Piece", "icon": "/assets/items/tm_piece_aoe.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0}, {"id": 59194, "name": "TM Disk Piece", "icon": "/assets/items/tm_disk_piece.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0}, {"id": 59200, "name": "Normal-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "NORMAL", "npcPrice": 0}, {"id": 59201, "name": "Fire-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FIRE", "npcPrice": 0}, {"id": 59202, "name": "Water-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "WATER", "npcPrice": 0}, {"id": 59203, "name": "Grass-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GRASS", "npcPrice": 0}, {"id": 59204, "name": "Electric-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ELECTRIC", "npcPrice": 0}, {"id": 59205, "name": "Ice-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ICE", "npcPrice": 0}, {"id": 59206, "name": "Fighting-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FIGHTING", "npcPrice": 0}, {"id": 59207, "name": "Poison-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "POISON", "npcPrice": 0}, {"id": 59208, "name": "Ground-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GROUND", "npcPrice": 0}, {"id": 59209, "name": "Flying-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FLYING", "npcPrice": 0}, {"id": 59210, "name": "Psychic-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "PSYCHIC", "npcPrice": 0}, {"id": 59211, "name": "Bug-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "BUG", "npcPrice": 0}, {"id": 59212, "name": "Rock-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ROCK", "npcPrice": 0}, {"id": 59213, "name": "Ghost-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GHOST", "npcPrice": 0}, {"id": 59214, "name": "Dragon-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "DRAGON", "npcPrice": 0}, {"id": 59215, "name": "Dark-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "DARK", "npcPrice": 0}, {"id": 59216, "name": "Steel-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "STEEL", "npcPrice": 0}, {"id": 59247, "name": "Fairy-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FAIRY", "npcPrice": 0}, {"id": 70012, "name": "Shiny Stone Fragment", "icon": "/img/itens/shiny-stone.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0}, {"id": 70011, "name": "Key Fragment", "icon": "/img/itens/fragmento-chave.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0}, {"id": 70000, "name": "Bronze Boss Token", "icon": "/assets/items/bronze_boss_token.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 250000}, {"id": 70013, "name": "Bicycle Fragment", "icon": "/img/itens/fragmento-bicicleta.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0}, {"id": 5, "name": "Beast Ball", "icon": "/img/ball-beast.png", "category": "beast", "categoryLabel": "Beast Balls", "type": null, "npcPrice": 0}, {"id": 70040, "name": "Common House", "icon": "/img/itens/casa-comum.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0}, {"id": 70041, "name": "Uncommon House", "icon": "/img/itens/casa-incomum.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0}, {"id": 70042, "name": "Rare House", "icon": "/img/itens/casa-rara.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0}, {"id": 70043, "name": "Mythic House", "icon": "/img/itens/casa-mitica.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0}, {"id": 70044, "name": "Legendary House", "icon": "/img/itens/casa-lendaria.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0}, {"id": 70060, "name": "Founder Box", "icon": "/img/itens/caixa-fundador.png", "category": "box", "categoryLabel": "Boxes", "type": null, "npcPrice": 0}, {"id": 70061, "name": "Co-Founder Box", "icon": "/img/itens/caixa-cofundador.png", "category": "box", "categoryLabel": "Boxes", "type": null, "npcPrice": 0}, {"id": 70080, "name": "Common Bicycle", "icon": "/img/itens/bicicleta-comum.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0}, {"id": 70081, "name": "Uncommon Bicycle", "icon": "/img/itens/bicicleta-incomum.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0}, {"id": 70082, "name": "Rare Bicycle", "icon": "/img/itens/bicicleta-rara.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0}, {"id": 70083, "name": "Mythic Bicycle", "icon": "/img/itens/bicicleta-mitica.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0}, {"id": 70084, "name": "Legendary Bicycle", "icon": "/img/itens/bicicleta-lendaria.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0}];
+const POKEIDLE_ITEMS_DB = [{"id": 999999, "name": "Diamantes", "icon": "https://pokeidle.io/img/moeda-diamante.png", "category": "diamante", "categoryLabel": "Diamantes", "type": "CAMBIO", "npcPrice": 0}, {"id": 2, "name": "Ancient Stone", "icon": "/assets/stones/ancient_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "DRAGON", "npcPrice": 0}, {"id": 23, "name": "Cocoon Stone", "icon": "cocoon_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "BUG", "npcPrice": 0}, {"id": 28, "name": "Crystal Stone", "icon": "crystal_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 31, "name": "Darkness Stone", "icon": "darkness_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "DARK", "npcPrice": 0}, {"id": 40, "name": "Earth Stone", "icon": "earth_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "GROUND", "npcPrice": 0}, {"id": 45, "name": "Enigma Stone", "icon": "enigma_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "PSYCHIC", "npcPrice": 0}, {"id": 49, "name": "Feather Stone", "icon": "/assets/stones/feather_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FLYING", "npcPrice": 0}, {"id": 53, "name": "Fire Stone", "icon": "fire_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 66, "name": "Heart Stone", "icon": "heart_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "NORMAL", "npcPrice": 0}, {"id": 71, "name": "Ice Stone", "icon": "ice_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 76, "name": "Leaf Stone", "icon": "leaf_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "GRASS", "npcPrice": 0}, {"id": 87, "name": "Metal Stone", "icon": "/assets/stones/metal_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "STEEL", "npcPrice": 0}, {"id": 106, "name": "Punch Stone", "icon": "punch_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "FIGHTING", "npcPrice": 0}, {"id": 109, "name": "Rock Stone", "icon": "rock_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ROCK", "npcPrice": 0}, {"id": 209, "name": "Sun Stone", "icon": "/assets/stones/sun_stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 133, "name": "Thunder Stone", "icon": "thunder_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "ELECTRIC", "npcPrice": 0}, {"id": 139, "name": "Venom Stone", "icon": "venom_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "POISON", "npcPrice": 0}, {"id": 142, "name": "Water Stone", "icon": "water_stone.gif", "category": "stone", "categoryLabel": "Pedras", "type": "WATER", "npcPrice": 0}, {"id": 70031, "name": "Bug Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "BUG", "npcPrice": 0}, {"id": 70035, "name": "Dark Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "DARK", "npcPrice": 0}, {"id": 70034, "name": "Dragon Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "DRAGON", "npcPrice": 0}, {"id": 70024, "name": "Electric Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ELECTRIC", "npcPrice": 0}, {"id": 70037, "name": "Fairy Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FAIRY", "npcPrice": 0}, {"id": 70026, "name": "Fighting Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIGHTING", "npcPrice": 0}, {"id": 70021, "name": "Fire Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FIRE", "npcPrice": 0}, {"id": 70029, "name": "Flying Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "FLYING", "npcPrice": 0}, {"id": 70033, "name": "Ghost Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GHOST", "npcPrice": 0}, {"id": 70023, "name": "Grass Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GRASS", "npcPrice": 0}, {"id": 70028, "name": "Ground Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "GROUND", "npcPrice": 0}, {"id": 70025, "name": "Ice Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ICE", "npcPrice": 0}, {"id": 70020, "name": "Normal Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "NORMAL", "npcPrice": 0}, {"id": 70027, "name": "Poison Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "POISON", "npcPrice": 0}, {"id": 70030, "name": "Psychic Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "PSYCHIC", "npcPrice": 0}, {"id": 70032, "name": "Rock Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "ROCK", "npcPrice": 0}, {"id": 70036, "name": "Steel Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "STEEL", "npcPrice": 0}, {"id": 70022, "name": "Water Shiny Stone", "icon": "/img/itens/shiny-stone.png", "category": "stone", "categoryLabel": "Pedras", "type": "WATER", "npcPrice": 0}, {"id": 40575, "name": "AoE TM Disk", "icon": "/assets/items/tm_disk_aoe.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0}, {"id": 40530, "name": "AoE TM Disk Piece", "icon": "/assets/items/tm_piece_aoe.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0}, {"id": 59194, "name": "TM Disk Piece", "icon": "/assets/items/tm_disk_piece.png", "category": "tm", "categoryLabel": "TMs", "type": null, "npcPrice": 0, "aliases": ["Fragmento de Z-Move"]}, {"id": 59200, "name": "Normal-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "NORMAL", "npcPrice": 0}, {"id": 59201, "name": "Fire-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FIRE", "npcPrice": 0}, {"id": 59202, "name": "Water-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "WATER", "npcPrice": 0}, {"id": 59203, "name": "Grass-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GRASS", "npcPrice": 0}, {"id": 59204, "name": "Electric-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ELECTRIC", "npcPrice": 0}, {"id": 59205, "name": "Ice-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ICE", "npcPrice": 0}, {"id": 59206, "name": "Fighting-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FIGHTING", "npcPrice": 0}, {"id": 59207, "name": "Poison-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "POISON", "npcPrice": 0}, {"id": 59208, "name": "Ground-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GROUND", "npcPrice": 0}, {"id": 59209, "name": "Flying-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FLYING", "npcPrice": 0}, {"id": 59210, "name": "Psychic-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "PSYCHIC", "npcPrice": 0}, {"id": 59211, "name": "Bug-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "BUG", "npcPrice": 0}, {"id": 59212, "name": "Rock-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "ROCK", "npcPrice": 0}, {"id": 59213, "name": "Ghost-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "GHOST", "npcPrice": 0}, {"id": 59214, "name": "Dragon-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "DRAGON", "npcPrice": 0}, {"id": 59215, "name": "Dark-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "DARK", "npcPrice": 0}, {"id": 59216, "name": "Steel-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "STEEL", "npcPrice": 0}, {"id": 59247, "name": "Fairy-Type TM Disk", "icon": "/assets/items/tm_disk_elemental.png", "category": "tm", "categoryLabel": "TMs", "type": "FAIRY", "npcPrice": 0}, {"id": 70012, "name": "Shiny Stone Fragment", "icon": "/img/itens/shiny-stone.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0, "aliases": ["Fragmento de Shiny Stone"]}, {"id": 70011, "name": "Key Fragment", "icon": "/img/itens/fragmento-chave.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0, "aliases": ["Fragmento de Chave"]}, {"id": 70000, "name": "Bronze Boss Token", "icon": "/assets/items/bronze_boss_token.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 250000}, {"id": 70013, "name": "Bicycle Fragment", "icon": "/img/itens/fragmento-bicicleta.png", "category": "rare_loot", "categoryLabel": "Loots Raros", "type": null, "npcPrice": 0, "aliases": ["Fragmento de Bicicleta"]}, {"id": 5, "name": "Beast Ball", "icon": "/img/ball-beast.png", "category": "beast", "categoryLabel": "Beast Balls", "type": null, "npcPrice": 0}, {"id": 70040, "name": "Common House", "icon": "/img/itens/casa-comum.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0, "aliases": ["Casa Comum"]}, {"id": 70041, "name": "Uncommon House", "icon": "/img/itens/casa-incomum.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0, "aliases": ["Casa Incomum"]}, {"id": 70042, "name": "Rare House", "icon": "/img/itens/casa-rara.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0, "aliases": ["Casa Rara"]}, {"id": 70043, "name": "Mythic House", "icon": "/img/itens/casa-mitica.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0, "aliases": ["Casa Mítica"]}, {"id": 70044, "name": "Legendary House", "icon": "/img/itens/casa-lendaria.png", "category": "casa", "categoryLabel": "Casas", "type": null, "npcPrice": 0, "aliases": ["Casa Lendária"]}, {"id": 70060, "name": "Founder Box", "icon": "/img/itens/caixa-fundador.png", "category": "box", "categoryLabel": "Boxes", "type": null, "npcPrice": 0}, {"id": 70061, "name": "Co-Founder Box", "icon": "/img/itens/caixa-cofundador.png", "category": "box", "categoryLabel": "Boxes", "type": null, "npcPrice": 0}, {"id": 70080, "name": "Common Bicycle", "icon": "/img/itens/bicicleta-comum.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0, "aliases": ["Bicicleta Comum"]}, {"id": 70081, "name": "Uncommon Bicycle", "icon": "/img/itens/bicicleta-incomum.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0, "aliases": ["Bicicleta Incomum"]}, {"id": 70082, "name": "Rare Bicycle", "icon": "/img/itens/bicicleta-rara.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0, "aliases": ["Bicicleta Rara"]}, {"id": 70083, "name": "Mythic Bicycle", "icon": "/img/itens/bicicleta-mitica.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0, "aliases": ["Bicicleta Mítica"]}, {"id": 70084, "name": "Legendary Bicycle", "icon": "/img/itens/bicicleta-lendaria.png", "category": "bicicleta", "categoryLabel": "Bicicletas", "type": null, "npcPrice": 0, "aliases": ["Bicicleta Lendária"]}, {"id": 70014, "name": "Fragmento de MEGA Stone", "icon": "", "category": "fragment", "categoryLabel": "Fragmentos de Mega e Ovo Shiny", "type": null, "npcPrice": 0, "aliases": ["Mega Stone Fragment"]}, {"id": 70015, "name": "Fragmento de MEGA Shiny Stone", "icon": "", "category": "fragment", "categoryLabel": "Fragmentos de Mega e Ovo Shiny", "type": null, "npcPrice": 0, "aliases": ["Mega Shiny Stone Fragment"]}, {"id": 70017, "name": "Fragmento de Ovo Shiny", "icon": "", "category": "fragment", "categoryLabel": "Fragmentos de Mega e Ovo Shiny", "type": null, "npcPrice": 0, "aliases": ["Shiny Egg Fragment"]}, {"id": 70090, "name": "Mystic Ticket", "icon": "", "category": "ticket", "categoryLabel": "Tickets", "type": null, "npcPrice": 0}, {"id": 70095, "name": "Safari Ticket", "icon": "", "category": "ticket", "categoryLabel": "Tickets", "type": null, "npcPrice": 0}];
 
 const POKEIDLE_ITEMS_BY_ID = {};
+
+const CANONICAL_CATALOG_ITEMS = Object.freeze(POKEIDLE_ITEMS_DB.slice());
+const CANONICAL_ITEM_CATEGORIES = Object.freeze(
+  CANONICAL_CATALOG_ITEMS.reduce((acc, item) => {
+    if (item && item.id != null && item.category) {
+      acc[Number(item.id)] = String(item.category).toLowerCase();
+    }
+    return acc;
+  }, {})
+);
+const CANONICAL_IDS_BY_CATEGORY = Object.freeze(
+  CANONICAL_CATALOG_ITEMS.reduce((acc, item) => {
+    if (item && item.id != null && item.category) {
+      const cat = String(item.category).toLowerCase();
+      if (!acc[cat]) acc[cat] = [];
+      acc[cat].push(Number(item.id));
+    }
+    return acc;
+  }, {})
+);
 POKEIDLE_ITEMS_DB.forEach(function(item) {
   POKEIDLE_ITEMS_BY_ID[item.id] = item;
 });
@@ -212,7 +232,9 @@ function searchRotomItems(query, category) {
       if (itCat !== cat) {
         if ((cat === 'pedras' || cat === 'stone') && itCat === 'stone') { /* ok */ }
         else if ((cat === 'tms' || cat === 'tm') && itCat === 'tm') { /* ok */ }
-        else if ((cat === 'rare_loot' || cat === 'loot_raro' || cat === 'loots raros' || cat === 'fragment' || cat === 'boss') && itCat === 'rare_loot') { /* ok */ }
+        else if ((cat === 'rare_loot' || cat === 'loot_raro' || cat === 'loots raros' || cat === 'boss') && itCat === 'rare_loot') { /* ok */ }
+        else if ((cat === 'fragment' || cat === 'fragmentos') && itCat === 'fragment') { /* ok */ }
+        else if ((cat === 'ticket' || cat === 'tickets') && itCat === 'ticket') { /* ok */ }
         else if ((cat === 'beast' || cat === 'beast balls' || cat === 'beast ball') && itCat === 'beast') { /* ok */ }
         else if ((cat === 'casas' || cat === 'casa') && itCat === 'casa') { /* ok */ }
         else if ((cat === 'boxes' || cat === 'box') && itCat === 'box') { /* ok */ }
@@ -464,6 +486,12 @@ if (typeof window !== 'undefined') {
         }, '*');
   
       });
+  function isConfirmedSniperLog(l) {
+    if (!l || typeof l !== 'object' || l.falha === true) return false;
+    const st = String(l.status || '').trim().toUpperCase();
+    return st === 'CONFIRMADO' || st === 'OK' || l.success === true;
+  }
+
   // Escuta mensagens do injected.js com auto-desvinculação quando o contexto for invalidado
   function handleWindowMessage(event) {
     if (event.source !== window || !event.data || event.data.source !== 'ROTOM_SNIPER') return;
@@ -476,8 +504,9 @@ if (typeof window !== 'undefined') {
 
     try {
       if (event.data.type === 'SNIPER_LOG') {
+        if (!isConfirmedSniperLog(event.data.log)) return;
         safeStorageGet(['rotom_sniper_logs'], (res) => {
-          const logs = res.rotom_sniper_logs || [];
+          const logs = (res.rotom_sniper_logs || []).filter(isConfirmedSniperLog);
           const updatedLogs = [event.data.log, ...logs].slice(0, 100);
           safeStorageSet({ rotom_sniper_logs: updatedLogs });
         });
@@ -751,6 +780,11 @@ if (typeof window !== 'undefined') {
     ws.__rotomHooked = true;
 
     try {
+      originalProtoAddEventListener.call(ws, 'close', function() {
+        limparScanTimeouts();
+        Object.keys(sniperState.scheduledOffers).forEach(clearOfferTimers);
+        sniperState.scheduledOffers = {};
+      });
       originalProtoAddEventListener.call(ws, 'message', function(event) {
         if (typeof event.data === 'string') {
           try {
@@ -1067,7 +1101,10 @@ if (typeof window !== 'undefined') {
       maxPriceNoteGems: 0,
       maxPriceNoteDiamonds: 0,
       maxActiveSlots: 5,
-      autoMaxAffordable: true // Calibração por Saldo (Eficiência Máxima de Coins)
+      autoMaxAffordable: true, // Calibração por Saldo (Eficiência Máxima de Coins)
+      scanMode: 'original',
+      scanIntervalMs: 45000,
+      fastScanIntervalMs: 3000
     },
     playerGold: -1,
     playerDiamonds: -1,
@@ -1523,12 +1560,33 @@ if (typeof window !== 'undefined') {
     } catch (e) {}
   }
 
-  function executeBuyOrder(offerId, buyQty, preco, moeda, targetName, ruleId, ruleDesc, seller, isRetry = false) {
+  function executeBuyOrder(offerId, buyQty, preco, moeda, targetName, ruleId, ruleDesc, seller, isRetry = false, itemId = null) {
     if (!sniperState.enabled) {
       console.log(`[Rotom Sniper]: Compra cancelada para #${offerId} (${targetName}): Auto-Sniper está desativado.`);
       return;
     }
     if (sniperState.confirmedOffers[offerId]) return;
+
+    if (ruleId) {
+      const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId));
+      if (foundRule && foundRule.targetType === 'category') {
+        const itId = itemId || (foundRule.targetId ? Number(foundRule.targetId) : null);
+        if (itId && Array.isArray(foundRule.excludedItemIds) && foundRule.excludedItemIds.map(Number).includes(Number(itId))) {
+          console.log(`[Rotom Sniper]: 🛑 Disparo cancelado para #${offerId}: item #${itId} excluído na regra ${foundRule.targetName}.`);
+          return;
+        }
+      }
+    }
+
+    sniperState.sentBuyOrders = sniperState.sentBuyOrders || {};
+    if (isRetry) {
+      const authorizedQty = sniperState.sentBuyOrders[offerId];
+      if (!authorizedQty || authorizedQty <= 0) {
+        console.log(`[Rotom Sniper]: 🛑 Retry descartado para #${offerId}: primeiro envio não ocorreu ou foi cancelado.`);
+        return;
+      }
+      buyQty = authorizedQty;
+    }
 
     // VALIDAÇÃO FINAL ESTREITA CONTRA GASTO INDEVIDO DE GEMAS:
     const mClean = String(moeda || 'gold').toLowerCase();
@@ -1614,16 +1672,34 @@ if (typeof window !== 'undefined') {
       }
     }
 
+    const prevAttempt = sniperState.lastBuyAttempt;
+    const preservedAuxKeys = (prevAttempt && Number(prevAttempt.offerId) === Number(offerId) && Array.isArray(prevAttempt.auxLogKeys))
+      ? prevAttempt.auxLogKeys
+      : [];
     sniperState.boughtOffers[offerId] = Date.now();
     sniperState.lastBuyAttempt = {
       offerId: offerId,
       targetName: targetName,
       seller: seller || '',
+      ruleId: ruleId || null,
+      ruleDesc: ruleDesc || '',
+      qty: Number(buyQty) || 1,
       price: preco,
       currency: moeda,
-      qty: buyQty,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      auxLogKeys: preservedAuxKeys
     };
+    sniperState.recentAttemptsByOffer = sniperState.recentAttemptsByOffer || {};
+    sniperState.recentAttemptsByOffer[offerId] = sniperState.lastBuyAttempt;
+    const recentKeys = Object.keys(sniperState.recentAttemptsByOffer);
+    if (recentKeys.length > 150) {
+      const cutoffTs = Date.now() - 120000;
+      for (const rk of recentKeys) {
+        if (!sniperState.recentAttemptsByOffer[rk] || sniperState.recentAttemptsByOffer[rk].timestamp < cutoffTs) {
+          delete sniperState.recentAttemptsByOffer[rk];
+        }
+      }
+    }
 
     const payload = {
       t: 'market.comprar',
@@ -1637,6 +1713,8 @@ if (typeof window !== 'undefined') {
     const sent = sendRaw(payload);
 
     if (sent) {
+      sniperState.sentBuyOrders = sniperState.sentBuyOrders || {};
+      sniperState.sentBuyOrders[offerId] = orderQty;
       if (!isRetry) {
         // Otimização Preventiva de Saldo: decrementa preventivamente para evitar estouro em compras simultâneas apenas no primeiro disparo
         const mClean = String(moeda || 'gold').toLowerCase();
@@ -1674,6 +1752,12 @@ if (typeof window !== 'undefined') {
 
         emitSniperLog(logEntry);
         if (ruleId) {
+          if (!isRetry) {
+            const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId));
+            if (foundRule) {
+              foundRule.totalBought = (Number(foundRule.totalBought) || 0) + buyQty;
+            }
+          }
           emitSniperBought(ruleId, offerId, buyQty);
         }
 
@@ -1686,6 +1770,7 @@ if (typeof window !== 'undefined') {
             delete perdas[offerId];
             const rec = sniperState.pioRecusados || {};
             if (sniperState.confirmedOffers[offerId] || (rec[offerId] && Date.now() - rec[offerId] < 60000)) return;
+            if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === Number(offerId)) return;
             emitSniperLog({
               id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
               timestamp: Date.now(),
@@ -1740,10 +1825,11 @@ if (typeof window !== 'undefined') {
       const seller = String(an.vendedor || an.vendedorNome || an.seller || an.dono || '').trim();
       const preco = Number(an.preco) || 0;
       const qtd = Number(an.qtd) || 1;
-      const moeda = String(an.moeda || 'gold').toLowerCase();
+      const moeda = String(an.moeda || '').trim().toLowerCase();
       const isGold = (moeda === 'gold' || moeda === 'coins' || moeda === 'coin');
       const isGems = (moeda === 'orb' || moeda === 'orbs' || moeda === 'gemas' || moeda === 'gema' || moeda === 'gems' || moeda === 'pontos' || moeda === 'diamante');
       const isDiamonds = (moeda === 'diamantes' || moeda === 'diamonds'); // PIO: faltava; uma moeda desconhecida derrubava a varredura com ReferenceError
+      if (!isGold && !isGems && !isDiamonds) continue;
       const ficha = an.ficha || null;
 
       // Identificação robusta do Item
@@ -1805,6 +1891,41 @@ if (typeof window !== 'undefined') {
           }
         }
 
+        // Regra Customizada por Categoria
+        if (rule.targetType === 'category' && !isPokemon && itemId) {
+          let catMatches = false;
+          const excludedIds = Array.isArray(rule.excludedItemIds)
+            ? rule.excludedItemIds.map(Number)
+            : [];
+          if (!excludedIds.includes(Number(itemId))) {
+            const targetCat = rule.targetCategory ? String(rule.targetCategory).toLowerCase() : '';
+            const itemCat = CANONICAL_ITEM_CATEGORIES[Number(itemId)];
+            if (targetCat && itemCat && itemCat === targetCat) {
+              catMatches = true;
+            }
+          }
+
+          if (catMatches) {
+            const maxGold = Number(rule.maxPriceGold || 0);
+            const maxGems = Number(rule.maxPriceGems !== undefined ? rule.maxPriceGems : (rule.maxPriceDiamonds || 0));
+
+            let priceOk = false;
+            if (isGold && maxGold > 0 && preco <= maxGold) priceOk = true;
+            else if (isGems && maxGems > 0 && preco <= maxGems) priceOk = true;
+
+            if (priceOk) {
+              matched = true;
+              matchedRule = rule;
+              const dbItem = (typeof getRotomItem === 'function') ? getRotomItem(itemId) : null;
+              targetDisplayName = (dbItem && dbItem.name) || itemName || rule.targetName || ('Item #' + itemId);
+              const tetoStr = isGold
+                ? maxGold.toLocaleString('pt-BR') + ' Coins'
+                : maxGems.toLocaleString('pt-BR') + ' Gemas';
+              matchedDesc = 'Regra: ' + rule.targetName + ' (Teto: ' + tetoStr + ')';
+              break;
+            }
+          }
+        }
         // Regra Customizada de Pokémon por Espécie
         if (rule.targetType === 'pokemon' && isPokemon) {
           let pokeMatches = false;
@@ -1849,7 +1970,14 @@ if (typeof window !== 'undefined') {
         );
 
         let potencia = Number(an.potencia || (ficha && ficha.potencia) || 1);
-        let nota = Number((ficha && ficha.nota) || an.nota || 0);
+        let rawNota = (ficha && ficha.nota !== undefined) ? ficha.nota : an.nota;
+        let nota = null;
+        if (rawNota !== null && rawNota !== undefined && (typeof rawNota === 'number' || typeof rawNota === 'string') && String(rawNota).trim() !== '') {
+          const parsedNota = Number(rawNota);
+          if (Number.isFinite(parsedNota) && parsedNota >= 0 && parsedNota <= 10) {
+            nota = parsedNota;
+          }
+        }
 
         const gCfg = sniperState.globalConfig;
         const maxShinyGold = Number(gCfg.maxPriceShinyGold || 0);
@@ -1888,7 +2016,7 @@ if (typeof window !== 'undefined') {
         }
 
         // 3. Match Por Nota Mínima
-        if (!matched && gCfg.snipeByNote && gCfg.minNote > 0 && nota >= gCfg.minNote) {
+        if (!matched && gCfg.snipeByNote && Number(gCfg.minNote) >= 1.0 && nota !== null && nota >= Number(gCfg.minNote)) {
           let notePriceOk = false;
           if (isGold && maxNoteGold > 0 && preco <= maxNoteGold) notePriceOk = true;
           else if (isGems && maxNoteGems > 0 && preco <= maxNoteGems) notePriceOk = true;
@@ -2026,14 +2154,37 @@ if (typeof window !== 'undefined') {
             const atrasoMs = agoraDoServidor() - compravelEm;
             console.log(`[Rotom Sniper]: Disparo #${offerId} ${atrasoMs}ms após a liberação (desvio do relógio do PC: ${desvioServidor}ms).`);
             try { const A = window.__pioSniperAtrasos = window.__pioSniperAtrasos || []; A.push({ id: Date.now() + '-' + offerId, t: Date.now(), anuncio: offerId, item: targetDisplayName, atraso: atrasoMs, oculto: document.hidden }); if (A.length > 50) A.shift(); } catch (e) {}
-            executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false);
+            let currentBuyQty = buyQty;
+            if (matchedRule) {
+              const currentRule = sniperState.rules.find(r => r.id === matchedRule.id) || matchedRule;
+              if (currentRule && currentRule.targetType === 'category' && itemId) {
+                const excludedIds = Array.isArray(currentRule.excludedItemIds)
+                  ? currentRule.excludedItemIds.map(Number)
+                  : [];
+                if (excludedIds.includes(Number(itemId))) {
+                  console.log(`[Rotom Sniper]: 🛑 Disparo agendado cancelado para #${offerId}: item #${itemId} está excluído.`);
+                  return;
+                }
+              }
+              if (!currentRule.infinite && Number(currentRule.maxQty) > 0) {
+                const currentTotal = Number(currentRule.totalBought) || 0;
+                const maxQ = Number(currentRule.maxQty) || 0;
+                if (currentTotal >= maxQ) {
+                  console.log(`[Rotom Sniper]: 🛑 Disparo cancelado para #${offerId}: quota da regra atingida (${currentTotal}/${maxQ}).`);
+                  return;
+                }
+                currentBuyQty = Math.min(currentBuyQty, maxQ - currentTotal);
+              }
+            }
+            if (currentBuyQty <= 0) return;
+            executeBuyOrder(offerId, currentBuyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false, itemId);
           }, releaseDelayMs));
 
           // 2º Disparo (Garantia dentro dos 3s): +700ms após liberação se ainda não confirmado
           timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               console.log(`[Rotom Sniper]: 🔄 Reforço de compra pós-liberação #${offerId} (+700ms)...`);
-              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
+              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
           }, releaseDelayMs + 600));
 
@@ -2041,7 +2192,7 @@ if (typeof window !== 'undefined') {
           timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               console.log(`[Rotom Sniper]: 🔄 Reforço final de compra pós-liberação #${offerId} (+1500ms)...`);
-              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
+              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
             clearOfferTimers(offerId);
           }, releaseDelayMs + 1400));
@@ -2051,17 +2202,17 @@ if (typeof window !== 'undefined') {
         } else {
           // Anúncio JÁ ESTÁ LIBERADO! (compravelEm <= now ou sem carência)
           // Compra imediata e reforço de garantia dentro da janela de 3s
-          executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false);
+          executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false, itemId);
 
           const timers = [];
           timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
-              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
+              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
           }, 700));
           timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
-              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true);
+              executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
             clearOfferTimers(offerId);
           }, 1500));
@@ -2072,9 +2223,293 @@ if (typeof window !== 'undefined') {
     }
   }
 
+  function sanitizeDiagText(val, maxLen = 120) {
+    const cleaned = String(val == null ? '' : val).replace(/[\x00-\x1f\x7f]+/g, ' ').trim();
+    return cleaned.length > maxLen ? cleaned.slice(0, maxLen) + '...' : cleaned;
+  }
+
+  function extractExplicitOfferId(pkt) {
+    if (!pkt || typeof pkt !== 'object') return null;
+    for (const k of ['id', 'anuncioId', 'offerId']) {
+      if (pkt[k] != null && String(pkt[k]).trim() !== '') {
+        const n = Number(pkt[k]);
+        if (Number.isInteger(n) && n > 0) return n;
+      }
+    }
+    return null;
+  }
+
+  function allowAuxBuyLog(attempt, dedupKey) {
+    if (!attempt || typeof attempt !== 'object') return false;
+    if (!Array.isArray(attempt.auxLogKeys)) attempt.auxLogKeys = [];
+    if (attempt.auxLogKeys.length >= 5 || attempt.auxLogKeys.includes(dedupKey)) return false;
+    attempt.auxLogKeys.push(dedupKey);
+    return true;
+  }
+
+  function normalizeEnvelopeCurrency(raw) {
+    const m = String(raw == null ? '' : raw).trim().toLowerCase();
+    if (m === 'gold' || m === 'coins' || m === 'coin') return 'gold';
+    if (m === 'orb' || m === 'orbs' || m === 'gems' || m === 'gem' || m === 'gemas' || m === 'gema' || m === 'pontos' || m === 'diamante') return 'orb';
+    if (m === 'diamond' || m === 'diamonds' || m === 'diamantes') return 'diamond';
+    return '';
+  }
+
+  function isTerminalMarketRejection(packet) {
+    if (!packet) return false;
+    const op = packet.op || packet.acao || packet.t || packet.tipo || '';
+    if (op === 'market.comprar') return true;
+    const chave = String(packet.chave || packet.key || packet.erro || packet.error || '').toLowerCase();
+    const rawMsgLower = String(packet.msg || packet.mensagem || packet.message || packet.m || '').toLowerCase();
+    for (const candidate of [chave, rawMsgLower]) {
+      if (candidate === 'market.sorteioperdeu' || candidate === 'market.retencao' || candidate === 'market.loteinvalido' || candidate === 'market.estadiasaiu' || candidate === 'market.estadiavencida') {
+        return true;
+      }
+    }
+    if (chave.includes('market_anuncio') || chave.includes('market_oferta') || chave.includes('anuncio_expirado') || chave.includes('anuncio_cancelado') || chave.includes('anuncio_comprado') || chave.includes('oferta_expirada') || chave.includes('oferta_cancelada') || chave.includes('proprio_anuncio') || chave.includes('market_comprar')) {
+      return true;
+    }
+    const errMsg = rawMsgLower || chave;
+    return (errMsg.includes('anúncio') || errMsg.includes('anuncio') || errMsg.includes('oferta do mercado')) &&
+      (errMsg.includes('expir') || errMsg.includes('cancel') || errMsg.includes('comprad') || errMsg.includes('inválid') || errMsg.includes('invalido') || errMsg.includes('próprio') || errMsg.includes('proprio'));
+  }
+
+  function isLotteryProgress(packet) {
+    if (!packet) return false;
+    const chave = String(packet.chave || packet.key || packet.erro || packet.error || packet.msg || packet.mensagem || '').toLowerCase();
+    return chave === 'market.sorteio' || chave === 'market.sorteioespera';
+  }
+
+  function handlePendingBuyReplyPacket(packet, defaultOp) {
+    if (!sniperState.lastBuyAttempt || (Date.now() - sniperState.lastBuyAttempt.timestamp >= 12000)) return;
+    const last = sniperState.lastBuyAttempt;
+    const pendingOffId = Number(last.offerId);
+    const explicitId = extractExplicitOfferId(packet);
+    const chave = sanitizeDiagText(packet.chave || packet.key || packet.erro || packet.error || '', 60);
+    const rawReason = sanitizeDiagText(packet.msg || packet.mensagem || packet.message || packet.m || '', 120);
+    const errMsg = rawReason || chave || 'Operação recusada pelo servidor';
+
+    // Explicit offer-ID correlation: never release pending buy if reply references another offer
+    if (explicitId != null && explicitId !== pendingOffId) {
+      if (allowAuxBuyLog(last, `diag:reply_id:${defaultOp}:${explicitId}`)) {
+        emitSniperLog({
+          id: 'diag_id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          timestamp: Date.now(),
+          targetName: last.targetName,
+          offerId: pendingOffId,
+          status: 'DIAGNOSTICO',
+          details: `🔍 Resposta ${defaultOp} com ID divergente (recebido #${explicitId}, pendente #${pendingOffId}, chave='${chave}')`
+        });
+      }
+      return;
+    }
+
+    if (isTerminalMarketRejection(packet)) {
+      delete sniperState.boughtOffers[last.offerId];
+      delete sniperState.confirmedOffers[last.offerId];
+      (sniperState.pioRecusados = sniperState.pioRecusados || {})[last.offerId] = Date.now();
+      if (last.ruleId && sniperState.rules) {
+        const foundRule = sniperState.rules.find(r => String(r.id) === String(last.ruleId));
+        if (foundRule) {
+          foundRule.totalBought = Math.max(0, (Number(foundRule.totalBought) || 0) - (Number(last.qty) || 1));
+        }
+      }
+      sniperState.lastBuyAttempt = null;
+      showRotomHudToast('COMPRA RECUSADA', `${last.targetName}: ${errMsg}`, 'error');
+      emitSniperLog({
+        id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        timestamp: Date.now(),
+        targetName: last.targetName,
+        offerId: last.offerId,
+        status: 'RECUSADO',
+        details: `❌ Recusado pelo servidor: ${errMsg}`
+      });
+    } else if (isLotteryProgress(packet)) {
+      const progKey = chave || rawReason || 'market.sorteio';
+      if (allowAuxBuyLog(last, `prog:reply:${progKey.toLowerCase()}`)) {
+        emitSniperLog({
+          id: 'prog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          timestamp: Date.now(),
+          targetName: last.targetName,
+          offerId: last.offerId,
+          status: 'PROGRESSO',
+          details: `⏳ Pedido entrou no sorteio de liberação (aguardando desfecho - ${progKey})`
+        });
+      }
+    } else if (defaultOp === 'erro') {
+      // Unrecognized or unrelated error while buy is pending: MUST NOT release budget or unblock!
+      const op = sanitizeDiagText(packet.op || packet.acao || packet.t || defaultOp, 40) || 'erro';
+      if (allowAuxBuyLog(last, `diag:err:${chave}:${rawReason}:${op}`)) {
+        emitSniperLog({
+          id: 'diag_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          timestamp: Date.now(),
+          targetName: last.targetName,
+          offerId: last.offerId,
+          status: 'DIAGNOSTICO',
+          details: `🔍 Resposta de erro não reconhecida (chave='${chave}', msg='${rawReason}', op='${op}') para compra pendente #${last.offerId}`
+        });
+      }
+    }
+  }
+
+  function processMarketEvent(e) {
+    if (!e || typeof e !== 'object') return;
+    const evKey = String(e.k || e.t || '');
+
+    if (evKey === 'marketComprado') {
+      const desc = e.descricao || 'Item entregue na mochila/depot!';
+      const ultCompra = sniperState.lastBuyAttempt || null;
+      const explicitId = extractExplicitOfferId(e);
+      if (ultCompra && ultCompra.offerId) {
+        const offId = Number(ultCompra.offerId);
+        if (explicitId != null && explicitId !== offId) {
+          if (allowAuxBuyLog(ultCompra, `diag:comprado:${explicitId}`)) {
+            emitSniperLog({
+              id: 'diag_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              timestamp: Date.now(),
+              targetName: ultCompra.targetName,
+              offerId: offId,
+              status: 'DIAGNOSTICO',
+              details: `🔍 marketComprado com ID divergente (recebido #${explicitId}, pendente #${offId})`
+            });
+          }
+          return;
+        }
+        if (sniperState.confirmedOffers[offId]) {
+          sniperState.lastBuyAttempt = null;
+          return;
+        }
+        sniperState.confirmedOffers[offId] = true;
+        clearOfferTimers(offId);
+        sniperState.lastBuyAttempt = null;
+      } else if (explicitId != null && sniperState.confirmedOffers[explicitId]) {
+        return;
+      } else if (explicitId != null) {
+        sniperState.confirmedOffers[explicitId] = true;
+        clearOfferTimers(explicitId);
+      }
+      showRotomHudToast('COMPRA CONFIRMADA!', desc, 'confirmed');
+      const refCompra = ultCompra || (explicitId != null && sniperState.recentAttemptsByOffer ? sniperState.recentAttemptsByOffer[explicitId] : null);
+      const qtdDesc = /^\s*(\d+)\s*[x×]/i.exec(String(desc));
+      const descClean = String(desc || '').replace(/^\s*\d+\s*[x×]\s*/i, '').trim();
+      const isGenericDesc = !descClean || /entregue na mochila|entregue no depot|venceu o sorteio/i.test(descClean);
+      const refTarget = (refCompra && refCompra.targetName) ? String(refCompra.targetName).trim() : '';
+      const isGenericRuleTarget = !refTarget || /^Item\s*#\d+$/i.test(refTarget) || /^(pedras|pedras de evolu[cç][aã]o|tms|loots raros(\s*\(.*\))?|itens raros|beast balls?|casas|boxes|caixas|bicicletas|fragmentos(\s+de\s+mega.*)?|tickets?)$/i.test(refTarget);
+      const resolvedTarget = (!isGenericRuleTarget ? refTarget : (!isGenericDesc ? descClean : (refTarget || 'Item')));
+      const resolvedOfferId = refCompra ? refCompra.offerId : (explicitId != null ? explicitId : undefined);
+      const detailParts = [];
+      if (resolvedOfferId != null) detailParts.push(`Anúncio #${resolvedOfferId}`);
+      if (refCompra && refCompra.ruleDesc) detailParts.push(refCompra.ruleDesc);
+      emitSniperLog({
+        id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        timestamp: Date.now(),
+        ruleId: refCompra && refCompra.ruleId ? refCompra.ruleId : '',
+        targetName: resolvedTarget,
+        seller: refCompra && refCompra.seller ? refCompra.seller : '',
+        offerId: resolvedOfferId,
+        price: refCompra ? refCompra.price : undefined,
+        currency: refCompra ? refCompra.currency : undefined,
+        qty: qtdDesc ? Number(qtdDesc[1]) : (refCompra ? refCompra.qty : 1),
+        status: 'CONFIRMADO',
+        details: detailParts.length ? detailParts.join(' · ') : `Confirmado pelo servidor: ${desc}`
+      });
+    } else if (evKey === 'mktSorteio') {
+      const ultCompra = sniperState.lastBuyAttempt || null;
+      if (ultCompra && ultCompra.offerId) {
+        const offId = Number(ultCompra.offerId);
+        const evId = extractExplicitOfferId(e);
+        if (evId != null && evId === offId) {
+          const fase = sanitizeDiagText(e.fase || '', 24);
+          if (fase === 'fim') {
+            if (e.perdeu || (!e.ok && e.msg)) {
+              delete sniperState.boughtOffers[offId];
+              delete sniperState.confirmedOffers[offId];
+              (sniperState.pioRecusados = sniperState.pioRecusados || {})[offId] = Date.now();
+              if (ultCompra.ruleId && sniperState.rules) {
+                const foundRule = sniperState.rules.find(r => String(r.id) === String(ultCompra.ruleId));
+                if (foundRule) {
+                  foundRule.totalBought = Math.max(0, (Number(foundRule.totalBought) || 0) - (Number(ultCompra.qty) || 1));
+                }
+              }
+              sniperState.lastBuyAttempt = null;
+              const motivo = sanitizeDiagText(e.msg || 'Outro jogador venceu o sorteio de liberação', 120);
+              emitSniperLog({
+                id: 'sorteio_perdeu_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                timestamp: Date.now(),
+                targetName: ultCompra.targetName,
+                offerId: offId,
+                status: 'RECUSADO',
+                details: `❌ Recusado pelo servidor: ${motivo}`
+              });
+            } else if (e.ok) {
+              if (sniperState.confirmedOffers[offId]) {
+                sniperState.lastBuyAttempt = null;
+                return;
+              }
+              sniperState.confirmedOffers[offId] = true;
+              clearOfferTimers(offId);
+              sniperState.lastBuyAttempt = null;
+              const desc = sanitizeDiagText(e.descricao || ultCompra.targetName || 'Venceu o sorteio de liberação!', 120);
+              const qtdDesc = /^\s*(\d+)\s*[x×]/i.exec(String(desc));
+              const descClean = String(desc || '').replace(/^\s*\d+\s*[x×]\s*/i, '').trim();
+              const isGenericDesc = !descClean || /entregue na mochila|entregue no depot|venceu o sorteio/i.test(descClean);
+              const refTarget = ultCompra.targetName ? String(ultCompra.targetName).trim() : '';
+              const isGenericRuleTarget = !refTarget || /^Item\s*#\d+$/i.test(refTarget) || /^(pedras|pedras de evolu[cç][aã]o|tms|loots raros(\s*\(.*\))?|itens raros|beast balls?|casas|boxes|caixas|bicicletas|fragmentos(\s+de\s+mega.*)?|tickets?)$/i.test(refTarget);
+              const resolvedTarget = (!isGenericRuleTarget ? refTarget : (!isGenericDesc ? descClean : (refTarget || 'Item')));
+              const detailParts = [`Anúncio #${offId}`];
+              if (ultCompra.ruleDesc) detailParts.push(ultCompra.ruleDesc);
+              emitSniperLog({
+                id: 'sorteio_ok_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                timestamp: Date.now(),
+                ruleId: ultCompra.ruleId || '',
+                targetName: resolvedTarget,
+                seller: ultCompra.seller || '',
+                offerId: offId,
+                price: ultCompra.price,
+                currency: ultCompra.currency,
+                qty: qtdDesc ? Number(qtdDesc[1]) : (ultCompra.qty || 1),
+                status: 'CONFIRMADO',
+                details: detailParts.join(' · ')
+              });
+            }
+          } else if (allowAuxBuyLog(ultCompra, `prog:sorteio:${fase}`)) {
+            emitSniperLog({
+              id: 'sorteio_prog_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              timestamp: Date.now(),
+              targetName: ultCompra.targetName,
+              offerId: offId,
+              status: 'PROGRESSO',
+              details: `⏳ Sorteio de liberação: fase '${fase}'`
+            });
+          }
+        } else if (evId != null && allowAuxBuyLog(ultCompra, `diag:sorteio:${evId}`)) {
+          emitSniperLog({
+            id: 'diag_mkt_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            timestamp: Date.now(),
+            targetName: ultCompra.targetName,
+            offerId: offId,
+            status: 'DIAGNOSTICO',
+            details: `🔍 mktSorteio para oferta não associada #${evId} (pendente #${offId})`
+          });
+        }
+      }
+    } else if (evKey === 'aviso') {
+      handlePendingBuyReplyPacket(e, 'aviso');
+    }
+  }
+
   function handleMarketPacket(packet) {
     if (!packet || typeof packet !== 'object') return;
     const t = packet.t || '';
+
+    // Eventos de mercado diretos ou aninhados
+    if (packet.k === 'marketComprado' || packet.t === 'marketComprado' || packet.k === 'mktSorteio' || packet.t === 'mktSorteio') {
+      processMarketEvent(packet);
+    } else if (Array.isArray(packet.ev)) {
+      for (const e of packet.ev) {
+        processMarketEvent(e);
+      }
+    }
 
     // Detecção de Centro Pokémon e Hunt a partir de pacotes de mapa
     if (t === 'campo' || t === 'campo.init') {
@@ -2231,47 +2666,71 @@ if (typeof window !== 'undefined') {
         } catch (e) {}
 
         if (sniperState.enabled) {
-        const activeRules = sniperState.rules.filter(r => r.active && (r.targetType === 'item' || !r.targetType));
-        for (let r = 0; r < activeRules.length; r++) {
-          const rule = activeRules[r];
-          if (rule.maxQty > 0 && (rule.totalBought || 0) >= rule.maxQty) continue;
+          const activeRules = sniperState.rules.filter(r => r.active);
+          const queriesToSend = [];
+          const seenQueries = new Set();
 
-          let itId = Number(rule.targetId);
-          if (!itId && rule.targetName && typeof window.getRotomItem === 'function') {
-            const it = window.getRotomItem(rule.targetName);
-            if (it && it.id) itId = it.id;
-          }
-          if (!itId) continue;
-
-          const resumoItem = packet.resumo[itId] || packet.resumo[String(itId)];
-          if (resumoItem) {
-            const minGold = Number(resumoItem.minGold || 0);
-            const minOrb = Number(resumoItem.minOrb || 0);
-
-            let shouldFetch = false;
-            let fetchMoeda = 'gold';
+          for (let r = 0; r < activeRules.length; r++) {
+            const rule = activeRules[r];
+            if (rule.maxQty > 0 && (rule.totalBought || 0) >= rule.maxQty) continue;
 
             const maxGold = Number(rule.maxPriceGold || 0);
             const maxGems = Number(rule.maxPriceGems !== undefined ? rule.maxPriceGems : (rule.maxPriceDiamonds || 0));
+            if (maxGold <= 0 && maxGems <= 0) continue;
 
-            if (maxGold > 0 && minGold > 0 && minGold <= maxGold) {
-              shouldFetch = true;
-              fetchMoeda = 'gold';
-            } else if (maxGems > 0 && minOrb > 0 && minOrb <= maxGems) {
-              shouldFetch = true;
-              fetchMoeda = 'orb';
+            let itemIds = [];
+            if (rule.targetType === 'item' || !rule.targetType) {
+              let itId = Number(rule.targetId);
+              if (!itId && rule.targetName && typeof window.getRotomItem === 'function') {
+                const it = window.getRotomItem(rule.targetName);
+                if (it && it.id) itId = it.id;
+              }
+              if (itId) itemIds.push(itId);
+            } else if (rule.targetType === 'category') {
+              if (rule.targetCategory) {
+                const targetCat = String(rule.targetCategory).toLowerCase();
+                const catIds = CANONICAL_IDS_BY_CATEGORY[targetCat] || [];
+                const excludedIds = Array.isArray(rule.excludedItemIds)
+                  ? rule.excludedItemIds.map(Number)
+                  : [];
+                for (let i = 0; i < catIds.length; i++) {
+                  if (!excludedIds.includes(catIds[i])) {
+                    itemIds.push(catIds[i]);
+                  }
+                }
+              }
             }
 
-            if (shouldFetch) {
-              sniperState.pioQuenteAte = Date.now() + 150000; // alvo à vista: ritmo rápido por 2,5 min
-              sendRaw({
-                t: 'market.item',
-                itemId: itId,
-                moeda: fetchMoeda
-              });
+            for (let i = 0; i < itemIds.length; i++) {
+              const itId = itemIds[i];
+              const resumoItem = packet.resumo[itId] || packet.resumo[String(itId)];
+              if (resumoItem) {
+                const minGold = Number(resumoItem.minGold || 0);
+                const minOrb = Number(resumoItem.minOrb || 0);
+
+                if (maxGold > 0 && minGold > 0 && minGold <= maxGold) {
+                  const key = itId + ':gold';
+                  if (!seenQueries.has(key)) {
+                    seenQueries.add(key);
+                    queriesToSend.push({ t: 'market.item', itemId: itId, moeda: 'gold' });
+                  }
+                }
+                if (maxGems > 0 && minOrb > 0 && minOrb <= maxGems) {
+                  const key = itId + ':orb';
+                  if (!seenQueries.has(key)) {
+                    seenQueries.add(key);
+                    queriesToSend.push({ t: 'market.item', itemId: itId, moeda: 'orb' });
+                  }
+                }
+              }
             }
           }
-        }
+          if (queriesToSend.length > 0) {
+            sniperState.pioQuenteAte = Date.now() + 150000; // alvo à vista: ritmo rápido por 2,5 min
+            for (let q = 0; q < queriesToSend.length; q++) {
+              sendRaw(queriesToSend[q]);
+            }
+          }
         }
         return;
       }
@@ -2279,7 +2738,8 @@ if (typeof window !== 'undefined') {
       // Vendedores de um item específico (m.aba === 'item')
       if (aba === 'item' && Array.isArray(packet.linhas)) {
         const itemId = Number(packet.itemId || 0);
-        const moeda = String(packet.moeda || 'gold');
+        const envMoedaRaw = packet.moeda != null ? String(packet.moeda).trim() : '';
+        const envMoedaNorm = normalizeEnvelopeCurrency(envMoedaRaw);
         // A ficha do anúncio traz o nome oficial do item (vale para item que acabou de ser lançado).
         const fichaItem = (packet.linhas.find(l => l && l.ficha && l.ficha.nome) || {}).ficha;
         if (itemId && fichaItem) {
@@ -2288,12 +2748,29 @@ if (typeof window !== 'undefined') {
         const rotomItem = (typeof window.getRotomItem === 'function' && window.getRotomItem(itemId)) || sniperState.knownItems[itemId];
         const itemName = (rotomItem && rotomItem.name) || (sniperState.knownItems[itemId] && sniperState.knownItems[itemId].name) || `Item #${itemId}`;
 
-        const enrichedLinhas = packet.linhas.map(line => ({
-          ...line,
-          itemId: itemId,
-          itemNome: (rotomItem && rotomItem.name) || line.itemNome || itemName,
-          moeda: line.moeda || moeda
-        }));
+        const enrichedLinhas = [];
+        for (const line of packet.linhas) {
+          if (!line || typeof line !== 'object') continue;
+          const lineItemId = Number(line.itemId || (line.ficha && line.ficha.itemId) || 0);
+          if (itemId > 0 && lineItemId > 0 && lineItemId !== itemId) continue; // Conflito de itemId: fail-closed
+          const resolvedItemId = itemId > 0 ? itemId : lineItemId;
+          if (!resolvedItemId) continue;
+
+          const lineMoedaRaw = line.moeda != null ? String(line.moeda).trim() : '';
+          if (envMoedaRaw !== '') {
+            if (!envMoedaNorm) continue; // Moeda de envelope inválida: fail-closed
+            if (lineMoedaRaw !== '' && normalizeEnvelopeCurrency(lineMoedaRaw) !== envMoedaNorm) continue; // Conflito de moeda: fail-closed
+          }
+          const resolvedMoeda = lineMoedaRaw !== '' ? lineMoedaRaw : envMoedaRaw;
+          if (!resolvedMoeda || !normalizeEnvelopeCurrency(resolvedMoeda)) continue; // Sem moeda explícita: nunca assumir gold
+
+          enrichedLinhas.push({
+            ...line,
+            itemId: resolvedItemId,
+            itemNome: (rotomItem && rotomItem.name) || line.itemNome || itemName,
+            moeda: resolvedMoeda
+          });
+        }
 
         try {
           window.postMessage({
@@ -2301,13 +2778,15 @@ if (typeof window !== 'undefined') {
             type: 'ITEM_OFFERS_UPDATE',
             itemId: itemId,
             itemName: itemName,
-            moeda: moeda,
+            moeda: envMoedaRaw || 'gold',
             linhas: enrichedLinhas,
             offers: enrichedLinhas
           }, '*');
         } catch (e) {}
 
-        processMarketAnuncios(enrichedLinhas);
+        if (enrichedLinhas.length > 0) {
+          processMarketAnuncios(enrichedLinhas);
+        }
         return;
       }
 
@@ -2369,31 +2848,6 @@ if (typeof window !== 'undefined') {
       for (const e of packet.ev) {
         if (!e) continue;
         const evKey = String(e.k || e.t || '');
-
-        if (evKey === 'marketComprado') {
-          const desc = e.descricao || 'Item entregue na mochila/depot!';
-          const ultCompra = sniperState.lastBuyAttempt || null;
-          if (ultCompra && ultCompra.offerId) {
-            const offId = ultCompra.offerId;
-            sniperState.confirmedOffers[offId] = true;
-            clearOfferTimers(offId);
-          }
-          showRotomHudToast('COMPRA CONFIRMADA!', desc, 'confirmed');
-          /* PIO: a confirmação do jogo não traz anúncio nem preço; vêm da última ordem enviada.
-             A quantidade sai do texto do jogo ("3× Item"), senão da ordem. */
-          const qtdDesc = /^\s*(\d+)\s*[x×]/i.exec(String(desc));
-          emitSniperLog({
-            id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            timestamp: Date.now(),
-            targetName: desc,
-            offerId: ultCompra ? ultCompra.offerId : undefined,
-            price: ultCompra ? ultCompra.price : undefined,
-            currency: ultCompra ? ultCompra.currency : undefined,
-            qty: qtdDesc ? Number(qtdDesc[1]) : (ultCompra ? ultCompra.qty : undefined),
-            status: 'CONFIRMADO',
-            details: `✅ Confirmado pelo servidor: ${desc}`
-          });
-        }
 
         // Se ainda não temos slug de hunt ativa, inferir pelo monstro
         if (!farmSession.activeHuntSlug && e.nome) {
@@ -2668,24 +3122,12 @@ if (typeof window !== 'undefined') {
 
     // 4. Tratamento de Erros e Recusas do Servidor
     if (t === 'erro') {
-      const errMsg = packet.msg || packet.chave || 'Operação recusada pelo servidor';
-      if (errMsg.includes('Devagar')) {
+      const chave = String(packet.chave || packet.key || packet.erro || packet.error || '');
+      const errMsg = packet.msg || packet.mensagem || packet.message || packet.m || chave || 'Operação recusada pelo servidor';
+      if (String(errMsg).includes('Devagar')) {
         showRotomHudToast('AVISO ANTI-FLOOD', 'O servidor pediu para desacelerar as mensagens.', 'warning');
-      } else if (sniperState.lastBuyAttempt && (Date.now() - sniperState.lastBuyAttempt.timestamp < 12000)) {
-        // Se houve uma tentativa de compra recente, reportar a recusa exata
-        const last = sniperState.lastBuyAttempt;
-        delete sniperState.boughtOffers[last.offerId];
-        delete sniperState.confirmedOffers[last.offerId];
-        (sniperState.pioRecusados = sniperState.pioRecusados || {})[last.offerId] = Date.now();
-        showRotomHudToast('COMPRA RECUSADA', `${last.targetName}: ${errMsg}`, 'error');
-        emitSniperLog({
-          id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-          timestamp: Date.now(),
-          targetName: last.targetName,
-          offerId: last.offerId,
-          status: 'RECUSADO',
-          details: `❌ Recusado pelo servidor: ${errMsg}`
-        });
+      } else {
+        handlePendingBuyReplyPacket(packet, 'erro');
       }
     }
   }
@@ -2696,7 +3138,33 @@ if (typeof window !== 'undefined') {
   // PIO: ritmo adaptativo. Procurando: uma varredura completa a cada 45 s (o anúncio novo fica 2 min em
   // carência, então nenhum escapa). Achou alvo (disparo agendado ou preço dentro da regra): volta aos 3 s
   // até a compra sair, para não perder nada na liberação.
-  const PIO_LENTO_MS = 45000, PIO_RAPIDO_MS = 3000;
+  const scanTimeouts = new Set();
+  function limparScanTimeouts() {
+    for (const id of scanTimeouts) {
+      if (typeof pioRelogio !== 'undefined' && pioRelogio && typeof pioRelogio.limpar === 'function') {
+        pioRelogio.limpar(id);
+      } else {
+        clearTimeout(id);
+      }
+    }
+    scanTimeouts.clear();
+  }
+
+  function agendarScanQuery(fn, ms) {
+    let id;
+    const run = () => {
+      scanTimeouts.delete(id);
+      fn();
+    };
+    if (typeof pioRelogio !== 'undefined' && pioRelogio && typeof pioRelogio.timeout === 'function') {
+      id = pioRelogio.timeout(run, ms);
+    } else {
+      id = setTimeout(run, ms);
+    }
+    scanTimeouts.add(id);
+    return id;
+  }
+
   let scanCycle = 0;
   const pioModoRapido = () => Object.keys(sniperState.scheduledOffers || {}).length > 0 || (sniperState.pioQuenteAte || 0) > Date.now();
   let pioUltimaVarredura = 0;
@@ -2704,11 +3172,24 @@ if (typeof window !== 'undefined') {
     if (!sniperState.enabled) return;
     const ws = getGameWs();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+    const gCfg = sniperState.globalConfig || {};
+    const scanMode = gCfg.scanMode || 'original';
     const rapido = pioModoRapido();
-    if (Date.now() - pioUltimaVarredura < (rapido ? PIO_RAPIDO_MS : PIO_LENTO_MS) - 250) return;
-    pioUltimaVarredura = Date.now();
+
+    let effectiveInterval = 3000;
+    if (scanMode === 'adaptive') {
+      const slowMs = Number(gCfg.scanIntervalMs || 45000);
+      const fastMs = Number(gCfg.fastScanIntervalMs || 3000);
+      effectiveInterval = rapido ? fastMs : slowMs;
+    }
+
+    const now = Date.now();
+    if (now - pioUltimaVarredura < effectiveInterval) return;
+    pioUltimaVarredura = now;
 
     scanCycle++;
+    const currentCycle = scanCycle;
 
     // Mantém leitura de VIP e saldo atualizada continuamente
     updatePlayerVipStatus();
@@ -2717,9 +3198,8 @@ if (typeof window !== 'undefined') {
     getPlayerDiamonds();
 
     const activeRules = sniperState.rules.filter(r => r.active);
-    const hasItemRules = activeRules.some(r => r.targetType === 'item' || !r.targetType);
-    const gCfg = sniperState.globalConfig;
-    const hasPokeRules = gCfg.snipeAnyShiny || gCfg.snipeAnyP5 || gCfg.snipeByNote || activeRules.some(r => r.targetType === 'pokemon');
+    const hasItemRules = activeRules.some(r => r.targetType === 'item' || !r.targetType || r.targetType === 'category');
+    const hasPokeRules = gCfg.snipeAnyShiny || gCfg.snipeAnyP5 || (gCfg.snipeByNote && Number(gCfg.minNote) >= 1.0) || activeRules.some(r => r.targetType === 'pokemon');
 
     // 1. Varredura de Itens (a cada 3s)
     if (hasItemRules) {
@@ -2727,28 +3207,33 @@ if (typeof window !== 'undefined') {
     }
 
     // 2. Varredura de Pokémons (alternando ordenações para pegar novidades)
+    // Ordem oficial alinhada: scanCycle incrementado antes do switch -> 1=gold, 2=orb, 0=recentes
     if (hasPokeRules) {
       const listar = k => {
         switch (k % 3) {
-          case 0:
-            sendRaw({ t: 'market.listar', tipo: 'pokemon', ordem: 'recentes', moeda: '', busca: '', criterios: [], elemento: '' });
-            break;
           case 1:
             sendRaw({ t: 'market.listar', tipo: 'pokemon', ordem: 'menor_preco', moeda: 'gold', busca: '', criterios: [], elemento: '' });
             break;
           case 2:
             sendRaw({ t: 'market.listar', tipo: 'pokemon', ordem: 'menor_preco', moeda: 'orb', busca: '', criterios: [], elemento: '' });
             break;
+          case 0:
+            sendRaw({ t: 'market.listar', tipo: 'pokemon', ordem: 'recentes', moeda: '', busca: '', criterios: [], elemento: '' });
+            break;
         }
       };
-      if (rapido) {
-        pioRelogio.timeout(() => { if (sniperState.enabled) listar(scanCycle); }, 700);
+
+      if (scanMode === 'original' || rapido) {
+        agendarScanQuery(() => { if (sniperState.enabled) listar(currentCycle); }, 700);
       } else {
-        // No modo lento cada varredura cobre as 3 ordenações, espaçadas.
-        [0, 1, 2].forEach(k => pioRelogio.timeout(() => { if (sniperState.enabled) listar(k); }, 700 * (k + 1)));
+        // No modo adaptativo lento, cada varredura cobre as 3 ordenações, espaçadas por 700ms.
+        // Ordem alinhada: gold (1), orb (2), recentes (0)
+        [1, 2, 0].forEach((k, idx) => {
+          agendarScanQuery(() => { if (sniperState.enabled) listar(k); }, 700 * (idx + 1));
+        });
       }
     }
-  }, 1000);
+  }, 100);
 
   // =========================================================================
   // 4. INTERCEPTAÇÃO DE WEBSOCKET
@@ -2787,17 +3272,19 @@ if (typeof window !== 'undefined') {
       if (sniperState.enabled === newEnabled) return; // Deduplicação: não repete se já estiver no mesmo estado
       sniperState.enabled = newEnabled;
       if (!sniperState.enabled) {
+        limparScanTimeouts();
         // Cancela todos os disparos agendados e limpa a fila
         Object.keys(sniperState.scheduledOffers).forEach(clearOfferTimers);
         sniperState.scheduledOffers = {};
       }
       showRotomHudToast(
         sniperState.enabled ? 'AUTO-SNIPE ATIVADO' : 'AUTO-SNIPE PAUSADO',
-        sniperState.enabled ? 'Varrendo o mercado a cada 45 s; a cada 3 s quando há alvo à vista.' : 'Compras automáticas temporariamente suspensas.',
+        sniperState.enabled ? 'Monitoramento do mercado ativado conforme a configuração salva.' : 'Compras automáticas temporariamente suspensas.',
         sniperState.enabled ? 'success' : 'warning'
       );
     } else if (event.data.type === 'UPDATE_SNIPER_RULES') {
       sniperState.rules = Array.isArray(event.data.rules) ? event.data.rules : [];
+      limparScanTimeouts();
       // Se não há regras ativas de itens, limpa agendamentos
       const activeRuleIds = new Set(sniperState.rules.filter(r => r.active).map(r => r.id));
       if (activeRuleIds.size === 0 && !sniperState.globalConfig.snipeAnyShiny && !sniperState.globalConfig.snipeAnyP5 && !sniperState.globalConfig.snipeByNote) {
@@ -2808,6 +3295,7 @@ if (typeof window !== 'undefined') {
     } else if (event.data.type === 'UPDATE_SNIPER_CONFIG') {
       if (event.data.config) {
         sniperState.globalConfig = Object.assign(sniperState.globalConfig, event.data.config);
+        limparScanTimeouts();
       }
     } else if (event.data.type === 'FETCH_MY_LISTINGS') {
       sendRaw({ t: 'market.meus' });
@@ -5498,7 +5986,9 @@ function searchRotomItems(query, category) {
       if (itCat !== cat) {
         if ((cat === 'pedras' || cat === 'stone') && itCat === 'stone') { /* ok */ }
         else if ((cat === 'tms' || cat === 'tm') && itCat === 'tm') { /* ok */ }
-        else if ((cat === 'rare_loot' || cat === 'loot_raro' || cat === 'loots raros' || cat === 'fragment' || cat === 'boss') && itCat === 'rare_loot') { /* ok */ }
+        else if ((cat === 'rare_loot' || cat === 'loot_raro' || cat === 'loots raros' || cat === 'boss') && itCat === 'rare_loot') { /* ok */ }
+        else if ((cat === 'fragment' || cat === 'fragmentos') && itCat === 'fragment') { /* ok */ }
+        else if ((cat === 'ticket' || cat === 'tickets') && itCat === 'ticket') { /* ok */ }
         else if ((cat === 'beast' || cat === 'beast balls' || cat === 'beast ball') && itCat === 'beast') { /* ok */ }
         else if ((cat === 'casas' || cat === 'casa') && itCat === 'casa') { /* ok */ }
         else if ((cat === 'boxes' || cat === 'box') && itCat === 'box') { /* ok */ }
@@ -6479,30 +6969,42 @@ queueMicrotask(() => {
   }
 
   // =========================================================================
-  // 6. TERMINAL DE LOGS DO MERCADO
+  // 6. TERMINAL DE LOGS DO MERCADO (APENAS COMPRAS CONFIRMADAS)
   // =========================================================================
+  function isConfirmedCockpitLog(l) {
+    if (!l || typeof l !== 'object' || l.falha === true) return false;
+    const st = String(l.status || '').trim().toUpperCase();
+    return st === 'CONFIRMADO' || st === 'OK' || l.success === true;
+  }
+
+  function escapeCockpitHtml(val) {
+    return String(val == null ? '' : val)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function renderLogs() {
     if (!containerLogsList) return;
 
-    if (sniperLogs.length === 0) {
+    const confirmedLogs = (Array.isArray(sniperLogs) ? sniperLogs : []).filter(isConfirmedCockpitLog);
+
+    if (confirmedLogs.length === 0) {
       containerLogsList.innerHTML = `
         <div style="text-align: center; padding: 30px 10px; color: var(--vao-dim); font-size: 10px;">
-          Aguardando anúncios do mercado...
+          Nenhuma compra confirmada registrada ainda.
         </div>
       `;
       return;
     }
 
     containerLogsList.innerHTML = '';
-    sniperLogs.slice(0, 50).forEach(l => {
+    confirmedLogs.slice(0, 50).forEach(l => {
       const row = document.createElement('div');
       row.className = 'log-row';
-
-      const st = (l.status || '').toLowerCase();
-      let statusClass = 'sucesso';
-      if (st.includes('disparado') || st.includes('comprando')) statusClass = 'disparado';
-      else if (st.includes('agendado') || st.includes('limite') || st.includes('slot')) statusClass = 'aviso';
-      else if (st.includes('erro') || st.includes('falhou') || st.includes('rejeitado') || st.includes('recusado')) statusClass = 'erro';
+      const statusClass = 'sucesso';
 
       const d = new Date(l.timestamp || Date.now());
       const timeStr = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
@@ -6534,18 +7036,31 @@ queueMicrotask(() => {
       const unitPrice = Number(l.price || 0).toLocaleString('pt-BR');
       const totalPrice = (qtyNum * Number(l.price || 0)).toLocaleString('pt-BR');
 
+      const rawCleanName = String(targetName || 'Item').replace(/^\s*\d+\s*[x×]\s*/i, '').trim() || 'Item';
+      if (!/entregue na mochila|entregue no depot/i.test(rawCleanName)) {
+        targetName = rawCleanName;
+      }
+
       let priceSummary = '';
       if (l.price) {
         priceSummary = qtyNum > 1
           ? `${qtyNum}x a ${unitPrice} ${currLabel} (Total: ${totalPrice})`
-          : `${unitPrice} ${currLabel}`;
+          : `1x a ${unitPrice} ${currLabel}`;
+      } else if (qtyNum > 0) {
+        priceSummary = `${qtyNum}x`;
       }
 
       // 4. Limpeza e humanização dos detalhes (remove jargões robóticos legados)
       let cleanDetails = String(l.details || '').trim();
+      cleanDetails = cleanDetails.replace(/^✅\s*Confirmado pelo servidor:\s*/i, '');
       cleanDetails = cleanDetails.replace(/^Ordem enviada ao servidor via\s*/i, '');
       cleanDetails = cleanDetails.replace(/^Regra Item:\s*/i, 'Regra: ');
       cleanDetails = cleanDetails.replace(/^Regra Pokemon:\s*/i, 'Regra: ');
+      if (/^Item entregue na mochila\/depot!?$/i.test(cleanDetails) && l.offerId != null) {
+        cleanDetails = `Anúncio #${l.offerId}`;
+      } else if (l.offerId != null && !cleanDetails.includes(`#${l.offerId}`)) {
+        cleanDetails = cleanDetails ? `Anúncio #${l.offerId} · ${cleanDetails}` : `Anúncio #${l.offerId}`;
+      }
 
       // Ícone do item se existir no catálogo oficial
       let iconHtml = '';
@@ -6554,25 +7069,30 @@ queueMicrotask(() => {
         if (itemObj && typeof getItemIconUrl === 'function') {
           const iconUrl = getItemIconUrl(itemObj);
           if (iconUrl) {
-            iconHtml = `<img src="${iconUrl}" class="log-item-icon" alt="">`;
+            iconHtml = `<img src="${escapeCockpitHtml(iconUrl)}" class="log-item-icon" alt="">`;
           }
         }
       }
 
+      const safeTarget = escapeCockpitHtml(targetName);
+      const safeSeller = escapeCockpitHtml(seller.replace(/^@+/, ''));
+      const safePrice = escapeCockpitHtml(priceSummary);
+      const safeDetails = escapeCockpitHtml(cleanDetails);
+
       row.innerHTML = `
         <div class="log-row-top">
           <div class="log-target-group">
-            <span class="log-time">[${timeStr}]</span>
+            <span class="log-time">[${escapeCockpitHtml(timeStr)}]</span>
             ${iconHtml}
-            <span class="log-target" title="${targetName}">${targetName}</span>
-            ${seller ? `<span class="log-seller" title="Vendedor: ${seller}">de <b>@${seller}</b></span>` : ''}
+            <span class="log-target" title="${safeTarget}">${safeTarget}</span>
+            ${safeSeller ? `<span class="log-seller" title="Vendedor: @${safeSeller}">de <b>@${safeSeller}</b></span>` : ''}
           </div>
-          <span class="log-status-tag ${statusClass}">${l.status || 'OK'}</span>
+          <span class="log-status-tag ${statusClass}">CONFIRMADO</span>
         </div>
         <div class="log-detail">
-          ${priceSummary ? `<span class="log-price">${priceSummary}</span>` : ''}
-          ${priceSummary && cleanDetails ? ' · ' : ''}
-          <span class="log-desc">${cleanDetails}</span>
+          ${safePrice ? `<span class="log-price">${safePrice}</span>` : ''}
+          ${safePrice && safeDetails ? ' · ' : ''}
+          <span class="log-desc">${safeDetails}</span>
         </div>
       `;
 
@@ -6806,7 +7326,11 @@ queueMicrotask(() => {
         applyConfigToUI(result.rotom_sniper_config);
       }
       if (Array.isArray(result.rotom_sniper_logs)) {
-        sniperLogs = result.rotom_sniper_logs;
+        const onlyConfirmed = result.rotom_sniper_logs.filter(isConfirmedCockpitLog);
+        sniperLogs = onlyConfirmed;
+        if (onlyConfirmed.length !== result.rotom_sniper_logs.length) {
+          chrome.storage.local.set({ rotom_sniper_logs: onlyConfirmed });
+        }
         renderLogs();
       }
       const gold = result.rotom_player_gold;
@@ -6862,7 +7386,7 @@ queueMicrotask(() => {
         renderRules();
       }
       if (changes.rotom_sniper_logs) {
-        sniperLogs = changes.rotom_sniper_logs.newValue || [];
+        sniperLogs = (changes.rotom_sniper_logs.newValue || []).filter(isConfirmedCockpitLog);
         renderLogs();
       }
       if (changes.rotom_player_gold || changes.rotom_player_orbs || changes.rotom_player_diamonds) {

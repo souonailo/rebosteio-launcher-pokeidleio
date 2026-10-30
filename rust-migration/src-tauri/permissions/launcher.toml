@@ -7,6 +7,7 @@ commands.allow = [
   "backup_save", "system_notify", "webhook_send", "userscript_fetch", "userscript_request",
   "account_clear", "proxy_apply", "autostart_get", "autostart_set",
   "blaster_start", "blaster_stop", "blaster_status", "blaster_send",
+  "sniper_get_state", "sniper_save", "sniper_clear_history", "sniper_ingest",
   "session_token_save", "session_token_get", "telemetry_report",
   "twitch_creds_load", "twitch_creds_save", "twitch_test", "twitch_sync_lives", "twitch_status_get",
   "kick_creds_load", "kick_creds_save", "kick_test", "kick_sync_lives", "kick_status_get",
