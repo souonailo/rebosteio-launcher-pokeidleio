@@ -31,7 +31,31 @@ Um cantinho da comunidade para quem curte PokeIdle, boas caçadas e aquela resen
 
 Abra `PIO-Nailo-2.0.32-Setup.exe` e conclua a instalação. O pacote tem aproximadamente 1,62 GB; a extração pode levar alguns minutos e requer cerca de 5 GB livres durante a instalação. Depois use o atalho PIO Nailo. O pacote inclui Python, bibliotecas de login, Camoufox e o instalador offline do WebView2; não requer Rust, Visual Studio, Node ou comandos no computador do jogador. O acesso ao jogo continua exigindo internet.
 
-Para gerar o instalador neste checkout preparado: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-installer.ps1`. O resultado fica em `dist/`. O `.bat` permanece como alternativa para desenvolvimento pelo código-fonte.
+Para gerar o instalador neste checkout preparado: `powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-installer.ps1`. O resultado fica em `dist/`. Abra o aplicativo pelo `pio-nailo-rust.exe` da pasta principal.
+
+### Compilação de release para a raiz (`pio-nailo-rust.exe`)
+
+Para compilar o binário otimizado de release diretamente para a raiz do repositório:
+
+- Execute **`npm run build:release`** na raiz ou execute:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1
+  ```
+- Para reutilização por instaladores ou cópia direta do binário compilado sem recompilar, utilize a flag `-CopyOnly`:
+  ```powershell
+  powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-release.ps1 -CopyOnly
+  ```
+
+O script `tools/build-release.ps1`:
+
+- Executa a compilação via `cargo tauri build --no-bundle -- --locked`.
+- Controla explicitamente o diretório de saída (`CARGO_TARGET_DIR`, padronizado em `rust-migration/src-tauri/target`), prevenindo a cópia de binários obsoletos.
+- Interrompe a execução com mensagem clara caso o executável de destino (`pio-nailo-rust.exe`) esteja em execução ou bloqueado.
+- Copia o executável resultante para a raiz apenas após build bem-sucedido, preservando o executável existente se houver falha de compilação.
+- Valida a integridade do arquivo conferindo o hash SHA256 do binário de origem com o executável copiado no destino.
+- Após validar a cópia, apaga toda a pasta `rust-migration/src-tauri/target`. Falhas de build ou validação preservam `target`. Uma falha na limpeza é informada sem apagar o `.exe` da raiz.
+
+O build do instalador primeiro copia e valida o instalador em `dist/`, depois atualiza o `.exe` da raiz e remove `target`. A próxima compilação recriará o cache e demorará mais. Um `cargo build --release` avulso não realiza essa cópia nem a limpeza. Não execute builds concorrentes neste checkout.
 
 ## 👋 Chega mais, treinador!
 
@@ -56,10 +80,10 @@ Cinco modos lado a lado para você comparar o consumo de CPU e memória. 💜
 ## 🚀 Bora abrir o launcher
 
 1. Clone este repositório ou seu fork, ou use **Code → Download ZIP** e extraia tudo.
-2. Execute **`Abrir PIO Rebosteio.bat`** na raiz.
-3. Aguarde a preparação inicial. Downloads e compilação podem levar bastante tempo e ocupar vários GB. Instaladores Microsoft podem pedir autorização de administrador ou reinicialização.
+2. No checkout já preparado, gere o release com **`npm run build:release`** ou com o comando PowerShell acima.
+3. Abra **`pio-nailo-rust.exe`** na raiz. Para a segunda instância, use `pio-nailo-rust.exe --instance=2`. Atalhos devem apontar para esse executável.
 
-O inicializador verifica e prepara:
+Um ambiente novo precisa das seguintes dependências (o build de release não as instala automaticamente):
 
 | Dependência | Uso |
 |---|---|
@@ -71,28 +95,38 @@ O inicializador verifica e prepara:
 | Camoufox 0.5.4 e seu navegador | Dependência do login pelo helper Python |
 | Crates de `Cargo.lock` | Bibliotecas Rust baixadas pelo Cargo |
 
-Node.js, npm e Electron não são necessários para o novo `.bat`. A instalação automática de componentes do Windows usa **winget**; alternativas manuais estão no [tutorial](TUTORIAL.md).
+Node.js/npm são necessários apenas se você escolher o comando npm; o comando PowerShell dispensa ambos. Electron não é necessário. Consulte o [tutorial](TUTORIAL.md) para preparar um ambiente novo.
 
 ## 🔄 Manter a equipe em dia
 
-Em clones Git sem alterações locais, o `.bat` tenta `git pull --ff-only` no acompanhamento do branch atual. Forks seguem o próprio upstream configurado; não são redirecionados ao repositório original. Em caso de falta de internet, divergência ou alterações locais, o código existente continua disponível. ZIPs devem ser atualizados baixando e extraindo uma nova cópia.
+Atualize o código manualmente, preservando alterações locais, e execute novamente `npm run build:release`. O executável não atualiza o repositório automaticamente.
 
-A interface principal está em `rust-migration/ui/`. Ela é servida localmente pelo Tauri, sem criar um executável de distribuição para cada mudança. Reabra pelo `.bat` para carregar alterações; mudanças em Rust requerem compilação incremental. O `.bat` usa `--no-watch` para evitar reiniciar automaticamente contas durante uma edição.
+A interface principal está em `rust-migration/ui/` e é incluída no release. Mudanças na interface ou no Rust exigem um novo build para aparecer no `.exe`.
 
-Executáveis de versões anteriores não são atualizados pelo `.bat`. Atalhos que apontam para eles também continuam abrindo a versão antiga: crie um atalho para o novo `.bat`.
+Feche o executável da raiz antes de substituí-lo por um novo build. As sessões permanecem nas pastas de dados descritas abaixo.
 
 ## 🧭 Por dentro do projeto
 
 - `rust-migration/src-tauri/`: backend Rust, configuração e permissões Tauri.
 - `rust-migration/ui/`: HTML, CSS, JavaScript, imagens e ponte Tauri.
 - `rust-migration/tools/turnstile_solver.py`: helper de login.
+- `tools/build-release.ps1`: compilação, cópia validada do release para a raiz e limpeza de `target`.
 - `tools/start-rust.ps1`: preparação e execução; `tools/update-source.ps1`: atualização conservadora pelo Git.
 - `test/`: verificações, incluindo contratos de migração.
 - `index.html`, `main.js`, `preload.js` e `src/`: implementação Electron anterior.
 
-## 🔐 Seu cantinho no computador
+## 🔐 Seu cantinho no computador e caminhos de sessão
 
-O Rust usa `%APPDATA%/pionailo` para dados persistentes, incluindo credenciais protegidas por DPAPI no Windows. Não apague essa pasta ao atualizar. Perfis do Electron e do Rust são distintos; não há promessa de migração automática dos cookies entre engines. A execução de desenvolvimento usa uma origem local diferente do executável empacotado, podendo ter preferências de interface próprias.
+O backend Rust isola os dados de sessão, perfis WebView2 e credenciais protegidas por DPAPI em diretórios específicos no `%APPDATA%`:
+
+- **Instância padrão (1):** `%APPDATA%/pionailo` (identificador `com.pionailo.launcher`).
+- **Instâncias adicionais (`--instance=N`):** `%APPDATA%/pionailo-instancia-N` (identificador `com.pionailo.launcher.instanciaN`, por exemplo `pionailo-instancia-2`).
+
+Não apague essas pastas ao atualizar, pois guardam as contas e configurações de cada perfil. Perfis do Electron e do Rust são distintos; não há promessa de migração automática dos cookies entre engines. A execução de desenvolvimento usa uma origem local diferente do executável empacotado, podendo ter preferências de interface próprias.
+
+### Recursos locais ao lado do repositório
+
+Mantenha o executável na raiz deste checkout preparado. O login local encontra `tools/turnstile_solver.py` e `.runtime/python/Scripts/python.exe` a partir da localização do executável, mesmo quando um atalho usa outra pasta de trabalho. A variável `PIO_NAILO_PYTHON`, quando definida, continua tendo prioridade. Os arquivos de sessão existentes não são copiados nem alterados pelo build.
 
 Credenciais precisam ser enviadas aos serviços envolvidos no login; criptografia local não significa ausência de tráfego de autenticação. Não envie perfis, tokens, cookies ou arquivos de contas em commits/issues.
 

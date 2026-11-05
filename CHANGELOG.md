@@ -1,3 +1,88 @@
+## 2.0.64 — Menos trabalho visual no painel de batalha
+
+- Suspende a atualização visual do painel enquanto a janela está oculta e mostra o estado mais recente das quatro contas ao voltar.
+- Evita reescrever textos e atributos que não mudaram e limita as tentativas de fallback de imagens com erro.
+- Mantém a recepção de telemetria, os saldos, os bônus e o histórico de caça durante a suspensão visual, sem alterar sessões ou serviços.
+
+## 2.0.63 — Resumo compacto e bônus padronizados de Twitch e Kick
+
+- Coloca os pontos ao lado do nome de cada plataforma, seguidos da conexão e do bônus, em três linhas por plataforma.
+- Padroniza os bônus como EXP +15%, Captura +15% e Lure +15%, seguidos do tempo restante.
+- Remove a seção separada de pontos e mantém a consulta dos saldos por canal ao passar o mouse sobre o valor.
+
+## 2.0.62 — Pontos separados e resgates Twitch corrigidos
+
+- Mostra os pontos Kick e Twitch separadamente nas quatro contas, com os saldos por canal e sem tratar dados ausentes ou antigos como saldo zero.
+- Reconhece o catálogo real de recompensas Twitch de 1, 3, 5 e 10 horas, preservando títulos, descrições e custos oficiais.
+- Resgata a opção mais barata disponível do bônus selecionado assim que houver saldo, sem guardar pontos para uma duração maior.
+- Corrige PROPERTIES_MISMATCH enviando a descrição exata da recompensa e confirma o resgate pelo identificador retornado pela Twitch ou pelo débito comprovado.
+- Consulta o saldo atualizado após resgatar; mantém os horários de bônus informados pelo jogo e preserva as sessões existentes.
+
+## 2.0.61 — Consulta Twitch corrigida e conexão anterior restaurada
+
+- Corrige a consulta nativa de pontos: autentica pelo token da sessão salva sem enviar cookies entre domínios, conforme a resposta CORS da Twitch.
+- Restaura a conexão de chat com as credenciais existentes, independente de falhas na consulta de pontos, sem apagar ou substituir os logins.
+- Mantém o reaproveitamento do perfil de cada conta para pontos e distingue chat conectado de sessão confirmada para pontos.
+- Corrige a indicação global que pedia login também em falhas de consulta; adiciona regressões de reconexão e autenticação.
+
+## 2.0.60 — Reaproveitamento do login Twitch feito no jogo
+
+- Usa o perfil do jogo de cada conta também nas consultas e na janela da Twitch, reaproveitando os logins salvos.
+- Recupera sessões da janela antiga de autenticação e do perfil Twitch anterior somente após a Twitch confirmar o usuário vinculado; sessões expiradas ou de outra conta não são importadas.
+- Salva futuros vínculos no perfil e proxy da conta correspondente. O botão “Abrir Twitch” abre a página oficial, sem forçar a tela de login.
+- Adiciona testes de seleção de sessão, identidade vinculada, expiração, erros e isolamento dos quatro perfis.
+
+## 2.0.59 — Twitch com o mesmo fluxo da Kick
+
+- Remove “Modo leve” do painel Twitch e usa os controles de acompanhamento, resgate automático e escolha de bônus por conta, como na Kick.
+- Consulta o catálogo real de recompensas e mostra a disponibilidade para XP (300), Capture Boost (500) e Secret Lure (1000 pontos).
+- Implementa o resgate automático no launcher Rust com identidade vinculada, saldo recente e registro persistente; respostas incertas pausam novos resgates para evitar duplicação.
+- Preserva escolhas individuais e mostra a duração do bônus confirmada pelo jogo. O acúmulo sem player ainda depende da validação prática na Twitch.
+
+## 2.0.58 — Twitch por pontos em modo leve experimental
+
+- Substitui a presença automática no chat por consultas de pontos e tentativas de acúmulo sem player permanente, com até dois parceiros ao vivo por conta e intervalo de um minuto.
+- Mantém sessões Twitch separadas nas quatro contas, confere a identidade vinculada e distingue saldo verificado, saldo desatualizado, tentativa enviada e aumento observado.
+- Atualiza painel e HUD para XP, Capture Boost e Secret Lure com a duração enviada pelo jogo; remove a indicação antiga de bônus por chat.
+- Permite entrar na Twitch, atualizar o saldo e abrir o canal para resgatar pela interface oficial. O acúmulo sem vídeo continua experimental e precisa ser confirmado pelo saldo real.
+- Adiciona testes de telemetria, separação de contas, falhas de consulta, interface e expiração dos bônus.
+
+## 2.0.57
+
+- Exibe a tier de Outland também no modo Simples e nos cartões laterais das quatro contas, com o mesmo valor confirmado pelo servidor usado no headless.
+- Compartilha a indicação de confirmação pendente durante desconexões ou ausência de tier.
+
+## 2.0.56
+
+- Mostra a tier de Outland confirmada pelo servidor no painel headless de cada conta.
+- Indica confirmação pendente quando a conexão ou a tier ainda não estiver disponível, sem assumir tier 1.
+
+## 2.0.55
+
+- Preserva a tier de Outland confirmada pelo servidor na transição para headless e nas reconexões.
+- Confirma a restauração da tier antes de retomar a hunt quando o servidor responde com uma tier diferente ou ausente; falhas não apagam a seleção anterior.
+- Expõe a tier confirmada no status nativo e adiciona testes do handoff e da reconexão WebSocket.
+
+## 2.0.54
+
+- Aguarda o salvamento final das quatro sessões ao fechar o launcher, preservando os eventos posteriores ao último checkpoint periódico.
+
+## 2.0.53
+
+- Compartilha o histórico salvo de hunt entre visual e headless, preservando XP e duração em milissegundos na troca de modo.
+- Restaura os contadores atualizados ao voltar ao jogo e usa o mesmo arredondamento do XP/h.
+
+## 2.0.52 — XP concedida preservada na ponte de telemetria
+
+- Preserva xpTreinador e xpPokemon nos eventos de batalha, incluindo bosses, evitando que o acumulado visual herdado pelo headless use apenas a XP base.
+- Corrige também o fallback de XP em eventos avulsos de morte e cobre XP zero explícita e eventos antigos.
+- Adiciona regressões da ponte real e do parser Rust para comparar XP/h com os mesmos eventos e intervalo, incluindo a transição para headless.
+
+## 2.0.51 — Contagem de drops sem duplicação no HUD
+
+- Corrige a soma duplicada do mesmo drop recebido por ID e por nome na telemetria headless, preservando os totais da bag e a compatibilidade com o modo visual.
+- Adiciona testes de regressão para os contadores de itens nas duas versões do HUD.
+
 ## 2.0.50 — Identificação exata do item comprado em regras por categoria
 
 - Motor nativo Headless (`sniper.rs`) passa a resolver o nome exato do item pelo `itemId` no catálogo canônico (`SniperCatalog`) e pela confirmação do servidor (`marketComprado`), em vez de gravar o rótulo genérico da regra de categoria (ex.: grava `Cocoon Stone` em vez de `Pedras`).

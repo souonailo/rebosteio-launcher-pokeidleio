@@ -50,6 +50,9 @@ pub struct HeadlessState {
     pub name: String,
     pub cid: String,
     pub hunt: String,
+    /// Last server-confirmed Outland tier. None means the server has not supplied one.
+    #[serde(default)]
+    pub outland_tier: Option<u32>,
     pub in_center: Option<bool>,
     #[serde(skip)]
     pub last_hunt_slug: String,
@@ -97,9 +100,35 @@ pub struct HeadlessState {
     pub session_gold: i64,
     #[serde(skip)]
     pub start_time: Option<std::time::Instant>,
+    #[serde(skip)]
+    pub hunt_session: Option<crate::hunt_session::HuntSession>,
 }
 
 impl HeadlessState {
+    fn update_rates(&mut self, elapsed_seconds: u64) {
+        if let Some(session) = &self.hunt_session {
+            self.a.seconds = (session.elapsed_ms() / 1000.0) as u64;
+            self.a.xp = session.count("xpTreinador");
+            self.a.kills = session.count("abates") as u32;
+            self.a.captures = session.count("capturas") as u32;
+            self.a.shiny_found = session.count("shiniesVistos") as u32;
+            self.a.shiny_cap = session.count("shinies") as u32;
+            self.a.balls = session.balls();
+            self.session_gold = session.count("gold") as i64;
+            self.a.xph = session.rate("xpTreinador");
+            self.a.kph = session.rate("abates");
+            self.a.gph = session.rate("gold");
+            return;
+        }
+        self.a.seconds = elapsed_seconds;
+        if elapsed_seconds > 0 {
+            let seconds = elapsed_seconds.max(60);
+            self.a.xph = (self.a.xp * 3600) / seconds;
+            self.a.kph = (self.a.kills as u64 * 3600) / seconds;
+            self.a.gph = (self.session_gold.max(0) as u64 * 3600) / seconds;
+        }
+    }
+
     pub fn new(index: usize, nick: String) -> Self {
         let now_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -115,6 +144,7 @@ impl HeadlessState {
             name: nick,
             cid,
             hunt: String::new(),
+            outland_tier: None,
             in_center: None,
             last_hunt_slug: String::new(),
             balls_known: false,
@@ -147,6 +177,7 @@ impl HeadlessState {
             initial_gold: None,
             session_gold: 0,
             start_time: Some(std::time::Instant::now()),
+            hunt_session: None,
         }
     }
 }
@@ -177,16 +208,69 @@ pub struct GameHeadlessManager {
 }
 
 impl GameHeadlessManager {
+    pub async fn location_status(&self, index: usize) -> serde_json::Value {
+        let states = self.states.read().await;
+        let state = states.get(&index);
+        json!({"outlandTier":state.and_then(|s|s.outland_tier), "hunt":state.map(|s|s.hunt.as_str())})
+    }
     pub fn new() -> Self {
         let sessions = crate::credentials::load_sessions();
+        let states = sessions.iter().filter_map(|(index, saved)| {
+            let nick = saved.nick.as_ref()?;
+            let session = crate::hunt_session::HuntSession::load(*index, nick)?;
+            let mut state = HeadlessState::new(*index, nick.clone());
+            state.hunt_session = Some(session);
+            state.update_rates(0);
+            Some((*index, state))
+        }).collect();
         Self {
             auth_locks: std::array::from_fn(|_| tokio::sync::Mutex::new(())),
             clients: RwLock::new(HashMap::new()),
             tokens: RwLock::new(sessions.iter().map(|(i,s)| (*i, s.token.clone())).collect()),
             nicks: RwLock::new(sessions.iter().filter_map(|(i,s)| s.nick.clone().map(|n| (*i,n))).collect()),
-            states: RwLock::new(HashMap::new()),
+            states: RwLock::new(states),
             ws_urls: RwLock::new(HashMap::new()),
         }
+    }
+
+    pub async fn import_hunt_session(&self, index: usize, snapshot: &serde_json::Value) -> Result<(), String> {
+        let nick = snapshot["nick"].as_str().ok_or("Nick do histórico ausente")?;
+        let expected = self.get_nick(index).await.ok_or("Nick autenticado ausente")?;
+        if !nick.eq_ignore_ascii_case(&expected) { return Err("Histórico pertence a outra conta".into()); }
+        let session = crate::hunt_session::HuntSession::import(nick, &snapshot["saved"])?;
+        session.checkpoint(index).map_err(|e| format!("Não foi possível salvar o histórico: {e}"))?;
+        let mut states = self.states.write().await;
+        let state = states.entry(index).or_insert_with(|| HeadlessState::new(index, nick.into()));
+        if let Some(tier) = server_outland_tier(snapshot) { state.outland_tier = Some(tier); }
+        state.hunt_session = Some(session);
+        state.update_rates(0);
+        Ok(())
+    }
+
+    pub async fn pause_hunt_session(&self, index: usize) {
+        if let Some(session) = self.states.write().await.get_mut(&index).and_then(|s| s.hunt_session.as_mut()) {
+            session.pause();
+            if let Err(error) = session.checkpoint(index) { eprintln!("hunt checkpoint {index}: {error}"); }
+        }
+    }
+
+    pub async fn hunt_restore_script(&self, index: usize) -> String {
+        let states = self.states.read().await;
+        let Some(session) = states.get(&index).and_then(|s| s.hunt_session.as_ref()) else { return String::new(); };
+        let nick = serde_json::to_string(&session.nick).unwrap();
+        let saved = serde_json::to_string(&session.snapshot()).unwrap();
+        // A script remains installed across navigation. Its marker makes this
+        // handoff single-use, so a later reload cannot restore an old snapshot.
+        let nonce = serde_json::to_string(&format!("{}:{}", session.nick, saved)).unwrap();
+        format!(r#"(() => {{
+          if (location.hostname !== 'pokeidle.io' || window.top !== window) return;
+          const nick = {nick}, saved = {saved}, nonce = {nonce};
+          if ((localStorage.getItem('nick') || '').toLowerCase() !== nick) return;
+          const marker = 'pio:hunt-handoff:' + nick;
+          if (localStorage.getItem(marker) === nonce) return;
+          localStorage.setItem('sessao-hunt:' + nick, JSON.stringify(saved));
+          localStorage.setItem(marker, nonce);
+        }})();"#)
     }
 
     pub async fn set_token(&self, index: usize, token: String, nick: Option<String>) {
@@ -253,18 +337,18 @@ impl GameHeadlessManager {
             .entry(index)
             .or_insert_with(|| HeadlessState::new(index, nick));
 
+        // Once the visual client has welcomed the account, it owns the session
+        // again. The next handoff imports its authoritative saved history.
+        if t == "welcome" {
+            state.hunt_session = None;
+            crate::hunt_session::HuntSession::release_checkpoint(index);
+        }
         if parse_game_message(event, state) {
             if state.start_time.is_none() {
                 state.start_time = Some(std::time::Instant::now());
             }
             if let Some(st) = state.start_time {
-                state.a.seconds = st.elapsed().as_secs();
-                if state.a.seconds > 0 {
-                    let seconds = state.a.seconds.max(60);
-                    state.a.xph = (state.a.xp * 3600) / seconds;
-                    state.a.kph = (state.a.kills as u64 * 3600) / seconds;
-                    state.a.gph = (state.session_gold.max(0) as u64 * 3600) / seconds;
-                }
+                state.update_rates(st.elapsed().as_secs());
             }
 
             crate::sniper::update_vip(index, state.vip_dias.is_some());
@@ -299,6 +383,13 @@ impl GameHeadlessManager {
     pub async fn send_message(&self, index: usize, val: serde_json::Value) -> Result<bool, String> {
         let map = self.clients.read().await;
         if let Some(handle) = map.get(&index) {
+            // Local debug diagnostic: exercise the real reconnect loop without
+            // changing account settings or sending a fabricated game command.
+            #[cfg(debug_assertions)]
+            if val["t"] == "__pio_debug_disconnect" {
+                handle.out_tx.send(Message::Close(None)).await.map_err(|e| e.to_string())?;
+                return Ok(true);
+            }
             let msg = Message::Text(val.to_string().into());
             handle.out_tx.send(msg).await.map_err(|e| e.to_string())?;
             Ok(true)
@@ -344,6 +435,7 @@ impl GameHeadlessManager {
             .cloned()
             .unwrap_or_else(|| HeadlessState::new(index, nick.clone()));
 
+        if let Some(session) = &mut state.hunt_session { session.resume(); }
         let target_hunt = config
             .hunt
             .clone()
@@ -368,6 +460,8 @@ impl GameHeadlessManager {
             target_hunt.as_deref(),
         )
         .await?;
+        state.update_rates(state.start_time.map(|t| t.elapsed().as_secs()).unwrap_or(0));
+        self.states.write().await.insert(index, state.clone());
         let _ = app.emit("blaster:status", json!({"index":index,"status":"connected"}));
 
         let app_handle = app.clone();
@@ -508,12 +602,11 @@ impl GameHeadlessManager {
                             if let Some(command) = state.daily_pass.command(crate::daily_pass::now_ms()) {
                                 if write.send(Message::Text(command.to_string().into())).await.is_err() { break; }
                             }
-                            state.a.seconds = start_time.elapsed().as_secs();
-                            if state.a.seconds > 0 {
-                                let seconds = state.a.seconds.max(60);
-                                state.a.xph = (state.a.xp * 3600) / seconds;
-                                state.a.kph = (state.a.kills as u64 * 3600) / seconds;
-                                state.a.gph = (state.session_gold.max(0) as u64 * 3600) / seconds;
+                            state.update_rates(start_time.elapsed().as_secs());
+                            if let Some(session) = &state.hunt_session {
+                                if state.a.seconds % 5 == 0 {
+                                    if let Err(error) = session.checkpoint(index) { eprintln!("hunt checkpoint {index}: {error}"); }
+                                }
                             }
                             let cur_now_ms = std::time::SystemTime::now()
                                 .duration_since(std::time::UNIX_EPOCH)
@@ -553,7 +646,17 @@ impl GameHeadlessManager {
                                                 break;
                                             }
                                         }
+                                        let previous_location = (state.outland_tier, state.hunt.clone());
                                         if parse_game_message(&val, &mut state) {
+                                            if previous_location != (state.outland_tier, state.hunt.clone()) {
+                                                if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                                                    if let Some(saved) = m.states.write().await.get_mut(&index) {
+                                                        saved.outland_tier = state.outland_tier;
+                                                        saved.hunt = state.hunt.clone();
+                                                    }
+                                                }
+                                            }
+                                            state.update_rates(start_time.elapsed().as_secs());
                                             crate::sniper::update_vip(index, state.vip_dias.is_some());
                                             let _ = app_handle.emit("blaster:update", json!({
                                                 "index": index,
@@ -602,6 +705,11 @@ impl GameHeadlessManager {
             }
 
             crate::sniper::on_disconnect(index, Some(&app_handle));
+            if let Some(session) = &mut state.hunt_session {
+                session.pause();
+                if let Err(error) = session.checkpoint(index) { eprintln!("hunt checkpoint {index}: {error}"); }
+            }
+            state.update_rates(start_time.elapsed().as_secs());
             parse_game_message(&json!({"t":"disconnected"}), &mut state);
             if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
                 m.states.write().await.insert(index, state.clone());
@@ -630,6 +738,13 @@ async fn connect_and_handshake(
     state: &mut HeadlessState,
     hunt_slug: Option<&str>,
 ) -> Result<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, String> {
+    // A failed handshake must not replace the last confirmed tier with a stale
+    // welcome. Reconnect retries start from the same confirmed state.
+    let original_state = state;
+    let expected_tier = original_state.outland_tier;
+    let mut candidate = original_state.clone();
+    candidate.outland_tier = None;
+    let state = &mut candidate;
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
     let mut request = ws_url.into_client_request().map_err(|e| e.to_string())?;
     request.headers_mut().insert("Origin", "https://pokeidle.io".parse().unwrap());
@@ -683,6 +798,30 @@ async fn connect_and_handshake(
     .await
     .map_err(|_| "Servidor nao confirmou a sessao headless".to_string())??;
 
+    eprintln!("outland handshake account={} expected={:?} welcome={:?} hunt={}", index + 1, expected_tier, state.outland_tier, state.hunt);
+    if let Some(expected) = expected_tier {
+        if state.outland_tier != Some(expected) {
+            socket.send(Message::Text(json!({"t":"outland.tier","tier":expected}).to_string().into()))
+                .await.map_err(|e| e.to_string())?;
+            tokio::time::timeout(Duration::from_secs(10), async {
+                while let Some(message) = socket.next().await {
+                    match message.map_err(|e| e.to_string())? {
+                        Message::Text(text) => {
+                            let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+                            if value["t"] == "erro" { return Err("Servidor recusou restaurar a tier de Outland".to_string()); }
+                            parse_game_message(&value, state);
+                            if state.outland_tier == Some(expected) { return Ok(()); }
+                        }
+                        Message::Close(_) => return Err("Conexão encerrada antes de confirmar a tier de Outland".to_string()),
+                        _ => {}
+                    }
+                }
+                Err("Conexão encerrada antes de confirmar a tier de Outland".to_string())
+            }).await.map_err(|_| "Servidor não confirmou a tier de Outland; hunt não retomada".to_string())??;
+        }
+    }
+    eprintln!("outland confirmed account={} tier={:?} hunt={}", index + 1, state.outland_tier, state.hunt);
+
     let _ = socket
         .send(Message::Text(
             json!({"t":"client.visibility","foreground":true})
@@ -692,16 +831,22 @@ async fn connect_and_handshake(
         .await;
 
     if let Some(hunt) = hunt_slug.filter(|s| !s.is_empty()) {
-        let _ = socket
+        socket
             .send(Message::Text(
                 json!({"t":"hunt.select","slug":hunt})
                     .to_string()
                     .into(),
             ))
-            .await;
+            .await.map_err(|e| e.to_string())?;
     }
 
+    *original_state = candidate;
     Ok(socket)
+}
+
+fn server_outland_tier(player: &serde_json::Value) -> Option<u32> {
+    player.get("outlandTier").and_then(|v| v.as_u64())
+        .filter(|v| *v > 0 && *v <= 100).map(|v| v as u32)
 }
 
 fn normalize_session_token(token: String, nick: Option<String>) -> (String, Option<String>) {
@@ -807,6 +952,7 @@ pub fn resolve_headless_item_name(id: Option<u64>, current_name: &str) -> String
 }
 
 fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool {
+    if let Some(session) = &mut state.hunt_session { session.observe(m); }
     state.auto_depot.observe(m);
     state.daily_pass.observe(m, crate::daily_pass::now_ms());
     let t = m.get("t").and_then(|v| v.as_str()).unwrap_or("");
@@ -827,6 +973,11 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
 
     if t == "welcome" || t == "estado" {
         let player = data.get("estado").unwrap_or(data);
+        // Preserve absence as unknown: only an explicit server value may update this.
+        if let Some(tier) = server_outland_tier(player) {
+            state.outland_tier = Some(tier);
+            changed = true;
+        }
         if t == "welcome" { state.twitch = None; state.kick = None; }
         let full = t == "welcome" || player.get("cheio").and_then(|v| v.as_bool()) == Some(true);
         if full {
@@ -1373,6 +1524,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn twitch_point_bonuses_preserve_server_expiry_and_clear_on_reconnect() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        let twitch = json!({"login":"fixture","vinculado":true,"pct":15,
+            "bonus":{"xp":1793818800000u64,"captura":1793822400000u64,"shiny":0},
+            "oficiais":[{"login":"partner","aoVivo":true,"ativo":true}]});
+        parse_game_message(&json!({"t":"welcome","data":{"estado":{"twitch":twitch}}}), &mut state);
+        assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["captura"], 1793822400000u64);
+        parse_game_message(&json!({"t":"estado","data":{"gold":123}}), &mut state);
+        assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["xp"], 1793818800000u64);
+        parse_game_message(&json!({"t":"estado","data":{"twitch":{"bonus":{"xp":0,"captura":0,"shiny":0}}}}), &mut state);
+        assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["xp"], 0);
+        parse_game_message(&json!({"t":"welcome","data":{"estado":{}}}), &mut state);
+        assert!(state.twitch.is_none());
+    }
+
+    #[test]
     fn social_snapshots_survive_deltas_and_clear_on_disconnect() {
         let mut state = HeadlessState::new(0, "Fixture".into());
         parse_game_message(&json!({"t":"welcome","data":{"estado":{"twitch":{"login":"fixture","assistindo":true,"pctAtual":20,"token":"must-not-cross"},"kick":{"login":"fixture","pontos":123,"bonusExp":1}}}}), &mut state);
@@ -1398,6 +1565,64 @@ mod tests {
         assert_eq!(serde_json::to_value(&raw).unwrap(), serde_json::to_value(&bridged).unwrap());
         assert_eq!(raw.gold, 4321);
         assert_eq!(raw.team.iter().find(|p| p.ld == Some(true)).unwrap().sid, Some(7));
+    }
+
+    #[test]
+    fn saved_game_session_overrides_old_native_baseline_and_counts_once() {
+        let mut state = HeadlessState::new(0, "Nailo".into());
+        state.a.xp = 20_369_976;
+        state.a.seconds = 2030;
+        let mut session = crate::hunt_session::HuntSession::import("Nailo", &json!({
+            "ms":1_242_987,"xpTreinador":32_782_822,"xpPokemon":32_782_822,"abates":406
+        })).unwrap();
+        session.pause();
+        state.hunt_session = Some(session);
+        state.update_rates(2030);
+        assert_eq!(state.a.xp, 32_782_822);
+        assert_eq!(state.a.seconds, 1242);
+        assert!(state.a.xph.abs_diff(94_947_219) < 10);
+        parse_game_message(&json!({"t":"batalha","ev":[{
+            "k":"morte","quem":"selvagem","xp":13508,"xpTreinador":27379,"xpPokemon":27379
+        }]}), &mut state);
+        state.update_rates(2031);
+        assert_eq!(state.a.xp, 32_810_201);
+        assert_eq!(state.a.kills, 407);
+        let saved = state.hunt_session.as_ref().unwrap().snapshot();
+        assert_eq!(saved["xpPokemon"], json!(32_810_201.0));
+        parse_game_message(&json!({"t":"disconnected"}), &mut state);
+        parse_game_message(&json!({"t":"welcome","estado":{"nick":"Nailo"}}), &mut state);
+        state.update_rates(9000);
+        assert_eq!(state.a.xp, 32_810_201);
+        assert_eq!(state.a.seconds, 1242);
+    }
+
+    #[test]
+    fn bridged_xp_rate_matches_raw_game_and_survives_headless_handoff() {
+        // Node executes gameplay_bridge.js and asserts its output is this exact fixture.
+        let bridged: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../test/fixtures/gameplay-xp.json"
+        )).unwrap();
+        let raw = json!({"t":"batalha", "ev":bridged["data"]["ev"]});
+        let mut visual = HeadlessState::new(0, "Fixture".into());
+        let mut direct = visual.clone();
+        parse_game_message(&bridged, &mut visual);
+        parse_game_message(&raw, &mut direct);
+        assert_eq!(visual.a.xp, 900); // 291 + boss 600 + explicit zero + legacy 9
+        assert_eq!(visual.a.xp, direct.a.xp);
+        for seconds in [30, 60, 120, 900] {
+            visual.update_rates(seconds);
+            direct.update_rates(seconds);
+            let game_rate = (900.0 / (seconds.max(60) as f64 / 3600.0)).round() as u64;
+            assert_eq!(visual.a.xph, game_rate);
+            assert_eq!(direct.a.xph, game_rate);
+        }
+        // start() clones the visual accumulator; further raw events must add exactly once.
+        let mut headless = visual.clone();
+        parse_game_message(&raw, &mut headless);
+        headless.update_rates(1800);
+        assert_eq!(headless.a.xp, 1800);
+        assert_eq!(headless.a.xph, 3600);
+        assert_eq!(serde_json::to_value(&headless).unwrap()["a"]["xph"], 3600);
     }
 
     #[test]
@@ -1755,5 +1980,90 @@ mod identity_tests {
         assert_eq!(s.drops["Rock Stone"]["qty"], 3, "drops must persist across cheio: true");
         assert_eq!(s.vip_dias, Some(5), "vip_dias must persist");
         assert_eq!(s.passe_dias, Some(12), "passe_dias must persist");
+    }
+}
+
+#[cfg(test)]
+mod outland_tier_tests {
+    use super::*;
+
+    #[test]
+    fn server_tier_is_preserved_when_later_delta_omits_it() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        assert_eq!(state.outland_tier, None);
+        parse_game_message(&json!({"t":"welcome","estado":{"outlandTier":2}}), &mut state);
+        assert_eq!(state.outland_tier, Some(2));
+        parse_game_message(&json!({"t":"estado","data":{"gold":12}}), &mut state);
+        assert_eq!(state.outland_tier, Some(2));
+    }
+
+    #[test]
+    fn explicit_server_tier_changes_are_applied_without_defaulting() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(&json!({"t":"welcome","estado":{}}), &mut state);
+        assert_eq!(state.outland_tier, None);
+        parse_game_message(&json!({"t":"estado","outlandTier":3}), &mut state);
+        assert_eq!(state.outland_tier, Some(3));
+    }
+
+    #[test]
+    fn explicit_tier_two_from_welcome_is_visible_in_serialized_state() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(&json!({"t":"welcome","estado":{"outlandTier":2}}), &mut state);
+        assert_eq!(serde_json::to_value(&state).unwrap()["outlandTier"], 2);
+    }
+}
+
+#[cfg(test)]
+mod outland_handshake_tests {
+    use super::*;
+    async fn mock_server(welcome_tier: Option<u32>, reject: bool, expected_command: bool) -> (String, tokio::task::JoinHandle<()>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("ws://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            let (tcp, _) = listener.accept().await.unwrap();
+            let mut ws = tokio_tungstenite::accept_async(tcp).await.unwrap();
+            let hello = ws.next().await.unwrap().unwrap();
+            assert!(hello.to_text().unwrap().contains("hello"));
+            let mut player = json!({"huntSlug":"enraged_typhlosion","noCentro":false});
+            if let Some(tier) = welcome_tier { player["outlandTier"] = json!(tier); }
+            ws.send(Message::Text(json!({"t":"welcome","estado":player}).to_string().into())).await.unwrap();
+            if expected_command {
+                let cmd: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+                assert_eq!(cmd,json!({"t":"outland.tier","tier":2}));
+                if reject {
+                    ws.send(Message::Text(json!({"t":"erro","msg":"tier unavailable"}).to_string().into())).await.unwrap();
+                    return;
+                }
+                // An unrelated delta is not acknowledgement.
+                ws.send(Message::Text(json!({"t":"estado","gold":4}).to_string().into())).await.unwrap();
+                ws.send(Message::Text(json!({"t":"estado","outlandTier":2}).to_string().into())).await.unwrap();
+            }
+            let visibility: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(visibility["t"],"client.visibility");
+            let hunt: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(hunt,json!({"t":"hunt.select","slug":"enraged_typhlosion"}));
+        });
+        (url,task)
+    }
+    #[tokio::test]
+    async fn reconnect_restores_stale_or_missing_tier_before_resuming_hunt() {
+        for tier in [Some(1), None, Some(2)] {
+            let (url, server) = mock_server(tier,false,tier!=Some(2)).await;
+            let mut state = HeadlessState::new(99,"Fixture".into());
+            state.outland_tier = Some(2);
+            let socket = connect_and_handshake(99,&url,"Fixture","fixture",&mut state,Some("enraged_typhlosion")).await.unwrap();
+            assert_eq!(state.outland_tier,Some(2));
+            server.await.unwrap(); drop(socket);
+        }
+    }
+    #[tokio::test]
+    async fn rejected_restore_keeps_expected_tier_for_next_retry() {
+        let (url, server) = mock_server(Some(1),true,true).await;
+        let mut state = HeadlessState::new(99,"Fixture".into());
+        state.outland_tier = Some(2);
+        assert!(connect_and_handshake(99,&url,"Fixture","fixture",&mut state,Some("enraged_typhlosion")).await.is_err());
+        assert_eq!(state.outland_tier,Some(2));
+        server.await.unwrap();
     }
 }

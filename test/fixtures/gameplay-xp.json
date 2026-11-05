@@ -1,0 +1,11 @@
+{
+  "t": "batalha",
+  "data": {
+    "ev": [
+      { "k": "morte", "quem": "selvagem", "xp": 100, "xpTreinador": 291, "xpPokemon": 291 },
+      { "k": "bossMorto", "xp": 200, "xpTreinador": 600, "xpPokemon": 600 },
+      { "k": "morte", "quem": "selvagem", "xp": 100, "xpTreinador": 0, "xpPokemon": 0 },
+      { "k": "morte", "quem": "selvagem", "xp": 9 }
+    ]
+  }
+}

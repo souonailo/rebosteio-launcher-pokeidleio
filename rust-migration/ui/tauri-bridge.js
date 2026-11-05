@@ -71,7 +71,7 @@
     camoufoxCheck: () => invoke('camoufox_check').catch(() => ({ available: false })),
     openAuthWindow: (index, url) => invoke('auth_window_open', { index, url }).catch(() => true),
 
-    // 6. Bônus Twitch IRC
+    // 6. Bônus Twitch por pontos do canal
     twitchLoadCreds: () => invoke('twitch_creds_load'),
     twitchSaveCreds: async (data) => {
       if (typeof twitchConfigReady === 'boolean' && !twitchConfigReady) {
@@ -81,9 +81,17 @@
       return invoke('twitch_creds_save', { data });
     },
     twitchTestConnection: (username, token) => invoke('twitch_test', { username, token }).catch(() => ({ ok: false, error: 'Teste falhou' })),
-    twitchSyncLives: (lives) => invoke('twitch_sync_lives', { lives }).catch(() => true),
+    twitchSyncLives: (lives) => invoke('twitch_sync_lives', { lives }),
     twitchGetStatus: () => invoke('twitch_status_get').catch(() => ({ accounts: [] })),
     onTwitchStatus: (cb) => listen('twitch:status', (e) => cb(e.payload)),
+    twitchGetChatStatus: () => invoke('twitch_chat_status_get'),
+    onTwitchChatStatus: (cb) => listen('twitch:chat-status', (e) => cb(e.payload)),
+    twitchGetPoints: () => invoke('twitch_points_get'),
+    twitchRefreshPoints: (index) => invoke('twitch_points_refresh', { index }),
+    twitchSetPointChannels: (channels) => invoke('twitch_point_channels', { channels }),
+    twitchSessionOpen: (index, slug = '') => invoke('twitch_session_open', { index, slug }),
+    twitchSessionClose: (index) => invoke('twitch_session_close', { index }),
+    onTwitchPoints: (cb) => listen('twitch:points', (e) => cb(e.payload)),
 
     // 7. Bônus Kick (Pusher & WebSocket)
     kickLoadCreds: () => invoke('kick_creds_load'),
@@ -202,7 +210,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.50',
+    appVersion: '2.0.64',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {

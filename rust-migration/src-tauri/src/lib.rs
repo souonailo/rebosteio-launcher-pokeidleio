@@ -4,6 +4,7 @@ pub mod account_proxy;
 pub mod desktop_settings;
 pub mod social_store;
 pub mod game_headless;
+mod hunt_session;
 pub mod daily_pass;
 pub mod auto_depot;
 pub mod kick_service;
@@ -11,9 +12,13 @@ pub mod kick_connections;
 pub mod kick_browser;
 pub mod kick_rewards;
 pub mod twitch_service;
+pub mod twitch_chat;
+pub mod twitch_browser;
+mod twitch_rewards;
 pub mod webview_manager;
 pub mod webview_memory;
 pub mod pio_arquivos;
+mod runtime_paths;
 pub mod sniper;
 
 use std::fs;
@@ -349,6 +354,7 @@ async fn autostart_set(app:AppHandle,on:bool)->Result<bool,String>{
 #[tauri::command]
 async fn blaster_start(
     app: AppHandle,
+    window: Window,
     manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
     views: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
     index: usize,
@@ -357,6 +363,22 @@ async fn blaster_start(
     if index >= 4 { return Err("Conta inválida".into()); }
     let _auth = manager.auth_locks[index].lock().await;
     let _transition = views.transition.lock().await;
+    if manager.is_running(index).await { return Ok(()); }
+    // Startup may request headless before a guest exists. Read that profile's
+    // official history in a hidden guest instead of starting a second session.
+    if app.get_webview(&format!("game-account-{}", index)).is_none() {
+        views.set_headless(index, false).await;
+        views.set_visibility_state(index, false).await;
+        views.create_or_update(&app, &window, index, 0.0, 0.0, 800.0, 600.0, None).await?;
+        let mut ready = false;
+        for _ in 0..100 {
+            if views.execute(&app, index, "typeof window.__idleioTakeHuntSession === 'function'").await.unwrap_or_default() == true {
+                ready = true; break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+        if !ready { return Err("Aguarde o jogo carregar antes de ativar o Headless".into()); }
+    }
     if manager.get_token(index).await.is_none() && config.token.as_deref().unwrap_or("").is_empty() {
         let session = views.execute(&app, index,
             "({token: localStorage.getItem('sessao'), nick: localStorage.getItem('nick')})").await?;
@@ -364,8 +386,20 @@ async fn blaster_start(
         manager.set_token(index, token.into(), session.get("nick").and_then(|v| v.as_str()).map(str::to_owned)).await;
     }
     views.set_headless(index, true).await;
+    let handoff = async {
+        let snapshot = views.execute(&app, index, "window.__idleioTakeHuntSession()" ).await?;
+        manager.import_hunt_session(index, &snapshot).await
+    }.await;
+    if let Err(error) = handoff {
+        views.set_headless(index, false).await;
+        // The handoff may already have frozen the old socket. Recreate from
+        // its saved official history instead of leaving a frozen guest alive.
+        views.destroy(&app, index).await?;
+        return Err(error);
+    }
     views.destroy(&app, index).await?;
     if let Err(e) = manager.start(app, index, config).await {
+        manager.pause_hunt_session(index).await;
         views.set_headless(index, false).await;
         return Err(e);
     }
@@ -390,8 +424,11 @@ async fn blaster_status(
     index: usize,
 ) -> Result<serde_json::Value, String> {
     let running = manager.is_running(index).await;
+    let location = manager.location_status(index).await;
     Ok(json!({
         "active": running,
+        "outlandTier": location["outlandTier"],
+        "hunt": location["hunt"],
         "status": if running { "connected" } else { "disconnected" }
     }))
 }
@@ -455,12 +492,14 @@ fn twitch_creds_load() -> Result<serde_json::Value,String> {
 async fn twitch_creds_save(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, data: serde_json::Value) -> Result<bool,String> {
     let _save=manager.save_lock.lock().await;
     if !twitch_service::save_creds(data.clone()) { return Err("Falha ao salvar credenciais Twitch".into()); }
-    manager.configure(&app, &data).await; Ok(true)
+    manager.configure(&app, &data).await;
+    app.state::<Arc<twitch_chat::TwitchChatServiceManager>>().inner().configure(&app, &data).await;
+    Ok(true)
 }
 
 #[tauri::command]
 async fn twitch_test(username: String, token: String) -> Result<serde_json::Value, String> {
-    match twitch_service::TwitchServiceManager::test_connection(username, token).await {
+    match twitch_chat::TwitchChatServiceManager::test_connection(username, token).await {
         Ok(ok) => Ok(json!({ "ok": ok })),
         Err(err) => Ok(json!({ "ok": false, "error": err })),
     }
@@ -469,13 +508,33 @@ async fn twitch_test(username: String, token: String) -> Result<serde_json::Valu
 #[tauri::command]
 async fn twitch_sync_lives(
     manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    chat: tauri::State<'_, Arc<twitch_chat::TwitchChatServiceManager>>,
     lives: Vec<String>,
 ) -> Result<bool, String> {
+    chat.sync_lives(lives.clone()).await;
     Ok(manager.sync_lives(lives).await)
 }
 
 #[tauri::command]
 async fn twitch_status_get(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_status().await) }
+
+#[tauri::command]
+async fn twitch_chat_status_get(chat: tauri::State<'_, Arc<twitch_chat::TwitchChatServiceManager>>) -> Result<serde_json::Value,String> { Ok(chat.get_status().await) }
+
+#[tauri::command]
+async fn twitch_points_get(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_points().await) }
+
+#[tauri::command]
+async fn twitch_points_refresh(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize) -> Result<serde_json::Value,String> { manager.refresh(&app, index, true).await }
+
+#[tauri::command]
+async fn twitch_session_open(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize, slug: String) -> Result<bool,String> { manager.open(&app, index, &slug).await }
+
+#[tauri::command]
+async fn twitch_session_close(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize) -> Result<bool,String> { manager.close(&app, index).await }
+
+#[tauri::command]
+async fn twitch_point_channels(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, channels: Vec<Vec<String>>) -> Result<bool,String> { manager.set_channels(channels).await; Ok(true) }
 
 // ----------------- KICK -----------------
 
@@ -535,10 +594,10 @@ fn login_components(app: &AppHandle) -> Option<(PathBuf, PathBuf, Option<PathBuf
             return Some((python, script, Some(browser)));
         }
     }
-    [PathBuf::from("tools/turnstile_solver.py"), PathBuf::from("../tools/turnstile_solver.py")]
-        .into_iter().find(|p| p.is_file())
-        .map(|script| (std::env::var_os("PIO_NAILO_PYTHON").map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("python")), script, None))
+    let executable = std::env::current_exe().ok()?;
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = runtime_paths::source_root(&executable, &cwd)?;
+    runtime_paths::source_login(&root, std::env::var_os("PIO_NAILO_PYTHON").map(PathBuf::from))
 }
 
 #[tauri::command]
@@ -615,17 +674,32 @@ fn auth_cancel_login(_index: usize) -> bool {
 
 #[tauri::command]
 async fn auth_window_open(app: AppHandle, index: usize, url: String) -> Result<bool, String> {
+    if index >= 4 { return Err("Conta inválida".into()); }
+    let target: url::Url = url.parse().map_err(|_| "Endereço de autenticação inválido")?;
+    if target.scheme() != "https" || !target.username().is_empty() || target.password().is_some() {
+        return Err("Endereço de autenticação inválido".into());
+    }
     let label = format!("auth-window-{}", index);
     if let Some(w) = app.get_webview_window(&label) {
         let _ = w.show();
         let _ = w.set_focus();
         return Ok(true);
     }
-    let parsed_url = WebviewUrl::External(url.parse().map_err(|e: url::ParseError| e.to_string())?);
-    let builder = WebviewWindowBuilder::new(&app, &label, parsed_url)
+    let proxy = account_proxy::for_account(index)?;
+    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External("about:blank".parse().unwrap()))
         .title(format!("Autenticação - Conta {}", index + 1))
-        .inner_size(800.0, 700.0);
-    let _ = builder.build().map_err(|e| e.to_string())?;
+        .inner_size(800.0, 700.0)
+        .data_directory(webview_manager::get_account_profile_dir(index))
+        .user_agent(webview_manager::CHROME_USER_AGENT)
+        .additional_browser_args(&webview_memory::browser_args(proxy.as_ref().map(|p| &p.url)));
+    if let Some(proxy) = &proxy { builder = builder.proxy_url(proxy.url.clone()); }
+    let window = builder.build().map_err(|e| e.to_string())?;
+    let view = app.get_webview(&label).ok_or("Janela de autenticação indisponível")?;
+    if let Err(error) = account_proxy::authenticate(&view, proxy.as_ref()).await {
+        let _ = window.destroy();
+        return Err(error);
+    }
+    window.navigate(target).map_err(|_| "Não foi possível abrir a autenticação")?;
     Ok(true)
 }
 
@@ -789,6 +863,7 @@ async fn report_gameplay_batch(
 pub fn run() {
     let headless_manager = Arc::new(game_headless::GameHeadlessManager::new());
     let twitch_manager = Arc::new(twitch_service::TwitchServiceManager::new());
+    let twitch_chat_manager = Arc::new(twitch_chat::TwitchChatServiceManager::new());
     let kick_manager = Arc::new(kick_service::KickServiceManager::new());
     let webview_manager = Arc::new(webview_manager::WebviewManager::new());
 
@@ -819,10 +894,13 @@ pub fn run() {
                 if desktop_settings::autostart_enabled(){let _=desktop_settings::set_autostart(true);}
             });
             let twitch = app.state::<Arc<twitch_service::TwitchServiceManager>>().inner().clone();
+            let twitch_chat = app.state::<Arc<twitch_chat::TwitchChatServiceManager>>().inner().clone();
             let kick = app.state::<Arc<kick_service::KickServiceManager>>().inner().clone();
             tauri::async_runtime::spawn(async move {
                 twitch.configure(&handle, &twitch_service::load_creds()).await;
+                twitch_chat.configure(&handle, &twitch_service::load_creds()).await;
                 kick.configure(&handle, kick_service::load_creds()).await;
+                twitch.start(handle.clone());
                 kick.start(handle);
             });
             Ok(())
@@ -837,9 +915,36 @@ pub fn run() {
                     tauri::async_runtime::spawn(async move{let _=manager.refresh(&app,index,true).await;});
                 }
             }
+            if let Some(index)=window.label().strip_prefix("twitch-session-").and_then(|s|s.parse::<usize>().ok()).filter(|i|*i<4) {
+                if matches!(event,tauri::WindowEvent::Destroyed) {
+                    let app=window.app_handle().clone();
+                    let manager=app.state::<Arc<twitch_service::TwitchServiceManager>>().inner().clone();
+                    tauri::async_runtime::spawn(async move{ manager.on_session_closed(&app,index).await; });
+                }
+            }
             if window.label()=="main" {
-                if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
-                    window.app_handle().exit(0);
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    // Wait for the final native checkpoint and visual pagehide
+                    // save. Immediate exit could lose the last five seconds.
+                    api.prevent_close();
+                    static CLOSING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                    if CLOSING.swap(true, std::sync::atomic::Ordering::SeqCst) { return; }
+                    let app = window.app_handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let views = app.state::<Arc<webview_manager::WebviewManager>>();
+                        let manager = app.state::<Arc<game_headless::GameHeadlessManager>>();
+                        let _transition = views.transition.lock().await;
+                        for index in 0..4 {
+                            if views.is_headless(index).await {
+                                manager.stop(index).await;
+                            } else if app.get_webview(&format!("game-account-{}", index)).is_some() {
+                                if let Err(error) = views.execute(&app, index,
+                                    "(() => { window.dispatchEvent(new Event('pagehide')); return true; })()"
+                                ).await { eprintln!("hunt shutdown {index}: {error}"); }
+                            }
+                        }
+                        app.exit(0);
+                    });
                 }
                 if matches!(event, tauri::WindowEvent::Resized(_)) {
                     desktop_settings::minimize_to_tray(window.app_handle());
@@ -852,6 +957,7 @@ pub fn run() {
         .manage(desktop_settings::DesktopSettings::new())
         .manage(headless_manager)
         .manage(twitch_manager)
+        .manage(twitch_chat_manager)
         .manage(kick_manager)
         .manage(webview_manager)
         .manage(webview_memory::MemoryPolicy::default())
@@ -894,6 +1000,12 @@ pub fn run() {
             twitch_test,
             twitch_sync_lives,
             twitch_status_get,
+            twitch_chat_status_get,
+            twitch_points_get,
+            twitch_points_refresh,
+            twitch_session_open,
+            twitch_session_close,
+            twitch_point_channels,
             kick_creds_load,
             kick_creds_save,
             kick_test,

@@ -446,15 +446,17 @@
 .battle-slot-hud { padding-left: 154px; }
 .bsh-social { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 126px; box-sizing: border-box; padding: 7px; border: 1px solid #293d59; border-radius: 8px; background: #091324cc; font-size: 9.5px; line-height: 1.4; }
 .bsh-social-twitch, .bsh-social-kick { display: grid; gap: 1px; padding-bottom: 5px; }
-.bsh-social-kick, .bsh-social-wallet { border-top: 1px solid #293d59; padding-top: 5px; }
+.bsh-social-kick { border-top: 1px solid #293d59; padding-top: 5px; }
 .bsh-social-brand { font-weight: 800; color: #c6a5ff; }
 .bsh-social-kick .bsh-social-brand { color: #8ae66b; }
-.bsh-social-status, .bsh-social-channels { color: #94a6bf; }
+.bsh-social-status, .bsh-social-channels, .bsh-twitch-channels { color: #94a6bf; }
 .is-connected > .bsh-social-status { color: #79e3b0; }
 .bsh-social-bonus { color: #8fa5c5; overflow-wrap: anywhere; font-size: 9px; line-height: 1.3; }
 .bsh-social-bonus.is-bonus-active { color: #86efac !important; font-weight: 700; text-shadow: 0 0 6px rgba(134, 239, 172, 0.35); }
-.bsh-social-wallet { display: grid; gap: 1px; }
-.bsh-social-points { font-weight: 800; color: #ffc966; font-variant-numeric: tabular-nums; }
+.bsh-social-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 5px; min-width: 0; }
+.bsh-social-heading > span { white-space: nowrap; }
+.bsh-social-points, .bsh-kick-points { font-weight: 800; color: #ffc966; font-variant-numeric: tabular-nums; }
+.bsh-twitch-points { font-weight: 800; color: #d8b4fe; font-variant-numeric: tabular-nums; }
 @container (max-width: 500px) {
   .battle-slot-hud { padding-left: 12px; }
   .bsh-social { position: static; transform: none; width: 100%; display: flex; gap: 8px; margin-bottom: 4px; flex-shrink: 0; }
@@ -462,6 +464,7 @@
 }
 
 .panel { container-type: inline-size; }
+.panel:is(.is-hud-active, .is-blaster-active) { grid-template-columns: minmax(0, 1fr); }
 
 /* Sem scroll vertical: layout perfeitamente proporcional que cabe em qualquer altura */
 .battle-slot-hud { overflow: hidden !important; overflow-y: hidden !important; justify-content: center; }
@@ -469,7 +472,7 @@
   .battle-slot-hud { padding: 6px 10px; }
   .bsh-mode-banner { font-size: 8px; letter-spacing: .2px; max-width: 100%; white-space: normal; text-align: center; }
   .bsh-social { gap: 6px; font-size: 8.5px; }
-  .bsh-social-status, .bsh-social-channels { overflow-wrap: anywhere; }
+  .bsh-social-status, .bsh-social-channels, .bsh-twitch-channels { overflow-wrap: anywhere; }
   .bsh-arena { gap: 10px; }
   .bsh-sprite-stage { width: 50px; height: 50px; }
   .bsh-sprite { max-width: 48px; max-height: 48px; }
@@ -477,3 +480,15 @@
   .bsh-controls-row { gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .bsh-open-game-btn { margin-top: 6px; }
 }
+
+/* Server-confirmed account setting, separate from the hunt name. */
+.bsh-outland-tier {
+  margin-top: 4px;
+  max-width: 100%;
+  font-size: 11px;
+  line-height: 1.35;
+  font-weight: 600;
+  color: #c2d3e9;
+  overflow-wrap: anywhere;
+}
+.bsh-outland-tier[hidden] { display: none; }

@@ -9,6 +9,20 @@ const fs = require('fs');
 const path = require('path');
 const { app, safeStorage } = require('electron');
 
+const priority = value => ['exp', 'catch', 'lure', 'all'].includes(value) ? value : 'exp';
+function preferences(data = {}) {
+  return {
+    autoClaim: data.autoClaim === true && data.autoClaimProtocol === 1,
+    autoClaimProtocol: 1,
+    claimPriority: priority(data.claimPriority),
+    accounts: Array.from({length:4}, (_, i) => ({
+      claimPriority: priority(data.accounts?.[i]?.claimPriority || data.claimPriority),
+      gameLinked: data.accounts?.[i]?.gameLinked === true,
+      linkedUsername: String(data.accounts?.[i]?.linkedUsername || '')
+    }))
+  };
+}
+
 class TwitchAccountClient {
   constructor(accountIndex, onStatusChange) {
     this.index = accountIndex;
@@ -23,6 +37,7 @@ class TwitchAccountClient {
     this.targetChannels = new Set();
     this.reconnectTimer = null;
     this.pingInterval = null;
+    this.shouldReconnect = false;
   }
 
   setCredentials(username, token, enabled = true) {
@@ -52,6 +67,7 @@ class TwitchAccountClient {
     }
 
     this.status = 'connecting';
+    this.shouldReconnect = true;
     this.lastError = '';
     this.onStatusChange(this.index, this.getStatus());
 
@@ -80,7 +96,8 @@ class TwitchAccountClient {
             continue;
           }
 
-          if (line.includes(':tmi.twitch.tv 001 ') || line.includes('GLHF')) {
+          const welcome = line.split(/\s+/);
+          if (welcome[0] === ':tmi.twitch.tv' && welcome[1] === '001' && welcome[2]?.toLowerCase() === this.username) {
             this.status = 'connected';
             this.lastError = '';
             // Reingressa em canais pendentes
@@ -129,7 +146,7 @@ class TwitchAccountClient {
         }
         this.onStatusChange(this.index, this.getStatus());
 
-        if (this.enabled && this.username && this.token) {
+        if (this.shouldReconnect && this.enabled && this.username && this.token) {
           clearTimeout(this.reconnectTimer);
           this.reconnectTimer = setTimeout(() => this.connect(), 15000);
         }
@@ -170,6 +187,7 @@ class TwitchAccountClient {
   }
 
   disconnect() {
+    this.shouldReconnect = false;
     clearTimeout(this.reconnectTimer);
     if (this.ws) {
       try {
@@ -198,6 +216,7 @@ class TwitchChatManager {
   constructor() {
     this.maxAccounts = 4;
     this.masterEnabled = false;
+    this.preferences = preferences();
     this.accounts = Array.from({ length: this.maxAccounts }, (_, i) => new TwitchAccountClient(i, (idx, st) => this.broadcastStatus()));
     this.liveChannels = [];
     this.statusCallback = null;
@@ -238,6 +257,7 @@ class TwitchChatManager {
 
       const parsed = JSON.parse(jsonStr);
       this.masterEnabled = !!parsed.masterEnabled;
+      this.preferences = preferences(parsed);
 
       if (Array.isArray(parsed.accounts)) {
         parsed.accounts.slice(0, this.maxAccounts).forEach((acc, i) => {
@@ -252,8 +272,10 @@ class TwitchChatManager {
       }
 
       return {
+        ...this.preferences,
         masterEnabled: this.masterEnabled,
-        accounts: this.accounts.map(a => ({
+        accounts: this.accounts.map((a, i) => ({
+          ...this.preferences.accounts[i],
           username: a.username,
           token: a.token,
           enabled: a.enabled
@@ -269,6 +291,7 @@ class TwitchChatManager {
       if (!data || typeof data !== 'object') return false;
 
       this.masterEnabled = !!data.masterEnabled;
+      this.preferences = preferences(data);
 
       if (Array.isArray(data.accounts)) {
         data.accounts.slice(0, this.maxAccounts).forEach((acc, i) => {
@@ -279,8 +302,10 @@ class TwitchChatManager {
       }
 
       const toSave = {
+        ...this.preferences,
         masterEnabled: this.masterEnabled,
-        accounts: this.accounts.map(a => ({
+        accounts: this.accounts.map((a, i) => ({
+          ...this.preferences.accounts[i],
           username: a.username,
           token: a.token,
           enabled: a.enabled
@@ -314,9 +339,10 @@ class TwitchChatManager {
   }
 
   startAll() {
+    if (!this.masterEnabled) return;
     this.accounts.forEach(acc => {
       acc.setTargetChannels(this.liveChannels);
-      acc.connect();
+      if (acc.enabled) acc.connect();
     });
   }
 

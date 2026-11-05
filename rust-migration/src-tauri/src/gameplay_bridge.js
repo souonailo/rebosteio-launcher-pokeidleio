@@ -4,7 +4,12 @@
   window.__idleioGameplayBridge = true;
   const NativeWebSocket = window.WebSocket;
   let latestSocket, activeSession, pending = [], pendingBytes = 0, inFlight = false, timer;
-  let awaitingSnapshot = false;
+  let awaitingSnapshot = false, handedOff = false;
+  window.__idleioFreezeGameplay = () => {
+    handedOff = true;
+    pending = []; pendingBytes = 0;
+    latestSocket?.close();
+  };
   // Invoked only by the native executor. Never changes inventory or gold locally.
   window.__idleioSupplySend = (session, command) => {
     if (session !== activeSession || awaitingSnapshot || latestSocket?.readyState !== NativeWebSocket.OPEN) return;
@@ -128,6 +133,7 @@
       socket.addEventListener('open', () => { if (socket === latestSocket) report(session, { t: 'reset' }); });
       socket.addEventListener('close', () => { if (socket === latestSocket) report(session, { t: 'disconnected' }); });
       socket.addEventListener('message', message => {
+        if (handedOff) { message.stopImmediatePropagation(); return; }
         if (socket !== latestSocket || typeof message.data !== 'string') return;
         try {
           const raw = JSON.parse(message.data), t = raw.t ?? raw.type, data = raw.data ?? raw;
@@ -143,7 +149,7 @@
             queueMicrotask(() => window.__idleioBackgroundEconomy?.ready());
           }
           else if (t === 'campo' || t === 'campo.init') report(session, { t, data: { ...pick(data, ['slug','centro','pvp','casa','fora']), mobs: (data.mobs ?? []).map(m => pick(m,['s','x','xr'])) } });
-          else if (t === 'batalha') report(session, { t, data: { ev: (data.ev ?? []).filter(e => ['bola','morte','capturado'].includes(e.k ?? e.t)).map(e => ({...pick(e,['k','t','ballId','slot','sucesso','quem','nome','ouro','xp']), ...(Array.isArray(e.drops) ? {drops:e.drops.map(d => pick(d,['nome','qtd']))} : {}), ...(e.pokemon ? {pokemon:{...pick(e.pokemon,[...pokemonKeys,'pokeId','potency','grade','nota','iv_hp','iv_atk','iv_def','iv_spa','iv_spd','iv_spe']),ivs:pick(e.pokemon.ivs,['hp','atk','def','spAtk','spa','spDef','spd','speed','spe'])}} : {})})) } });
+          else if (t === 'batalha') report(session, { t, data: { ev: (data.ev ?? []).filter(e => ['bola','morte','bossMorto','capturado'].includes(e.k ?? e.t)).map(e => ({...pick(e,['k','t','ballId','slot','sucesso','quem','nome','ouro','valor','xp','xpTreinador','xpPokemon']), ...(Array.isArray(e.drops) ? {drops:e.drops.map(d => pick(d,['nome','qtd']))} : {}), ...(e.pokemon ? {pokemon:{...pick(e.pokemon,[...pokemonKeys,'pokeId','potency','grade','nota','iv_hp','iv_atk','iv_def','iv_spa','iv_spd','iv_spe']),ivs:pick(e.pokemon.ivs,['hp','atk','def','spAtk','spa','spDef','spd','speed','spe'])}} : {})})) } });
           else if (t === 'estado') report(session, { t, data: player(data.estado ?? data) });
           else if (t === 'market') report(session, { t, data: { aba: data.aba, itemId: data.itemId, moeda: data.moeda, total: data.total, pagina: data.pagina, resumo: data.resumo, linhas: data.linhas, anuncio: data.anuncio } });
           else if (t === 'erro') report(session, { t, data: pick(data, ['chave','msg']) });
@@ -152,7 +158,7 @@
             const name = p.nome ?? p.name;
             if (typeof name === 'string') report(session, { t: 'activity', data: { kind: 'capture', name, qty: 1, shiny: typeof p.shiny === 'boolean' ? p.shiny : null, pokemon: {...pick(p,['speciesId','pokeId','level','quality','potencia','potency','grade','nota','skin','iv_hp','iv_atk','iv_def','iv_spa','iv_spd','iv_spe']), ivs: pick(p.ivs,['hp','atk','def','spAtk','spa','spDef','spd','speed','spe'])} } });
           } else if (t === 'morte' && data.quem === 'selvagem') {
-            report(session, { t: 'activity', data: { kind: 'battle', name: data.nome ?? 'Selvagem derrotado', qty: 1, gold: data.ouro, xp: data.xp } });
+            report(session, { t: 'activity', data: { kind: 'battle', name: data.nome ?? 'Selvagem derrotado', qty: 1, gold: data.ouro, xp: data.xpTreinador ?? data.xp } });
             for (const item of data.drops ?? []) if (typeof item.nome === 'string' && item.qtd > 0) report(session, { t: 'activity', data: { kind: 'drop', name: item.nome, qty: item.qtd } });
           } else if (t === 'loot.received') {
             for (const item of data.items ?? []) if (typeof item.item_id === 'string' && item.qty > 0) report(session, { t: 'activity', data: { kind: 'drop', name: item.item_id, qty: item.qty } });

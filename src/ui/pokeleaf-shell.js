@@ -361,13 +361,8 @@
     const st = window.__twitchBonusStatus;
     const isOn = st && st.masterEnabled;
     const bonusTxt = window.__twitchBonusPctTxt || '';
-    if (!isOn) {
-      badge.textContent = 'OFF';
-      badge.classList.remove('is-on');
-    } else {
-      badge.textContent = bonusTxt || 'ON';
-      badge.classList.add('is-on');
-    }
+    RebosteioPerformance.setText(badge, isOn ? (bonusTxt || 'ON') : 'OFF');
+    if (badge.classList.contains('is-on') !== !!isOn) badge.classList.toggle('is-on', !!isOn);
   }
   window.__syncTwitchBonusBadge = syncTwitchBonusBadge;
 
@@ -377,13 +372,8 @@
     const st = window.__kickBonusStatus;
     const isOn = st && st.masterEnabled;
     const bonusTxt = window.__kickBonusTxt || '';
-    if (!isOn) {
-      badge.textContent = 'OFF';
-      badge.classList.remove('is-on');
-    } else {
-      badge.textContent = bonusTxt || 'ON';
-      badge.classList.add('is-on');
-    }
+    RebosteioPerformance.setText(badge, isOn ? (bonusTxt || 'ON') : 'OFF');
+    if (badge.classList.contains('is-on') !== !!isOn) badge.classList.toggle('is-on', !!isOn);
   }
   window.__syncKickBonusBadge = syncKickBonusBadge;
 
@@ -568,6 +558,7 @@
             <div class="leaf-account-state ${sc}">${sl}</div>
           </div>
           <div class="leaf-hunt-row"><span class="leaf-hunt-glyph">${ico('hunt')}</span><span class="leaf-hunt-name">Em caça <b>${escH(hunt)}</b></span><span class="leaf-hunt-time">${a.seconds?Math.floor(a.seconds/3600)+'h '+String(Math.floor(a.seconds%3600/60)).padStart(2,'0')+'m':'—'}</span></div>
+          <div class="leaf-outland-tier" title="Tier confirmada pelo servidor nesta conexão">${escH(window.PioBattleHud.outlandTierLabel(r))}</div>
           <div class="leaf-account-metrics">
             <div class="leaf-metric" title="${(r.equippedBall && r.equippedBall.name) ? `${escH(r.equippedBall.name)}: ${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}` : `Bolas: ${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}`}"><div class="mk">Bolas</div><div class="mv">${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}</div></div>
             <div class="leaf-metric" title="Shiny"><div class="mk">Shiny</div><div class="mv">${a.shinyFound!=null?fmtCompact(a.shinyFound):'—'}</div></div>

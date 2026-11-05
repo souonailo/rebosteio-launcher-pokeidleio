@@ -1,6 +1,6 @@
 [package]
 name = "pio-nailo-rust"
-version = "2.0.50"
+version = "2.0.64"
 description = "Launcher nativo em Rust para PokeIdle multi-contas"
 edition = "2021"
 

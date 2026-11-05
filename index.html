@@ -2619,6 +2619,7 @@
   <script src="src/ui/capture-value.js"></script>
   <script src="src/ui/auto-depot.js"></script>
   <script src="src/ui/kick-reward-status.js"></script>
+  <script src="src/ui/twitch-reward-status.js"></script>
   <script src="src/ui/catch-nota.js"></script>
   <script src="src/ui/game-hud-layout.js"></script>
   <script src="src/ui/center-scheduler.js"></script>
@@ -3046,7 +3047,7 @@
     </div>
   </div>
 
-  <!-- Modal Bônus Twitch (Presença Headless em Chats Oficiais) -->
+  <!-- Modal Bônus Twitch por pontos do canal -->
   <div id="twitchBonusOverlay">
     <div id="twitchBonusModal" role="dialog" aria-modal="true" aria-labelledby="twitchBonusTitle">
       <div class="twitch-bonus-head">
@@ -3059,25 +3060,36 @@
         <button type="button" class="twitch-bonus-close" id="twitchBonusCloseBtn"
           aria-label="Fechar Bônus Twitch">&times;</button>
       </div>
-      <p class="hint">Presença nos chats dos parceiros, sem reproduzir vídeo ou áudio. Consulte abaixo o bônus informado
-        pelo jogo.</p>
+      <p class="hint">Conecte suas contas, acompanhe os pontos dos parceiros e escolha o bônus para resgatar automaticamente.</p>
 
       <!-- Master Card -->
       <div class="twitch-global-card">
         <div class="twitch-global-row">
           <label class="twitch-toggle-label">
             <input type="checkbox" id="twitchMasterToggle">
-            <span class="twitch-toggle-text"><b>Ativar Presença Automática</b> <small>Entrar nos canais ao vivo com
-                bônus informados pelo jogo.</small></span>
+            <span class="twitch-toggle-text"><b>Ativar acompanhamento da Twitch</b> <small>Consultar o saldo autenticado a cada minuto e acompanhar os parceiros em segundo plano.</small></span>
           </label>
           <div class="twitch-global-kpis">
             <span class="twitch-kpi-pill" id="twitchGlobalStatusPill">● Desconectado</span>
-            <span class="twitch-kpi-pill twitch-kpi-bonus" id="twitchGlobalBonusPill">⚡ Bônus no Jogo: 0%</span>
+            <span class="twitch-kpi-pill twitch-kpi-bonus" id="twitchGlobalBonusPill">Nenhum bônus ativo no jogo</span>
           </div>
         </div>
       </div>
 
 
+      <div class="twitch-global-card twitch-auto-claim-row">
+        <div class="twitch-toggle-text" role="status" aria-live="polite">
+          <b id="twitchRewardSummary">Buffs para resgatar: consulte o saldo</b>
+          <small id="twitchRedemptionStatus"></small>
+        </div>
+        <label class="twitch-toggle-label"><input type="checkbox" id="twitchAutoClaimToggle"><span class="twitch-toggle-text"><b>Resgatar automaticamente</b><small>Gasta pontos no buff escolhido, uma vez por consulta.</small></span></label>
+        <label class="twitch-priority-label" for="twitchAutoClaimPriority">Buff da conta selecionada:
+          <select id="twitchAutoClaimPriority">
+            <option value="exp">+15% EXP (300 pts)</option><option value="catch">+15% Capture (500 pts)</option>
+            <option value="lure">+15% Lure (1000 pts)</option><option value="all">Qualquer buff</option>
+          </select>
+        </label>
+      </div>
       <div class="twitch-bonus-content">
         <aside class="twitch-guide" aria-label="Tutorial Twitch">
           <h3 class="twitch-side-title">Como conectar</h3>
@@ -3090,49 +3102,28 @@
           <div class="twitch-guide-body">
             <section class="twitch-guide-step" data-guide-panel="0">
               <h3>1. Vincule no jogo</h3>
-              <ol>
-                <li>No PokeIdle, abra <b>Treinador</b> e procure a conexão ou bônus Twitch.</li>
-                <li>Entre na Twitch desejada e conclua a autorização.</li>
-                <li>Volte ao launcher. Ao receber o vínculo do jogo, ele preenche o campo vazio com seu <b>login
-                    Twitch</b>, que pode ser diferente do nick do treinador.</li>
-              </ol>
-              <p><b>Dica:</b> Se a janela não abrir pelo jogo, use o botão <b>🔗 Vincular no Jogo (via Bot)</b> no cartão da conta para abrir a janela de autorização diretamente pelo launcher!</p>
-              <p>Já tem um login salvo? Confira se corresponde ao vínculo.</p>
+              <p>No PokeIdle, abra <b>Treinador</b> e vincule sua Twitch. Mantenha o jogo conectado para receber o vínculo e os parceiros oficiais.</p>
+              <p>Você também pode usar <b>Vincular no jogo</b> no cartão da conta.</p>
             </section>
             <section class="twitch-guide-step" data-guide-panel="1" hidden>
-              <h3>2. Gere o token</h3>
-              <ol>
-                <li>Clique em <b>Gerar Token de Chat</b>, acima das contas.</li>
-                <li>Escolha <b>Bot Chat Token</b> no site. Siga a geração e autorize a mesma Twitch vinculada ao jogo.
-                </li>
-                <li>Copie <b>Access token</b> e cole em <b>Token de Chat (OAuth)</b>.</li>
-              </ol>
-              <p>Não copie Refresh token nem Client ID. O prefixo <b>oauth:</b> é opcional.</p>
+              <h3>2. Confira a sessão</h3>
+              <p>O launcher reaproveita a sessão Twitch usada no jogo e confere se ela corresponde à conta vinculada. Selecione a conta e clique em <b>Atualizar pontos</b>.</p>
+              <p>Use <b>Abrir Twitch</b> se precisar conferir a sessão. Um novo login só é necessário quando não houver uma sessão válida salva para essa conta.</p>
             </section>
             <section class="twitch-guide-step" data-guide-panel="2" hidden>
-              <h3>3. Teste e aplique</h3>
-              <ol>
-                <li>Selecione a conta do jogo e confira seu usuário Twitch.</li>
-                <li>Clique em <b>Testar Conexão</b>. Aguarde <b>✓ Conexão OK!</b>.</li>
-                <li>Marque <b>Ligar</b> nessa conta e <b>Ativar Presença Automática</b> no topo.</li>
-                <li>Clique em <b>Salvar e Aplicar</b>.</li>
-              </ol>
-              <p>O teste confirma o chat. O bônus precisa ser informado pelo jogo.</p>
+              <h3>3. Ative o acompanhamento</h3>
+              <p>Marque <b>Ligar</b> na conta, ative o acompanhamento no topo e clique em <b>Salvar e Aplicar</b>.</p>
+              <p>As conexões ficam em segundo plano, sem abrir o vídeo. O saldo retornado pela Twitch confirma os pontos.</p>
             </section>
             <section class="twitch-guide-step" data-guide-panel="3" hidden>
-              <h3>4. Acompanhe a presença</h3>
-              <p><b>Conectado nos Chats:</b> há uma conexão Twitch ativa.</p>
-              <p><b>Nenhum canal ativo:</b> pode não haver parceiro elegível ao vivo ou o jogo ainda não enviou os
-                dados.</p>
-              <p><b>Falha no teste?</b> Confira o login e gere um token da mesma Twitch.</p>
-              <p>Para atualizar o vínculo e o percentual de bônus, mantenha a conta do jogo conectada.</p>
+              <h3>4. Escolha o bônus</h3>
+              <p>Escolha o <b>Buff da conta selecionada</b> e marque <b>Resgatar automaticamente</b>. O launcher confere saldo e disponibilidade antes do resgate.</p>
+              <p>O botão <b>Abrir canal</b> permite consultar a Twitch. O tempo do bônus aplicado é confirmado pelo jogo.</p>
             </section>
             <section class="twitch-guide-step" data-guide-panel="4" hidden>
-              <h3>5. Contas e privacidade</h3>
-              <p>Em cada conta, use a Twitch vinculada no jogo e seu token correspondente.</p>
-              <p>Tem apenas uma Twitch vinculada? Configure a conta correspondente e deixe as demais desligadas.</p>
-              <p>O launcher entra nos chats sem publicar mensagens ou comandos. Não reproduz vídeo ou áudio.</p>
-              <p>Não compartilhe seu token nem mostre seu valor em capturas.</p>
+              <h3>5. Acompanhe os bônus</h3>
+              <p>Os bônus de <b>1 hora</b> custam 300 pontos para XP, 500 para Capture Boost e 1000 para Secret Lure. O catálogo também oferece <b>3, 5 e 10 horas</b>. O automático resgata assim que houver saldo para a opção mais barata disponível; as horas se somam.</p>
+              <p>O tempo mostrado vem do jogo. O antigo adicional por quantidade de lives não se aplica.</p>
             </section>
           </div>
           <div class="twitch-guide-pager"><button type="button" id="twitchGuidePrev">Anterior</button><span
@@ -3142,8 +3133,7 @@
         <div class="twitch-section twitch-setup">
           <div class="twitch-sec-head">
             <label class="twitch-sec-title">Suas quatro contas</label>
-            <a href="https://twitchtokengenerator.com/" target="_blank" class="twitch-token-help-link"
-              id="twitchTokenHelpLink">Gerar Token de Chat ↗</a>
+            <span class="twitch-field-help">Sessões separadas por conta</span>
           </div>
           <div class="twitch-workspace">
             <nav id="twitchAccountNav" class="twitch-account-nav" aria-label="Selecionar conta Twitch"></nav>
@@ -4745,14 +4735,16 @@
       for (const k in im) { if (k === '__proto__' || k === 'constructor') continue; if (++nInv > 500) break; inv2[String(k).slice(0, 12)] = num(im[k]); }
       d.invMap = inv2;
       if (d.twitch && typeof d.twitch === 'object') {
+        const tw = d.twitch;
+        const login = String(tw.login || '').slice(0, 40);
         d.twitch = {
-          login: String(d.twitch.login || '').slice(0, 40),
-          assistindo: !!d.twitch.assistindo,
-          assistindoEm: Array.isArray(d.twitch.assistindoEm) ? d.twitch.assistindoEm.slice(0, 20).map(x => String(x).slice(0, 40)) : [],
-          emLives: num(d.twitch.emLives),
-          pctAtual: num(d.twitch.pctAtual),
-          lives: Array.isArray(d.twitch.lives) ? d.twitch.lives.slice(0, 20).map(l => ({ login: String(l.login || '').slice(0, 40), espectadores: num(l.espectadores), aoVivo: l && l.aoVivo !== false })) : [],
-          oficiais: Array.isArray(d.twitch.oficiais) ? d.twitch.oficiais.slice(0, 20).map(o => ({ login: String(o.login || '').slice(0, 40), bonus: !!o.bonus })) : []
+          login,
+          vinculado: (tw.vinculado ?? !!login) === true,
+          pct: num(tw.pct),
+          bonus: Object.fromEntries(['xp', 'captura', 'shiny'].map(key => [key, Math.max(0, num(tw.bonus?.[key]))])),
+          oficiais: Array.isArray(tw.oficiais) ? tw.oficiais.filter(o => o && typeof o === 'object').slice(0, 40).map(o => ({
+            login: String(o.login || '').slice(0, 40), ativo: o.ativo === true, aoVivo: o.aoVivo === true, espectadores: num(o.espectadores)
+          })) : []
         };
       }
       if (d.kick && typeof d.kick === 'object') {
@@ -7361,7 +7353,7 @@
       if (autoSupplyOn) executeAutoSupply(false);
     }, 20000);
 
-    // ===== Sistema de Bônus Twitch (Presença Headless em Chats Oficiais) =====
+    // ===== Bônus Twitch por pontos do canal =====
     const twitchBonusBtn = document.getElementById('twitchBonusBtn');
     const twitchBonusOverlay = document.getElementById('twitchBonusOverlay');
     const twitchBonusCloseBtn = document.getElementById('twitchBonusCloseBtn');
@@ -7373,44 +7365,274 @@
     const twitchStreamersCount = document.getElementById('twitchStreamersCount');
     const twitchGlobalStatusPill = document.getElementById('twitchGlobalStatusPill');
     const twitchGlobalBonusPill = document.getElementById('twitchGlobalBonusPill');
-    const twitchBonusStatusBar = document.getElementById('twitchBonusStatusBar');
-    const twitchBonusStatusText = document.getElementById('twitchBonusStatusText');
-
-    const twitchBonusConfig = {
-      masterEnabled: false,
-      accounts: Array.from({ length: 4 }, () => ({ username: '', token: '', enabled: true }))
-    };
-    let twitchBonusLiveState = null;
+    const twitchBonusConfig = { masterEnabled: false, autoClaim: false, autoClaimProtocol: 1, claimPriority: 'exp', accounts: Array.from({ length: 4 }, () => ({ username: '', token: '', enabled: true, claimPriority: 'exp' })) };
     const twitchCachedGameData = Array(4).fill(null);
-
-    function showTwitchFeedback(msg, isError = false) {
-      if (!twitchBonusStatusBar || !twitchBonusStatusText) return;
-      twitchBonusStatusText.textContent = msg;
-      twitchBonusStatusBar.style.display = 'block';
-      twitchBonusStatusBar.className = 'twitch-status-bar' + (isError ? ' error' : ' success');
-      setTimeout(() => { if (twitchBonusStatusBar) twitchBonusStatusBar.style.display = 'none'; }, 4000);
+    let twitchConfigReady = false;
+    let twitchSavedConfig = null;
+    let twitchConfigLoading = null;
+    let twitchBonusLiveState = null;
+    let twitchPointsState = { accounts: [] };
+    let twitchChatState = { accounts: [] };
+    let twitchSelectedAccount = 0;
+    let twitchPartnersPage = 0;
+    let twitchFeedbackTimer;
+    let twitchSaveQueue = Promise.resolve();
+    let twitchSettingsBusy = false;
+    function twitchAccountPriority(index) {
+      const value = twitchBonusConfig.accounts[index]?.claimPriority || twitchBonusConfig.claimPriority;
+      return ['exp', 'catch', 'lure', 'all'].includes(value) ? value : 'exp';
     }
-
+    function twitchApplyGameLink(index, data) {
+      const account = twitchBonusConfig.accounts[index];
+      const linked = data?.vinculado === true && /^[a-z0-9_]{1,40}$/i.test(data.login || '');
+      const name = linked ? data.login.toLowerCase() : '';
+      const changed = account.gameLinked !== linked || account.linkedUsername !== name || (linked && account.username !== name);
+      account.gameLinked = linked; account.linkedUsername = name;
+      if (linked) account.username = name;
+      return changed;
+    }
+    function saveTwitchConfig() {
+      if (!twitchConfigReady) return Promise.reject(new Error('Configuração Twitch não carregada.'));
+      const snapshot = JSON.parse(JSON.stringify(twitchBonusConfig));
+      const task = twitchSaveQueue.catch(() => {}).then(async () => {
+        if (!await window.pokeAPI.twitchSaveCreds(snapshot)) throw new Error('Falha ao salvar configurações Twitch.');
+        twitchSavedConfig = snapshot;
+      });
+      twitchSaveQueue = task;
+      return task;
+    }
+    function showTwitchFeedback(message, isError = false) {
+      const bar = document.getElementById('twitchBonusStatusBar');
+      document.getElementById('twitchBonusStatusText').textContent = message;
+      bar.style.display = 'block';
+      bar.className = 'twitch-status-bar' + (isError ? ' error' : ' success');
+      clearTimeout(twitchFeedbackTimer);
+      twitchFeedbackTimer = setTimeout(() => { bar.style.display = 'none'; }, 6000);
+    }
     async function loadTwitchBonusConfig() {
-      try {
-        if (window.pokeAPI && window.pokeAPI.twitchLoadCreds) {
-          const res = await window.pokeAPI.twitchLoadCreds();
-          if (res) {
-            twitchBonusConfig.masterEnabled = !!res.masterEnabled;
-            if (Array.isArray(res.accounts)) {
-              for (let i = 0; i < 4; i++) {
-                if (res.accounts[i]) {
-                  twitchBonusConfig.accounts[i] = Object.assign({ username: '', token: '', enabled: true }, res.accounts[i]);
-                }
-              }
-            }
+      if (twitchConfigReady) return;
+      if (twitchConfigLoading) return twitchConfigLoading;
+      twitchConfigLoading = (async () => {
+        try {
+          if (!window.pokeAPI?.twitchLoadCreds) throw new Error('Serviço Twitch indisponível.');
+          const saved = await window.pokeAPI.twitchLoadCreds();
+          twitchBonusConfig.masterEnabled = !!saved?.masterEnabled;
+          twitchBonusConfig.autoClaim = saved?.autoClaim === true && saved?.autoClaimProtocol === 1;
+          twitchBonusConfig.autoClaimProtocol = 1;
+          twitchBonusConfig.claimPriority = saved?.claimPriority || 'exp';
+          for (let i = 0; i < 4; i++) {
+            twitchBonusConfig.accounts[i] = { username: '', token: '', enabled: true, claimPriority: saved?.claimPriority || 'exp', ...(saved?.accounts?.[i] || {}) };
           }
-        }
-        if (window.pokeAPI && window.pokeAPI.twitchGetStatus) {
-          twitchBonusLiveState = await window.pokeAPI.twitchGetStatus();
-        }
-      } catch (e) { }
+          twitchSavedConfig = JSON.parse(JSON.stringify(twitchBonusConfig));
+          twitchConfigReady = true;
+          let linkedChanged = false;
+          for (let i = 0; i < 4; i++) linkedChanged = twitchApplyGameLink(i, twitchCachedGameData[i]) || linkedChanged;
+          if (linkedChanged) await saveTwitchConfig();
+          const [status, points, chat] = await Promise.all([
+            window.pokeAPI.twitchGetStatus?.(), window.pokeAPI.twitchGetPoints?.(), window.pokeAPI.twitchGetChatStatus?.()
+          ]);
+          twitchBonusLiveState = status;
+          if (points) twitchPointsState = points;
+          if (chat) twitchChatState = chat;
+          syncTwitchPartners();
+        } catch (error) { showTwitchFeedback(String(error.message || error), true); }
+        finally { twitchConfigLoading = null; }
+      })();
+      return twitchConfigLoading;
     }
+    function twitchOfficialChannels(index) {
+      const data = twitchCachedGameData[index];
+      if (!data?.vinculado || !data.login) return [];
+      return (data.oficiais || []).filter(item => item?.ativo === true && /^[a-z0-9_]{1,40}$/i.test(item.login));
+    }
+    let twitchLastPartners = '';
+    function syncTwitchPartners() {
+      if (!twitchConfigReady) return;
+      const channels = Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).map(c => c.login.toLowerCase()));
+      const lives = [...new Set(Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).filter(c => c.aoVivo).map(c => c.login.toLowerCase())).flat())];
+      const signature = JSON.stringify([channels, lives]);
+      if (signature === twitchLastPartners) return;
+      twitchLastPartners = signature;
+      Promise.all([window.pokeAPI?.twitchSetPointChannels?.(channels), window.pokeAPI?.twitchSyncLives?.(lives)])
+        .catch(error => { twitchLastPartners = ''; showTwitchFeedback(String(error.message || error), true); });
+    }
+    function twitchActiveBonuses(data, now = Date.now()) {
+      return [['xp', 'XP'], ['captura', 'Capture Boost'], ['shiny', 'Secret Lure']]
+        .filter(([key]) => Number(data?.bonus?.[key]) > now)
+        .map(([key, label]) => {
+          const minutes = Math.ceil((Number(data.bonus[key]) - now) / 60000);
+          return { label, time: minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}min` : `${minutes}min` };
+        });
+    }
+    function updateTwitchBonusBadge() {
+      const count = twitchCachedGameData.filter(data => twitchActiveBonuses(data).length).length;
+      window.__twitchBonusStatus = { masterEnabled: !!twitchBonusLiveState?.masterEnabled };
+      window.__twitchBonusPctTxt = count ? `${count} com bônus` : '';
+      window.__syncTwitchBonusBadge?.();
+      if (twitchGlobalBonusPill) RebosteioPerformance.setText(twitchGlobalBonusPill, count ? `${count} conta(s) com bônus no jogo` : 'Nenhum bônus ativo no jogo');
+    }
+    const twitchStatusLabels = {
+      disconnected: 'Desligado', login_required: 'Entre na Twitch', account_mismatch: 'Twitch diferente do vínculo',
+      authenticated: 'Sessão verificada', waiting_watch: 'Aguardando consulta', page_open: 'Janela Twitch aberta',
+      blocked: 'Consulta bloqueada pela Twitch', rate_limited: 'Limite da Twitch; aguardando', error: 'Falha na consulta'
+    };
+    function renderTwitchBonusUI() {
+      twitchMasterToggle.checked = twitchBonusConfig.masterEnabled;
+      const authenticated = twitchPointsState?.accounts?.some(account => account.status === 'authenticated');
+      const chatConnected = twitchChatState?.accounts?.some(account => account.status === 'connected');
+      twitchGlobalStatusPill.textContent = !twitchBonusConfig.masterEnabled ? '● Desativado' : authenticated ? '● Sessão Twitch confirmada' : chatConnected ? '● Chat conectado · pontos pendentes' : '● Aguardando consulta';
+      const auto = document.getElementById('twitchAutoClaimToggle');
+      auto.checked = twitchBonusConfig.autoClaim;
+      auto.disabled = twitchSettingsBusy || !window.__TAURI_INTERNALS__;
+      auto.title = window.__TAURI_INTERNALS__ ? '' : 'Resgate automático disponível na versão Rust.';
+      const priority = document.getElementById('twitchAutoClaimPriority');
+      priority.value = twitchAccountPriority(twitchSelectedAccount);
+      priority.disabled = twitchSettingsBusy;
+      updateTwitchBonusBadge();
+      const nav = document.getElementById('twitchAccountNav');
+      nav.replaceChildren();
+      for (let i = 0; i < 4; i++) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'twitch-account-choice' + (i === twitchSelectedAccount ? ' selected' : '');
+        button.setAttribute('aria-pressed', String(i === twitchSelectedAccount));
+        button.innerHTML = `<span class="twitch-choice-number">${i + 1}</span><span class="twitch-choice-info"><b>${kickEscape(shownAccountName(i, accounts[i]?.name || defName(i)))}</b><small>${kickEscape(twitchCachedGameData[i]?.login ? '@' + twitchCachedGameData[i].login : 'Sem vínculo recebido')}</small></span>`;
+        button.onclick = () => { twitchSelectedAccount = i; twitchPartnersPage = 0; renderTwitchBonusUI(); };
+        nav.appendChild(button);
+      }
+      const i = twitchSelectedAccount;
+      const cfg = twitchBonusConfig.accounts[i];
+      const data = twitchCachedGameData[i];
+      const state = twitchPointsState?.accounts?.[i] || {};
+      const chat = twitchChatState?.accounts?.[i];
+      const bonuses = twitchActiveBonuses(data);
+      const text = twitchStatusLabels[state.status] || 'Aguardando consulta';
+      const linked = data?.vinculado && data.login;
+      twitchAccountsGrid.innerHTML = `<div class="twitch-account-card ${cfg.enabled ? 'is-active' : 'is-disabled'}">
+        <div class="twitch-acc-header"><div class="twitch-acc-title"><span class="twitch-acc-badge">${i + 1}</span><span class="twitch-acc-name">${kickEscape(shownAccountName(i, accounts[i]?.name || defName(i)))}</span></div>
+        <label class="twitch-acc-toggle"><input type="checkbox" id="twitchAccountEnabled" ${cfg.enabled ? 'checked' : ''}><span>Ligar</span></label></div>
+        <div class="twitch-acc-status-row"><span class="twitch-status-label">${kickEscape(state.refreshing ? 'Consultando pontos…' : text)}</span></div>
+        <p class="twitch-field-help">${linked ? `Vínculo no jogo: @${kickEscape(data.login)}` : 'Conecte o jogo e vincule sua Twitch para receber os parceiros desta conta.'}</p>
+        ${chat?.status === 'connected' ? '<p class="twitch-field-help">Chat conectado com o acesso salvo.</p>' : ''}
+        <p class="twitch-field-help">Sessão Twitch: ${state.username ? '@' + kickEscape(state.username) : 'ainda não verificada'}</p>
+        ${state.error ? `<p class="twitch-field-help" role="status">${kickEscape(state.error)}</p>` : ''}
+        <div class="twitch-acc-channels-row"><span class="twitch-chans-label">Bônus no jogo:</span><div class="twitch-chans-list">${bonuses.length ? bonuses.map(b => `<span class="twitch-chan-badge">${b.label}: ${b.time}</span>`).join(' ') : '<span class="twitch-chan-none">Nenhum bônus ativo informado</span>'}</div></div>
+        <p class="twitch-field-help">Bônus de 1, 3, 5 e 10 horas, conforme o catálogo do canal. O automático resgata o mais barato disponível da preferência escolhida, assim que houver saldo. As horas se somam.</p>
+        <div class="twitch-acc-actions"><button type="button" class="twitch-btn-test" id="twitchSessionLogin">Abrir Twitch</button><button type="button" class="twitch-btn-test" id="twitchPointsRefresh" ${state.refreshing ? 'disabled' : ''}>Atualizar pontos</button><button type="button" class="twitch-btn-test" id="twitchLinkGame">Vincular no jogo</button></div>
+        <span class="twitch-test-result" aria-live="polite" id="twitchTestResult${i}"></span>
+      </div>`;
+      document.getElementById('twitchAccountEnabled').onchange = event => { cfg.enabled = event.target.checked; };
+      document.getElementById('twitchSessionLogin').onclick = () => twitchRunAction(() => {
+        if (!window.pokeAPI?.twitchSessionOpen) throw new Error('Sessão Twitch indisponível nesta versão.');
+        return window.pokeAPI.twitchSessionOpen(i, '');
+      });
+      document.getElementById('twitchPointsRefresh').onclick = () => twitchRunAction(async () => {
+        if (!window.pokeAPI?.twitchRefreshPoints) throw new Error('Consulta Twitch indisponível nesta versão.');
+        twitchPointsState = await window.pokeAPI.twitchRefreshPoints(i);
+        renderTwitchBonusUI();
+      });
+      document.getElementById('twitchLinkGame').onclick = () => linkTwitchInGame(i);
+      renderTwitchStreamersList();
+    }
+    async function twitchRunAction(action) {
+      try { await action(); } catch (error) { showTwitchFeedback(String(error.message || error), true); }
+    }
+    function renderTwitchStreamersList() {
+      const list = twitchOfficialChannels(twitchSelectedAccount).slice().sort((a, b) => Number(b.aoVivo) - Number(a.aoVivo));
+      twitchStreamersCount.textContent = `${list.filter(s => s.aoVivo).length} no ar`;
+      const pointAccount = twitchPointsState?.accounts?.[twitchSelectedAccount];
+      const statuses = list.map(channel => TwitchRewardStatus.forBalance(pointAccount?.balances?.[channel.login.toLowerCase()], twitchAccountPriority(twitchSelectedAccount)));
+      const ready = statuses.filter(item => item.affordable.length).length;
+      document.getElementById('twitchRewardSummary').textContent = ready ? `Buffs para resgatar: ${ready} canal(is)`
+        : statuses.some(item => item.known) ? 'Buffs para resgatar: nenhum disponível com este saldo' : 'Buffs para resgatar: aguardando consulta da Twitch';
+      document.getElementById('twitchRedemptionStatus').textContent = !window.__TAURI_INTERNALS__ ? 'Resgate automático disponível na versão Rust.'
+        : !twitchBonusConfig.autoClaim ? 'Resgate automático desligado.'
+        : pointAccount?.redemption?.message || 'Automático ativo: aguardando saldo e recompensa disponíveis.';
+      const pages = Math.max(1, Math.ceil(list.length / 4));
+      twitchPartnersPage = Math.max(0, Math.min(pages - 1, twitchPartnersPage));
+      document.getElementById('twitchPartnersPosition').textContent = `${twitchPartnersPage + 1} / ${pages}`;
+      document.getElementById('twitchPartnersPrev').disabled = twitchPartnersPage === 0;
+      document.getElementById('twitchPartnersNext').disabled = twitchPartnersPage === pages - 1;
+      twitchStreamersList.innerHTML = list.slice(twitchPartnersPage * 4, twitchPartnersPage * 4 + 4).map(channel => {
+        const balance = twitchPointsState?.accounts?.[twitchSelectedAccount]?.balances?.[channel.login.toLowerCase()];
+        const fresh = balance?.status === 'verified' && Date.now() - Number(balance.checkedAt) < 120000;
+        const points = fresh ? `${Number(balance.points).toLocaleString('pt-BR')} pontos` : (balance?.checkedAt ? 'Saldo desatualizado' : 'Saldo não consultado');
+        const rewardStatus = TwitchRewardStatus.forBalance(balance, twitchAccountPriority(twitchSelectedAccount));
+        const rewardLabel = rewardStatus.label;
+        const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : ' · indisponível'}</div>`).join('')}</details>` : '';
+        return `<div class="twitch-streamer-item ${channel.aoVivo ? 'live' : 'off'}"><span class="twitch-streamer-name">@${kickEscape(channel.login)}</span><div class="twitch-streamer-meta"><span class="${channel.aoVivo ? 'twitch-badge-live' : 'twitch-badge-off'}">${channel.aoVivo ? 'Ao vivo' : 'Offline'}</span><span class="twitch-badge-bonus">${points}</span><span class="twitch-field-help">${kickEscape(rewardLabel)}</span>${options}<button type="button" class="twitch-btn-test" data-twitch-channel="${kickEscape(channel.login)}">Abrir canal</button></div></div>`;
+      }).join('') || '<div class="twitch-empty-streamers">Aguardando parceiros oficiais enviados pelo jogo desta conta.</div>';
+      twitchStreamersList.querySelectorAll('[data-twitch-channel]').forEach(button => {
+        button.onclick = () => twitchRunAction(() => window.pokeAPI.twitchSessionOpen(twitchSelectedAccount, button.dataset.twitchChannel));
+      });
+    }
+    document.getElementById('twitchPartnersPrev').onclick = () => { twitchPartnersPage--; renderTwitchStreamersList(); };
+    document.getElementById('twitchPartnersNext').onclick = () => { twitchPartnersPage++; renderTwitchStreamersList(); };
+    async function openTwitchBonusModal() {
+      await loadTwitchBonusConfig();
+      renderTwitchBonusUI();
+      twitchBonusOverlay.classList.add('show');
+    }
+    function closeTwitchBonusModal() {
+      if (twitchSavedConfig) Object.assign(twitchBonusConfig, JSON.parse(JSON.stringify(twitchSavedConfig)));
+      twitchBonusOverlay.classList.remove('show');
+    }
+    twitchBonusBtn.onclick = openTwitchBonusModal;
+    twitchBonusCloseBtn.onclick = closeTwitchBonusModal;
+    twitchBonusCancel.onclick = closeTwitchBonusModal;
+    twitchMasterToggle.onchange = () => { twitchBonusConfig.masterEnabled = twitchMasterToggle.checked; };
+    twitchBonusSave.onclick = () => twitchRunAction(async () => {
+      if (!twitchConfigReady) throw new Error('Configuração não carregada; tente abrir o painel novamente.');
+      twitchBonusSave.disabled = true;
+      try {
+        for (let i = 0; i < 4; i++) twitchApplyGameLink(i, twitchCachedGameData[i]);
+        await saveTwitchConfig();
+        showTwitchFeedback('Configurações da Twitch salvas!');
+        syncTwitchPartners();
+      } finally { twitchBonusSave.disabled = false; }
+    });
+    document.getElementById('twitchAutoClaimToggle').onchange = async event => {
+      const previous = twitchBonusConfig.autoClaim;
+      twitchBonusConfig.autoClaim = event.target.checked;
+      twitchBonusConfig.autoClaimProtocol = 1;
+      twitchSettingsBusy = true;
+      renderTwitchBonusUI();
+      try { await saveTwitchConfig(); }
+      catch (error) { twitchBonusConfig.autoClaim = previous; showTwitchFeedback('Falha ao salvar. O resgate automático mantém a configuração anterior.', true); }
+      finally { twitchSettingsBusy = false; renderTwitchBonusUI(); }
+    };
+    document.getElementById('twitchAutoClaimPriority').onchange = async event => {
+      const account = twitchBonusConfig.accounts[twitchSelectedAccount];
+      const previous = account.claimPriority;
+      account.claimPriority = event.target.value;
+      twitchSettingsBusy = true;
+      renderTwitchBonusUI();
+      try { await saveTwitchConfig(); }
+      catch (error) { account.claimPriority = previous; showTwitchFeedback('Falha ao salvar. O buff escolhido mantém a configuração anterior.', true); }
+      finally { twitchSettingsBusy = false; renderTwitchBonusUI(); }
+    };
+    window.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && twitchBonusOverlay.classList.contains('show')) closeTwitchBonusModal();
+    });
+    function twitchRefreshView() {
+      updateTwitchBonusBadge();
+      if (twitchBonusOverlay.classList.contains('show')) renderTwitchBonusUI();
+    }
+    window.pokeAPI?.onTwitchStatus?.(state => { twitchBonusLiveState = state; twitchRefreshView(); });
+    window.pokeAPI?.onTwitchPoints?.(state => { twitchPointsState = state; twitchRefreshView(); });
+    window.pokeAPI?.onTwitchChatStatus?.(state => { twitchChatState = state; twitchRefreshView(); });
+    function handleTwitchGameTelemetry(index, data) {
+      if (!Number.isInteger(index) || index < 0 || index >= 4) return;
+      twitchCachedGameData[index] = data || null;
+      if (twitchConfigReady && twitchApplyGameLink(index, data)) {
+        saveTwitchConfig().catch(error => showTwitchFeedback(String(error.message || error), true));
+      }
+      syncTwitchPartners();
+      twitchRefreshView();
+    }
+    window.handleTwitchGameTelemetry = handleTwitchGameTelemetry;
+    const twitchExpiryTimer = setInterval(twitchRefreshView, 30000);
+    window.addEventListener('beforeunload', () => { clearInterval(twitchExpiryTimer); clearTimeout(twitchFeedbackTimer); });
 
     let twitchGuideStep = 0;
     function selectTwitchGuideStep(step) {
@@ -7426,180 +7648,6 @@
     document.getElementById('twitchGuidePrev').onclick = () => selectTwitchGuideStep(twitchGuideStep - 1);
     document.getElementById('twitchGuideNext').onclick = () => selectTwitchGuideStep(twitchGuideStep + 1);
     selectTwitchGuideStep(0);
-    let twitchPartnersPage = 0;
-    document.getElementById('twitchPartnersPrev').onclick = () => { twitchPartnersPage--; renderTwitchStreamersList(); };
-    document.getElementById('twitchPartnersNext').onclick = () => { twitchPartnersPage++; renderTwitchStreamersList(); };
-    let twitchSelectedAccount = 0;
-    function renderTwitchBonusUI() {
-      if (twitchMasterToggle) twitchMasterToggle.checked = twitchBonusConfig.masterEnabled;
-
-      const isRunning = twitchBonusConfig.masterEnabled && twitchBonusLiveState && twitchBonusLiveState.accounts && twitchBonusLiveState.accounts.some(a => a.status === 'connected');
-      if (twitchGlobalStatusPill) {
-        twitchGlobalStatusPill.textContent = !twitchBonusConfig.masterEnabled ? '● Desativado' : (isRunning ? '● Conectado nos Chats' : '● Aguardando Conexão');
-        twitchGlobalStatusPill.className = 'twitch-kpi-pill' + (isRunning ? ' active' : '');
-      }
-
-      let maxBonus = 0;
-      twitchCachedGameData.forEach(tw => {
-        if (tw && tw.pctAtual && tw.pctAtual > maxBonus) maxBonus = tw.pctAtual;
-      });
-      if (twitchGlobalBonusPill) {
-        twitchGlobalBonusPill.textContent = maxBonus > 0 ? `⚡ Bônus no Jogo: +${maxBonus}% XP` : '⚡ Bônus no Jogo: 0%';
-      }
-
-      window.__twitchBonusStatus = twitchBonusConfig;
-      window.__twitchBonusPctTxt = maxBonus > 0 ? `+${maxBonus}%` : '';
-      if (window.__syncTwitchBonusBadge) window.__syncTwitchBonusBadge();
-
-      if (twitchAccountsGrid) {
-        twitchAccountsGrid.innerHTML = '';
-        const twitchNav = document.getElementById('twitchAccountNav');
-        twitchNav.replaceChildren();
-        for (let n = 0; n < 4; n++) {
-          const item = document.createElement('button');
-          item.type = 'button';
-          item.className = 'twitch-account-choice' + (n === twitchSelectedAccount ? ' selected' : '');
-          item.setAttribute('aria-pressed', String(n === twitchSelectedAccount));
-          const number = document.createElement('span'); number.className = 'twitch-choice-number'; number.textContent = String(n + 1);
-          const info = document.createElement('span'); info.className = 'twitch-choice-info';
-          const name = document.createElement('b'); name.textContent = shownAccountName(n, (accounts[n] && accounts[n].name) || defName(n));
-          const state = document.createElement('small');
-          const cfg = twitchBonusConfig.accounts[n];
-          state.textContent = !cfg || !cfg.enabled ? 'Desligada' : (cfg.username ? '@' + cfg.username : 'Configuração pendente');
-          info.append(name, state); item.append(number, info);
-          item.onclick = () => { twitchSelectedAccount = n; renderTwitchBonusUI(); };
-          twitchNav.appendChild(item);
-        }
-        for (let i = 0; i < 4; i++) {
-          const acc = twitchBonusConfig.accounts[i] || { username: '', token: '', enabled: true };
-          const liveAcc = (twitchBonusLiveState && twitchBonusLiveState.accounts && twitchBonusLiveState.accounts[i]) || { status: 'disconnected', joinedChannels: [] };
-          const gameTwitch = twitchCachedGameData[i] || null;
-
-          if (!acc.username && gameTwitch && gameTwitch.login) {
-            acc.username = gameTwitch.login;
-          }
-
-          const card = document.createElement('div');
-          card.hidden = i !== twitchSelectedAccount;
-          card.className = 'twitch-account-card' + (acc.enabled ? ' is-active' : ' is-disabled');
-
-          const statusColor = liveAcc.status === 'connected' ? '#22c55e' : (liveAcc.status === 'connecting' ? '#eab308' : (liveAcc.status === 'error' ? '#ef4444' : '#8b949e'));
-          const statusText = liveAcc.status === 'connected' ? 'Ativo no Chat' : (liveAcc.status === 'connecting' ? 'Conectando...' : (liveAcc.status === 'error' ? (liveAcc.lastError || 'Erro') : 'Desconectado'));
-
-          const joinedBadges = (liveAcc.joinedChannels && liveAcc.joinedChannels.length > 0)
-            ? liveAcc.joinedChannels.map(ch => `<span class="twitch-chan-badge">✓ #${ch}</span>`).join(' ')
-            : '<span class="twitch-chan-none">Nenhum canal ativo</span>';
-
-          const inGameBonus = (gameTwitch && gameTwitch.assistindo && gameTwitch.pctAtual) ? `<span class="twitch-ingame-tag">+${gameTwitch.pctAtual}% XP</span>` : '';
-
-          card.innerHTML = `
-            <div class="twitch-acc-header">
-              <div class="twitch-acc-title">
-                <span class="twitch-acc-badge">${i + 1}</span>
-                <span class="twitch-acc-name">${kickEscape(shownAccountName(i, (accounts[i] && accounts[i].name) || defName(i)))}</span>
-                ${inGameBonus}
-              </div>
-              <label class="twitch-acc-toggle" title="Ativar esta conta na Twitch">
-                <input type="checkbox" data-acc-enable="${i}" ${acc.enabled ? 'checked' : ''}>
-                <span>Ligar</span>
-              </label>
-            </div>
-            <div class="twitch-acc-status-row">
-              <span class="twitch-status-dot" style="background:${statusColor}"></span>
-              <span class="twitch-status-label">${statusText}</span>
-              ${gameTwitch && gameTwitch.login ? `<span class="twitch-linked-tag" title="Vinculado no jogo">Twitch: @${gameTwitch.login}</span>` : `<span class="twitch-unlinked-tag" title="Vincule pelo menu Treinador do jogo">Sem vínculo no jogo</span>`}
-            </div>
-            <div class="twitch-acc-channels-row">
-              <span class="twitch-chans-label">Presença:</span>
-              <div class="twitch-chans-list">${joinedBadges}</div>
-            </div>
-            <div class="twitch-acc-inputs">
-              <div class="twitch-input-group">
-                <label for="twitchUser${i}">Usuário Twitch</label>
-                <input id="twitchUser${i}" type="text" autocomplete="off" spellcheck="false" placeholder="Login da Twitch" value="${kickEscape(acc.username || '')}" data-acc-user="${i}">
-              </div>
-              <p class="twitch-field-help">Use a mesma Twitch vinculada a esta conta no jogo.</p>
-              <div class="twitch-input-group">
-                <label for="twitchToken${i}">Token de Chat (OAuth)</label>
-                <div class="twitch-token-wrap">
-                  <input id="twitchToken${i}" type="password" autocomplete="off" placeholder="Cole o Access token" value="${acc.token || ''}" data-acc-token="${i}">
-                  <button type="button" class="twitch-btn-eye" title="Mostrar/ocultar token" data-toggle-eye="${i}" aria-label="Mostrar ou ocultar token">Ver</button>
-                </div>
-              </div>
-            </div>
-            <p class="twitch-field-help">Cole o Access token gerado pela Twitch. Ele ficará oculto neste painel.</p>
-            <div class="twitch-acc-actions">
-              <button type="button" class="twitch-btn-test" data-test-acc="${i}">Testar Conexão</button>
-              <button type="button" class="twitch-btn-test twitch-btn-link-game" data-link-twitch="${i}" title="Vincular a Twitch desta conta diretamente pelo bot">🔗 Vincular no Jogo (via Bot)</button>
-              <span class="twitch-test-result" aria-live="polite" id="twitchTestResult${i}"></span>
-            </div>
-          `;
-          twitchAccountsGrid.appendChild(card);
-        }
-
-        twitchAccountsGrid.querySelectorAll('[data-acc-enable]').forEach(cb => {
-          cb.onchange = () => {
-            const idx = +cb.dataset.accEnable;
-            if (twitchBonusConfig.accounts[idx]) {
-              twitchBonusConfig.accounts[idx].enabled = cb.checked;
-              renderTwitchBonusUI();
-            }
-          };
-        });
-        twitchAccountsGrid.querySelectorAll('[data-acc-user]').forEach(inp => {
-          inp.oninput = () => {
-            const idx = +inp.dataset.accUser;
-            if (twitchBonusConfig.accounts[idx]) twitchBonusConfig.accounts[idx].username = inp.value.trim();
-          };
-        });
-        twitchAccountsGrid.querySelectorAll('[data-acc-token]').forEach(inp => {
-          inp.oninput = () => {
-            const idx = +inp.dataset.accToken;
-            if (twitchBonusConfig.accounts[idx]) twitchBonusConfig.accounts[idx].token = inp.value.trim();
-          };
-        });
-        twitchAccountsGrid.querySelectorAll('[data-toggle-eye]').forEach(btn => {
-          btn.onclick = () => {
-            const idx = +btn.dataset.toggleEye;
-            const inp = twitchAccountsGrid.querySelector(`[data-acc-token="${idx}"]`);
-            if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
-          };
-        });
-        twitchAccountsGrid.querySelectorAll('[data-link-twitch]').forEach(btn => {
-          btn.onclick = async () => {
-            const idx = +btn.dataset.linkTwitch;
-            await linkTwitchInGame(idx);
-          };
-        });
-        twitchAccountsGrid.querySelectorAll('[data-test-acc]').forEach(btn => {
-          btn.onclick = async () => {
-            const idx = +btn.dataset.testAcc;
-            const resEl = document.getElementById(`twitchTestResult${idx}`);
-            const acc = twitchBonusConfig.accounts[idx];
-            if (!acc || !acc.username || !acc.token) {
-              if (resEl) { resEl.textContent = 'Preencha usuário e token'; resEl.style.color = '#ef4444'; }
-              return;
-            }
-            btn.disabled = true;
-            if (resEl) { resEl.textContent = 'Testando...'; resEl.style.color = '#eab308'; }
-            try {
-              const r = await window.pokeAPI.twitchTestConnection(acc.username, acc.token);
-              if (r.ok) {
-                if (resEl) { resEl.textContent = '✓ Conexão OK!'; resEl.style.color = '#22c55e'; }
-              } else {
-                if (resEl) { resEl.textContent = r.error || 'Falha na conexão'; resEl.style.color = '#ef4444'; }
-              }
-            } catch (err) {
-              if (resEl) { resEl.textContent = err.message; resEl.style.color = '#ef4444'; }
-            } finally {
-              btn.disabled = false;
-            }
-          };
-        });
-      }
-
-      renderTwitchStreamersList();
-    }
 
     async function linkTwitchInGame(accIdx) {
       const wv = webviews[accIdx];
@@ -7668,156 +7716,7 @@
       }
     }
 
-    function renderTwitchStreamersList() {
-      if (!twitchStreamersList) return;
-      const allStreams = new Map();
-      twitchCachedGameData.forEach(tw => {
-        if (!tw) return;
-        if (Array.isArray(tw.oficiais)) {
-          tw.oficiais.forEach(o => {
-            if (o && o.login && !allStreams.has(o.login.toLowerCase())) {
-              allStreams.set(o.login.toLowerCase(), { login: o.login, bonus: !!o.bonus, aoVivo: false, espectadores: 0 });
-            }
-          });
-        }
-        if (Array.isArray(tw.lives)) {
-          tw.lives.forEach(l => {
-            if (l && l.login) {
-              const existing = allStreams.get(l.login.toLowerCase()) || { login: l.login, bonus: true };
-              existing.aoVivo = l && l.aoVivo !== false;
-              existing.espectadores = l.espectadores || 0;
-              allStreams.set(l.login.toLowerCase(), existing);
-            }
-          });
-        }
-      });
 
-      const list = Array.from(allStreams.values()).sort((a, b) => Number(b.aoVivo) - Number(a.aoVivo) || b.espectadores - a.espectadores);
-      const onlineCount = list.filter(s => s.aoVivo).length;
-      if (twitchStreamersCount) twitchStreamersCount.textContent = `${onlineCount} no ar`;
-
-      const pageCount = Math.max(1, Math.ceil(list.length / 4));
-      twitchPartnersPage = Math.max(0, Math.min(pageCount - 1, twitchPartnersPage));
-      document.getElementById('twitchPartnersPosition').textContent = `${twitchPartnersPage + 1} / ${pageCount}`;
-      document.getElementById('twitchPartnersPrev').disabled = twitchPartnersPage === 0;
-      document.getElementById('twitchPartnersNext').disabled = twitchPartnersPage === pageCount - 1;
-      if (list.length === 0) {
-        twitchStreamersList.innerHTML = '<div class="twitch-empty-streamers">Aguardando dados do jogo ou nenhum streamer parceiro cadastrado.</div>';
-        return;
-      }
-
-      twitchStreamersList.innerHTML = list.slice(twitchPartnersPage * 4, twitchPartnersPage * 4 + 4).map(s => {
-        const statusBadge = s.aoVivo
-          ? `<span class="twitch-badge-live">Ao vivo</span><span class="twitch-viewers">${s.espectadores} espectadores</span>`
-          : '<span class="twitch-badge-off">Offline</span>';
-        const bonusBadge = s.bonus ? '<span class="twitch-badge-bonus">Bônus habilitado</span>' : '<span class="twitch-badge-nobonus">Sem Bônus</span>';
-        return `
-          <div class="twitch-streamer-item ${s.aoVivo ? 'live' : 'off'}">
-            <span class="twitch-streamer-name">@${s.login}</span>
-            <div class="twitch-streamer-meta">${statusBadge} ${bonusBadge}</div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    function openTwitchBonusModal() {
-      loadTwitchBonusConfig().then(() => {
-        renderTwitchBonusUI();
-        if (twitchBonusOverlay) twitchBonusOverlay.classList.add('show');
-      });
-    }
-
-    function closeTwitchBonusModal() {
-      if (twitchBonusOverlay) twitchBonusOverlay.classList.remove('show');
-    }
-
-    if (twitchBonusBtn) twitchBonusBtn.onclick = openTwitchBonusModal;
-    if (twitchBonusCloseBtn) twitchBonusCloseBtn.onclick = closeTwitchBonusModal;
-    if (twitchBonusCancel) twitchBonusCancel.onclick = closeTwitchBonusModal;
-
-    if (twitchMasterToggle) {
-      twitchMasterToggle.onchange = () => {
-        twitchBonusConfig.masterEnabled = twitchMasterToggle.checked;
-        renderTwitchBonusUI();
-      };
-    }
-
-    if (twitchBonusSave) {
-      twitchBonusSave.onclick = async () => {
-        twitchBonusSave.disabled = true;
-        try {
-          if (window.pokeAPI && window.pokeAPI.twitchSaveCreds) {
-            const ok = await window.pokeAPI.twitchSaveCreds(twitchBonusConfig);
-            if (ok) {
-              showTwitchFeedback('✓ Configurações da Twitch salvas e aplicadas!');
-              renderTwitchBonusUI();
-              setTimeout(closeTwitchBonusModal, 800);
-            } else {
-              showTwitchFeedback('Falha ao salvar configurações', true);
-            }
-          }
-        } catch (e) {
-          showTwitchFeedback(e.message, true);
-        } finally {
-          twitchBonusSave.disabled = false;
-        }
-      };
-    }
-
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      window.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && twitchBonusOverlay && twitchBonusOverlay.classList.contains('show')) {
-          e.preventDefault();
-          closeTwitchBonusModal();
-        }
-      });
-    }
-
-    if (window.pokeAPI && window.pokeAPI.onTwitchStatus) {
-      window.pokeAPI.onTwitchStatus((st) => {
-        twitchBonusLiveState = st;
-        if (twitchBonusOverlay && twitchBonusOverlay.classList.contains('show')) {
-          renderTwitchBonusUI();
-        } else {
-          const isRunning = st && st.masterEnabled && st.accounts && st.accounts.some(a => a.status === 'connected');
-          window.__twitchBonusStatus = { masterEnabled: isRunning };
-          if (window.__syncTwitchBonusBadge) window.__syncTwitchBonusBadge();
-        }
-      });
-    }
-
-    function handleTwitchGameTelemetry(accIndex, twData) {
-      if (!twData) return;
-      twitchCachedGameData[accIndex] = twData;
-
-      if (twData.login && twitchBonusConfig.accounts[accIndex] && !twitchBonusConfig.accounts[accIndex].username) {
-        twitchBonusConfig.accounts[accIndex].username = twData.login;
-        if (window.pokeAPI && window.pokeAPI.twitchSaveCreds) {
-          window.pokeAPI.twitchSaveCreds(twitchBonusConfig).catch(() => {});
-        }
-      }
-
-      const allLiveLogins = new Set();
-      twitchCachedGameData.forEach(tw => {
-        if (!tw || !Array.isArray(tw.lives)) return;
-        tw.lives.forEach(l => {
-          if (l && l.login && l.aoVivo !== false) {
-            allLiveLogins.add(l.login.toLowerCase());
-          }
-        });
-      });
-      if (window.pokeAPI && window.pokeAPI.twitchSyncLives) {
-        window.pokeAPI.twitchSyncLives(Array.from(allLiveLogins));
-      }
-
-      if (twitchBonusOverlay && twitchBonusOverlay.classList.contains('show')) {
-        renderTwitchBonusUI();
-      } else {
-        if (twData.pctAtual) window.__twitchBonusPctTxt = `+${twData.pctAtual}%`;
-        if (window.__syncTwitchBonusBadge) window.__syncTwitchBonusBadge();
-      }
-    }
-    window.handleTwitchGameTelemetry = handleTwitchGameTelemetry;
 
     const kickCachedGameData = [];
     const KICK_OFFICIAL_PARTNERS = [
@@ -11547,7 +11446,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
               : '<span style="color:var(--cd-positive, #3fb950)">' + t('cdHunting') + '</span>' + folegoTxt(r); // o pokémon em uso agora tem coluna própria
           s += '<tr data-i="' + r.i + '"><td><span class="cd-dot" style="background:' + r.dot + '"></span>' + esc(r.name) + '</td>'
             + '<td>' + (r.lead ? (r.lead.shiny ? '✨ ' : '') + esc(r.lead.name) + ' <b style="color:var(--cd-secondary, #adbac7)">Lv' + nf(r.lead.level) + '</b>' : '—') + '</td>'
-            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + '</td>'
+            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + '<div class="cd-outland-tier">' + esc(window.PioBattleHud.outlandTierLabel(stCache[r.i]?.d)) + '</div></td>'
             + '<td style="color:var(--cd-secondary, #adbac7)">' + (r.st === 'on' ? tsec(r.secs) : '—') + '</td>'
             + '<td style="color:' + ((r.gph || 0) < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (r.st === 'on' ? ncs(r.gph) : '—') + '</td>'
             + '<td style="color:var(--cd-xp, #79c0ff)">' + (r.st === 'on' ? nc(r.xph) : '—') + '</td>'

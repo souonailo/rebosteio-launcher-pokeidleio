@@ -91,9 +91,59 @@
   function setSocialText(element, text) {
     if (element.textContent !== text) element.textContent = text;
   }
+  function setHudAttribute(element, name, value) {
+    if (element && element.getAttribute(name) !== String(value)) element.setAttribute(name, String(value));
+  }
+  function setHudTitle(element, value) {
+    if (element && element.title !== value) element.title = value;
+  }
+  function setHudClass(element, name, enabled) {
+    if (element && element.classList.contains(name) !== !!enabled) element.classList.toggle(name, !!enabled);
+  }
+  function setHudStyle(element, name, value) {
+    if (element && element.style[name] !== value) element.style[name] = value;
+  }
+  function setHudSprite(element, source, fallback, opacity = '1') {
+    if (!element) return;
+    if (element.getAttribute('data-src') === source) {
+      if (!element.__hudImageFailed) setHudStyle(element, 'opacity', opacity);
+      return;
+    }
+    element.__hudImageFailed = false;
+    setHudAttribute(element, 'data-src', source);
+    setHudStyle(element, 'opacity', opacity);
+    const failed = () => {
+      element.onerror = null;
+      element.__hudImageFailed = true;
+      setHudStyle(element, 'opacity', '0');
+    };
+    element.onerror = () => {
+      if (!fallback || element.getAttribute('src') === fallback) return failed();
+      element.onerror = failed;
+      element.src = fallback;
+    };
+    element.src = source;
+  }
+
+  // Only presentation is deferred. Telemetry ingestion and native services continue.
+  let nativeWindowVisible = true;
+  const latestPresentation = new Map();
+  const presentationVisible = () => nativeWindowVisible && !document.hidden;
+  function restorePresentation() {
+    if (!presentationVisible()) return;
+    const grid = document.getElementById('grid');
+    if (!grid) return;
+    for (const [i, state] of latestPresentation) {
+      const panel = grid.children[i];
+      if (panel) PioBattleHud.update(panel, i, state);
+    }
+    refreshSocial();
+  }
+
   const social = { twitch: null, kick: null, points: null };
   const gameSocial = new Map();
   function refreshSocial() {
+    if (!presentationVisible()) return;
     const grid = document.getElementById('grid');
     if (!grid) return;
     Array.from(grid.children).forEach((panel, i) => PioBattleHud.updateSocial(panel, i));
@@ -185,19 +235,31 @@
 
     // 2. Coletados na run atual
     let runDrops = 0;
-    for (const id of def.ids) {
-      const entry = rawDrops[id] || rawDrops[String(id)];
-      if (entry != null) {
-        runDrops += typeof entry === 'object' ? (+entry.qty || 0) : (+entry || 0);
+    const matchedEntries = [];
+    for (const k in rawDrops) {
+      const entry = rawDrops[k];
+      const entryName = (entry !== null && typeof entry === 'object' && entry.name) ? String(entry.name).toLowerCase().trim().replace(/\s+/g, ' ') : String(k).toLowerCase().trim().replace(/\s+/g, ' ');
+      const entryId = entry !== null && typeof entry === 'object' ? (+entry.id || +k || 0) : (+k || 0);
+      if ((entryId && def.ids.includes(entryId)) || def.names.some(n => entryName.includes(n))) {
+        matchedEntries.push({ entry, key: String(k), id: entryId, name: entryName });
       }
     }
-    for (const k in rawDrops) {
-      if (def.ids.map(String).includes(String(k))) continue;
-      const entry = rawDrops[k];
-      const entryName = (typeof entry === 'object' && entry.name) ? String(entry.name).toLowerCase() : String(k).toLowerCase();
-      if (def.names.some(n => entryName.includes(n))) {
-        runDrops += typeof entry === 'object' ? (+entry.qty || 0) : (+entry || 0);
+    const seenIds = new Set();
+    const seenAliasNames = new Set();
+    const identifiedNames = new Set(matchedEntries
+      .filter(item => item.id && def.ids.includes(item.id))
+      .map(item => item.name));
+    for (const item of matchedEntries) {
+      // Headless telemetry serializes the same item under its name and ID.
+      // Use IDs as identity when present; name-only aliases use their complete normalized name.
+      if (item.id && def.ids.includes(item.id)) {
+        if (seenIds.has(item.id)) continue;
+        seenIds.add(item.id);
+      } else {
+        if (seenAliasNames.has(item.name) || identifiedNames.has(item.name)) continue;
+        seenAliasNames.add(item.name);
       }
+      runDrops += item.entry !== null && typeof item.entry === 'object' ? (+item.entry.qty || 0) : (+item.entry || 0);
     }
     if (runDrops === 0 && dropsList.length > 0) {
       for (const d of dropsList) {
@@ -230,6 +292,8 @@
 
     return { initial, runDrops, current: finalCurrent };
   }
+
+  const socialBonusLabels = { exp: 'EXP +15%', catch: 'Captura +15%', lure: 'Lure +15%' };
 
   function formatKickBonus(telemetry, account) {
     const redemption = account?.activeRedemption || account?.redemption;
@@ -300,15 +364,15 @@
     const types = [];
 
     if (telExp > 0 || (redemptionActive && redemptionKey.includes('exp'))) {
-      types.push('EXP +15%');
+      types.push(socialBonusLabels.exp);
     }
 
     if (telCatch > 0 || (redemptionActive && redemptionKey.includes('catch'))) {
-      types.push('Catch +15%');
+      types.push(socialBonusLabels.catch);
     }
 
     if (telLure > 0 || (redemptionActive && redemptionKey.includes('lure'))) {
-      types.push('Lure +15%');
+      types.push(socialBonusLabels.lure);
     }
 
     if (types.length === 0) {
@@ -348,51 +412,100 @@
   }
 
   const PioBattleHud = {
+    outlandTierLabel(state) {
+      const tier = state?.outlandTier;
+      return state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100
+        ? `Outland · tier ${tier}` : 'Outland · aguardando confirmação';
+    },
     updateSocial(panel, i) {
+      if (!presentationVisible()) return;
       const box = panel.querySelector('.battle-slot-hud');
       if (!box) return;
       const game = gameSocial.get(i) || {};
       const labels = { checking: 'Verificando sessão', authenticated: 'Sessão confirmada', blocked: 'Consulta bloqueada', rate_limited: 'Aguarde', account_mismatch: 'Outra conta', connected: 'Conectada', connecting: 'Conectando', waiting_live: 'Sem live', error: 'Erro', login_required: 'Entrar', disconnected: 'Desconectada' };
-      const account = social.points?.accounts?.[i];
+      const kickAccount = social.kickPoints?.accounts?.[i] || social.points?.accounts?.[i];
+      const twitchAccount = social.twitchPoints?.accounts?.[i];
+      const account = kickAccount;
       for (const platform of ['twitch', 'kick']) {
         const row = box.querySelector('.bsh-social-' + platform);
         const status = social[platform]?.accounts?.[i]?.status;
         const telemetry = game[platform];
-        const connected = status === 'connected' || status === 'authenticated';
-        row.classList.toggle('is-connected', connected);
+        const chatConnected = platform === 'twitch' && social.twitchChat?.accounts?.[i]?.status === 'connected';
+        const connected = status === 'connected' || status === 'authenticated' || chatConnected;
+        setHudClass(row, 'is-connected', connected);
         const statusEl = box.querySelector('.bsh-' + platform + '-status');
         // Routine balance polls do not replace an already confirmed session label.
-        setSocialText(statusEl, (platform === 'kick' && account?.refreshing && !connected ? 'Consultando saldo' : labels[status]) || (platform === 'twitch' && telemetry?.assistindo ? 'Assistindo' : telemetry?.login ? 'Vinculada' : 'Aguardando'));
-        statusEl.title = platform === 'kick' && account?.refreshing ? 'Atualizando saldo em segundo plano' : '';
+        setSocialText(statusEl, (chatConnected && status !== 'authenticated' ? 'Chat conectado' : platform === 'kick' && account?.refreshing && !connected ? 'Consultando saldo' : labels[status]) || (platform === 'twitch' && telemetry?.assistindo ? 'Assistindo' : telemetry?.login ? 'Vinculada' : 'Aguardando'));
+        setHudTitle(statusEl, platform === 'kick' && account?.refreshing ? 'Atualizando saldo em segundo plano' : '');
         const bonusEl = box.querySelector('.bsh-' + platform + '-bonus');
         if (platform === 'twitch') {
-          let twBonus = 'Bônus —';
-          if (telemetry) {
-            twBonus = telemetry.assistindo && telemetry.pctAtual > 0 ? '+' + telemetry.pctAtual + '% XP' : 'Sem bônus';
-          }
-          setSocialText(bonusEl, twBonus);
-          bonusEl.classList.toggle('is-bonus-active', twBonus.startsWith('+'));
+          const now = Date.now();
+          const active = [['xp', socialBonusLabels.exp], ['captura', socialBonusLabels.catch], ['shiny', socialBonusLabels.lure]]
+            .filter(([key]) => Number(telemetry?.bonus?.[key]) > now)
+            .map(([key, label]) => {
+              const minutes = Math.ceil((Number(telemetry.bonus[key]) - now) / 60000);
+              return `${label} · ${minutes >= 60 ? Math.floor(minutes / 60) + 'h ' + String(minutes % 60).padStart(2, '0') : minutes}m`;
+            });
+          setSocialText(bonusEl, active.join(' · ') || (telemetry ? 'Sem bônus' : 'Bônus —'));
+          setHudClass(bonusEl, 'is-bonus-active', active.length > 0);
         } else {
           let kickBonusText = 'Bônus —';
           if (telemetry || account?.activeRedemption || account?.redemption) {
             const kb = formatKickBonus(telemetry, account);
             kickBonusText = kb.text;
-            bonusEl.classList.toggle('is-bonus-active', kb.active);
-            if (kb.details) bonusEl.title = kb.details;
+            setHudClass(bonusEl, 'is-bonus-active', kb.active);
+            setHudTitle(bonusEl, kb.details || '');
           } else {
-            bonusEl.classList.remove('is-bonus-active');
+            setHudClass(bonusEl, 'is-bonus-active', false);
+            setHudTitle(bonusEl, '');
           }
           setSocialText(bonusEl, kickBonusText);
         }
       }
-      const balances = Object.entries(account?.balances || {});
-      const verified = balances.filter(([, b]) => b.status === 'verified' && Number.isSafeInteger(b.points));
-      const total = verified.reduce((n, [, b]) => n + b.points, 0);
-      const points = box.querySelector('.bsh-social-points');
-      const gamePoints = game.kick?.pontos;
-      setSocialText(points, !verified.length && Number.isFinite(gamePoints) ? fmtNumber(gamePoints) + ' pts no jogo' : verified.length ? fmtNumber(total) + ' pts' : 'Pontos —');
-      points.title = balances.length ? balances.map(([channel, b]) => channel + ': ' + (b.status === 'verified' ? fmtNumber(b.points) : 'indisponível')).join('\n') : 'Aguardando saldo confirmado pela Kick';
-      setSocialText(box.querySelector('.bsh-social-channels'), verified.length ? verified.length + (verified.length === 1 ? ' canal' : ' canais') + (verified.length < balances.length ? ' · parcial' : '') : Number.isFinite(gamePoints) ? 'Saldo informado pelo jogo' : 'Sem saldo confirmado');
+      const isFreshVerified = b => {
+        if (!b || b.status !== 'verified' || !Number.isSafeInteger(b.points) || b.points < 0) return false;
+        if (!Number.isFinite(b.checkedAt)) return false;
+        const now = Date.now();
+        const checked = Number(b.checkedAt);
+        return now >= checked && (now - checked) < 120000;
+      };
+
+      const renderPlatformWallet = (pointsEl, channelsEl, platformAccount, gamePoints, platformName) => {
+        if (!pointsEl) return;
+        const balances = Object.entries(platformAccount?.balances || {});
+        const verified = balances.filter(([, b]) => isFreshVerified(b));
+        const total = verified.reduce((n, [, b]) => n + b.points, 0);
+        const hasGamePoints = Number.isFinite(gamePoints);
+
+        const pointsText = verified.length
+          ? fmtNumber(total) + ' pts'
+          : hasGamePoints
+            ? fmtNumber(gamePoints) + ' pts no jogo'
+            : 'Pontos —';
+
+        setSocialText(pointsEl, pointsText);
+
+        setHudTitle(pointsEl, balances.length
+          ? balances.map(([channel, b]) => channel + ': ' + (isFreshVerified(b) ? fmtNumber(b.points) : 'indisponível')).join('\n')
+          : `Aguardando saldo confirmado pela ${platformName}`);
+
+        if (channelsEl) {
+          const channelsText = verified.length
+            ? verified.length + (verified.length === 1 ? ' canal' : ' canais') + (verified.length < balances.length ? ' · parcial' : '')
+            : hasGamePoints
+              ? 'Saldo informado pelo jogo'
+              : 'Sem saldo confirmado';
+          setSocialText(channelsEl, channelsText);
+        }
+      };
+
+      const kickPoints = box.querySelector('.bsh-social-points') || box.querySelector('.bsh-kick-points');
+      const kickChannels = box.querySelector('.bsh-social-channels') || box.querySelector('.bsh-kick-channels');
+      renderPlatformWallet(kickPoints, kickChannels, kickAccount, game.kick?.pontos, 'Kick');
+
+      const twitchPoints = box.querySelector('.bsh-twitch-points');
+      const twitchChannels = box.querySelector('.bsh-twitch-channels');
+      renderPlatformWallet(twitchPoints, twitchChannels, twitchAccount, null, 'Twitch');
     },
 
     isHudActive(i) {
@@ -594,9 +707,18 @@
           ${isBlaster ? 'Headless' : 'Painel de batalha'}
         </div>
         <aside class="bsh-social" aria-label="Twitch, Kick e pontos desta conta">
-          <div class="bsh-social-twitch"><span class="bsh-social-brand">Twitch</span><span class="bsh-social-status bsh-twitch-status">Aguardando</span><span class="bsh-social-bonus bsh-twitch-bonus">Bônus —</span></div>
-          <div class="bsh-social-kick"><span class="bsh-social-brand">Kick</span><span class="bsh-social-status bsh-kick-status">Aguardando</span><span class="bsh-social-bonus bsh-kick-bonus">Bônus —</span></div>
-          <div class="bsh-social-wallet"><span class="bsh-social-points">Pontos —</span><span class="bsh-social-channels">Sem saldo confirmado</span></div>
+          <div class="bsh-social-twitch">
+            <div class="bsh-social-heading"><span class="bsh-social-brand">Twitch</span><span class="bsh-twitch-points" aria-label="Pontos Twitch">Pontos —</span></div>
+            <span class="bsh-social-status bsh-twitch-status">Aguardando</span>
+            <span class="bsh-social-bonus bsh-twitch-bonus">Bônus —</span>
+            <span class="bsh-twitch-channels" hidden>Sem saldo confirmado</span>
+          </div>
+          <div class="bsh-social-kick">
+            <div class="bsh-social-heading"><span class="bsh-social-brand">Kick</span><span class="bsh-social-points bsh-kick-points" aria-label="Pontos Kick">Pontos —</span></div>
+            <span class="bsh-social-status bsh-kick-status">Aguardando</span>
+            <span class="bsh-social-bonus bsh-kick-bonus">Bônus —</span>
+            <span class="bsh-social-channels bsh-kick-channels" hidden>Sem saldo confirmado</span>
+          </div>
         </aside>
         <div class="bsh-arena">
           <div class="bsh-fighter bsh-fighter-lead">
@@ -615,6 +737,7 @@
               <img class="bsh-sprite bsh-hunt-sprite" src="" alt="Caça Atual" onerror="this.style.opacity='0'">
             </div>
             <div class="bsh-fighter-name bsh-hunt-name">—</div>
+            <div class="bsh-outland-tier" hidden></div>
           </div>
         </div>
         <div class="bsh-controls-row">
@@ -647,7 +770,7 @@
             <div class="bsh-drop-card bsh-drop-${item.key}" data-key="${item.key}" title="${item.title}">
               <span class="bsh-drop-badge" style="display: none;">+0</span>
               <div class="bsh-drop-icon-wrap">
-                <img class="bsh-drop-icon" src="${item.icon}" alt="${item.name}" onerror="this.src='${item.remoteFallback}'">
+                <img class="bsh-drop-icon" src="${item.icon}" alt="${item.name}" onerror="this.onerror=null;this.src='${item.remoteFallback}'">
               </div>
               <span class="bsh-drop-qty">x0</span>
             </div>
@@ -740,16 +863,23 @@
     },
 
     update(panel, i, state) {
-      if (!panel) return;
+      if (!panel || !Number.isInteger(i) || i < 0 || i >= 4) return;
       const hud = panel.querySelector('.battle-slot-hud');
       if (!hud) return;
 
+      latestPresentation.set(i, state);
       gameSocial.set(i, { twitch: state?.twitch, kick: state?.kick });
+      if (!presentationVisible()) {
+        // Baselines are bookkeeping, not paint: keep them current even while hidden.
+        const projected = window.PioInventory ? window.PioInventory.project(state) : state;
+        for (const item of IMPORTANT_DROPS) resolveItemTelemetry(item, projected, i);
+        return;
+      }
       this.updateSocial(panel, i);
       const isPaused = this.isPaused(i);
       const pauseBtn = hud.querySelector('.bsh-pause-btn');
       if (pauseBtn) {
-        pauseBtn.textContent = isPaused ? 'Retomar animação' : 'Pausar animação';
+        setSocialText(pauseBtn, isPaused ? 'Retomar animação' : 'Pausar animação');
       }
 
       const a = (state && state.a) || {};
@@ -765,21 +895,14 @@
 
       if (lead && leadDex > 0) {
         const leadSrc = getSpriteUrl(leadDex, !!lead.shiny, isPaused, lead.name);
-        if (leadSpriteEl && leadSpriteEl.getAttribute('data-src') !== leadSrc) {
-          leadSpriteEl.setAttribute('data-src', leadSrc);
-          leadSpriteEl.style.opacity = '1';
-          leadSpriteEl.src = leadSrc;
-          leadSpriteEl.onerror = () => {
-            leadSpriteEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${lead.shiny ? 'shiny/' : ''}${leadDex}.png`;
-          };
-        }
+        setHudSprite(leadSpriteEl, leadSrc, `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${lead.shiny ? 'shiny/' : ''}${leadDex}.png`);
         if (leadNameEl) {
           const leadTitle = (lead.shiny ? '✨ ' : '') + (lead.name || 'Líder') + (lead.level ? ` Lv ${lead.level}` : '');
           if (leadNameEl.textContent !== leadTitle) leadNameEl.textContent = leadTitle;
         }
       } else {
-        if (leadSpriteEl) leadSpriteEl.style.opacity = '0';
-        if (leadNameEl) leadNameEl.textContent = 'Sem Pokémon';
+        setHudStyle(leadSpriteEl, 'opacity', '0');
+        if (leadNameEl) setSocialText(leadNameEl, 'Sem Pokémon');
       }
 
       // 2. Caça Atual
@@ -792,25 +915,28 @@
 
       if (huntDex > 0) {
         const huntSrc = getSpriteUrl(huntDex, false, isPaused, huntRaw);
-        if (huntSpriteEl && huntSpriteEl.getAttribute('data-src') !== huntSrc) {
-          huntSpriteEl.setAttribute('data-src', huntSrc);
-          huntSpriteEl.style.opacity = '1';
-          huntSpriteEl.src = huntSrc;
-          huntSpriteEl.onerror = () => {
-            huntSpriteEl.src = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${huntDex}.png`;
-          };
-        }
+        setHudSprite(huntSpriteEl, huntSrc, `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${huntDex}.png`);
       } else if (huntRaw) {
-        if (huntSpriteEl) {
-          huntSpriteEl.style.opacity = '0.6';
-          huntSpriteEl.src = 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png';
-        }
+        setHudSprite(huntSpriteEl, 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png', '', '0.6');
       } else {
-        if (huntSpriteEl) huntSpriteEl.style.opacity = '0';
+        setHudStyle(huntSpriteEl, 'opacity', '0');
       }
 
       if (huntNameEl && huntNameEl.textContent !== prettyHunt) {
         huntNameEl.textContent = prettyHunt;
+      }
+
+      const tierEl = hud.querySelector('.bsh-outland-tier');
+      if (tierEl) {
+        const tierHidden = !this.isBlasterActive(i);
+        if (tierEl.hidden !== tierHidden) tierEl.hidden = tierHidden;
+        const tier = state?.outlandTier;
+        const confirmed = state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100;
+        const text = this.outlandTierLabel(state);
+        if (tierEl.textContent !== text) tierEl.textContent = text;
+        setHudTitle(tierEl, confirmed
+          ? 'Tier de Outland confirmada pelo servidor para esta conta.'
+          : 'Aguardando o servidor confirmar a tier nesta conexão.');
       }
 
       // 3. KPIs
@@ -853,9 +979,9 @@
           if (runDrops > 0) {
             const badgeText = `+${runDrops}`;
             if (badgeEl.textContent !== badgeText) badgeEl.textContent = badgeText;
-            badgeEl.style.display = 'inline-flex';
+            setHudStyle(badgeEl, 'display', 'inline-flex');
           } else {
-            badgeEl.style.display = 'none';
+            setHudStyle(badgeEl, 'display', 'none');
           }
         }
 
@@ -876,12 +1002,23 @@
   PioBattleHud.formatKickBonus = formatKickBonus;
 
   window.PioBattleHud = PioBattleHud;
+  document.addEventListener?.('visibilitychange', restorePresentation);
+  window.pokeAPI?.onJanela?.(visible => {
+    nativeWindowVisible = !!visible;
+    restorePresentation();
+  });
   for (const [key, getter, event] of [
     ['twitch', 'twitchGetStatus', 'onTwitchStatus'],
+    ['twitchChat', 'twitchGetChatStatus', 'onTwitchChatStatus'],
+    ['twitchPoints', 'twitchGetPoints', 'onTwitchPoints'],
     ['kick', 'kickGetStatus', 'onKickStatus'],
-    ['points', 'kickGetPoints', 'onKickPoints']
+    ['kickPoints', 'kickGetPoints', 'onKickPoints']
   ]) {
-    const receive = value => { social[key] = value; refreshSocial(); };
+    const receive = value => {
+      social[key] = value;
+      if (key === 'kickPoints') social.points = value;
+      refreshSocial();
+    };
     if (typeof window.pokeAPI?.[event] === 'function') window.pokeAPI[event](receive);
     if (typeof window.pokeAPI?.[getter] === 'function') Promise.resolve(window.pokeAPI[getter]()).then(receive).catch(() => {});
   }

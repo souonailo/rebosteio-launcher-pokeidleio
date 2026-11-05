@@ -94,6 +94,44 @@ fn get_creds_path() -> PathBuf {
     get_app_data_dir().join("accounts.enc")
 }
 
+#[cfg(test)]
+mod path_tests {
+    use super::*;
+
+    #[test]
+    fn session_path_child() {
+        let Ok(expected) = std::env::var("PIO_EXPECTED_DATA_DIR") else { return; };
+        let expected = PathBuf::from(expected);
+        assert_eq!(get_app_data_dir(), expected);
+        assert_eq!(get_creds_path(), expected.join("accounts.enc"));
+        for index in 0..4 {
+            assert_eq!(crate::webview_manager::get_account_profile_dir(index),
+                expected.join("profiles").join(format!("conta_{}", index + 1)));
+        }
+    }
+
+    #[test]
+    fn sessions_and_profiles_are_independent_of_working_directory() {
+        // Separate processes avoid changing environment/cwd for concurrent tests.
+        let appdata = std::env::temp_dir().join("PIO session path test");
+        let exe = std::env::current_exe().unwrap();
+        for cwd in [std::env::temp_dir(), exe.parent().unwrap().to_path_buf()] {
+            for instance in [1, 2] {
+                let folder = if instance == 1 { "pionailo".to_string() }
+                    else { format!("pionailo-instancia-{}", instance) };
+                let result = std::process::Command::new(&exe)
+                    .args(["--exact", "credentials::path_tests::session_path_child"])
+                    .current_dir(&cwd)
+                    .env("APPDATA", &appdata)
+                    .env("PIO_INSTANCE", instance.to_string())
+                    .env("PIO_EXPECTED_DATA_DIR", appdata.join(folder))
+                    .output().unwrap();
+                assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stdout));
+            }
+        }
+    }
+}
+
 #[cfg(windows)]
 pub fn dpapi_encrypt(data: &[u8]) -> Result<Vec<u8>, String> {
     use windows::Win32::Foundation::HLOCAL;

@@ -6,7 +6,7 @@ use tauri::{
 };
 use tokio::sync::{RwLock, oneshot};
 
-fn get_account_profile_dir(index: usize) -> PathBuf {
+pub(crate) fn get_account_profile_dir(index: usize) -> PathBuf {
     crate::credentials::get_app_data_dir()
         .join("profiles")
         .join(format!("conta_{}", index + 1))
@@ -274,11 +274,16 @@ impl WebviewManager {
         let profile_dir = get_account_profile_dir(index);
         let _ = std::fs::create_dir_all(&profile_dir);
 
+        let session_script = if let Some(manager) = app.try_state::<std::sync::Arc<crate::game_headless::GameHeadlessManager>>() {
+            manager.hunt_restore_script(index).await
+        } else { String::new() };
         let mut builder = WebviewBuilder::new(&label, initial_url)
             .data_directory(profile_dir)
             .user_agent(CHROME_USER_AGENT)
             .additional_browser_args(&crate::webview_memory::browser_args(proxy.as_ref().map(|p|&p.url)))
             .initialization_script(crate::webview_memory::background_economy_script())
+            .initialization_script(&session_script)
+            .initialization_script(include_str!("hunt_session_bridge.js"))
             .initialization_script(include_str!("gameplay_bridge.js"))
             .initialization_script(include_str!("../../ui/src/ui/inventory-state.js"))
             .initialization_script(include_str!("launcher_gameplay.js"))

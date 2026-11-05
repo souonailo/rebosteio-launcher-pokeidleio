@@ -36,6 +36,30 @@ try {
 app.commandLine.appendSwitch('disable-gpu-compositing');
 const https = require('https');
 const { twitchChatManager } = require('./src/domain/twitch-chat-service');
+const { createTwitchPoints } = require('./src/main/twitch-points');
+twitchChatManager.setStatusCallback(state => {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed() && window.webContents.getURL().startsWith('file://')) {
+      window.webContents.send('twitch:chat-status', state);
+    }
+  }
+});
+let twitchPointsManager;
+function getTwitchPointsManager() {
+  if (!twitchPointsManager) twitchPointsManager = createTwitchPoints({
+    prepareSession: i => applyAccountProxy(i, readAccounts()[i]?.proxy),
+    getProxy: i => activeProxies[i],
+    onChange: state => {
+      for (const window of BrowserWindow.getAllWindows()) {
+        if (!window.isDestroyed() && window.webContents.getURL().startsWith('file://')) {
+          window.webContents.send('twitch:status:update', state);
+          window.webContents.send('twitch:points:update', state);
+        }
+      }
+    }
+  });
+  return twitchPointsManager;
+}
 const { kickPresenceManager } = require('./src/domain/kick-presence-service');
 const { gameHeadlessManager } = require('./src/domain/game-headless-service');
 const { createKickBrowser } = require('./src/main/kick-browser');
@@ -75,6 +99,8 @@ function getKickPointsManager() {
   return kickPointsManager;
 }
 app.on('before-quit', () => {
+  twitchChatManager.stopAll();
+  twitchPointsManager?.dispose();
   kickPointsManager?.dispose();
   gameHeadlessManager?.stopAll();
 });
@@ -710,14 +736,25 @@ ipcMain.handle('proxy:apply', async (_e) => {
   return { changed, errors };
 });
 
-ipcMain.handle('twitch:creds:load', () => twitchChatManager.loadCreds());
-ipcMain.handle('twitch:creds:save', (_e, data) => twitchChatManager.saveCreds(data));
-ipcMain.handle('twitch:test', (_e, username, token) => twitchChatManager.testConnection(username, token));
-ipcMain.handle('twitch:sync-lives', (_e, lives) => {
-  twitchChatManager.syncLives(lives);
-  return true;
+ipcMain.handle('twitch:creds:load', () => {
+  const config = twitchChatManager.loadCreds();
+  getTwitchPointsManager().configure(config);
+  return config;
 });
-ipcMain.handle('twitch:status:get', () => twitchChatManager.getStatus());
+ipcMain.handle('twitch:creds:save', (_e, data) => {
+  const ok = twitchChatManager.saveCreds(data);
+  if (ok) getTwitchPointsManager().configure(data);
+  return ok;
+});
+ipcMain.handle('twitch:test', (_e, username, token) => twitchChatManager.testConnection(username, token));
+ipcMain.handle('twitch:chat-status:get', () => twitchChatManager.getStatus());
+ipcMain.handle('twitch:sync-lives', (_e, lives) => { twitchChatManager.syncLives(lives); return getTwitchPointsManager().syncLives(lives); });
+ipcMain.handle('twitch:status:get', () => getTwitchPointsManager().getStatus());
+ipcMain.handle('twitch:points:get', () => getTwitchPointsManager().getStatus());
+ipcMain.handle('twitch:points:refresh', (_e, index) => getTwitchPointsManager().refresh(index, true));
+ipcMain.handle('twitch:points:channels', (_e, channels) => getTwitchPointsManager().setChannels(channels));
+ipcMain.handle('twitch:session:open', (_e, index, channel) => getTwitchPointsManager().open(index, channel));
+ipcMain.handle('twitch:session:close', (_e, index) => getTwitchPointsManager().close(index));
 
 ipcMain.handle('kick:creds:load', () => {
   const mgr = getKickPointsManager();
@@ -1149,11 +1186,6 @@ app.whenReady().then(() => {
     return { maximized: !win.isDestroyed() && win.isMaximized() };
   });
   win.loadFile(path.join(__dirname, 'index.html')); // caminho absoluto: robusto no build empacotado (asar)
-  twitchChatManager.setStatusCallback((st) => {
-    if (!win.isDestroyed()) {
-      try { win.webContents.send('twitch:status:update', st); } catch {}
-    }
-  });
   kickPresenceManager.setStatusCallback((st) => {
     if (!win.isDestroyed()) {
       try { win.webContents.send('kick:status:update', st); } catch {}
@@ -1161,7 +1193,6 @@ app.whenReady().then(() => {
   });
   getKickPointsManager();
   win.on('closed', () => {
-    twitchChatManager.setStatusCallback(null);
     kickPresenceManager.setStatusCallback(null);
   });
   // a janela principal so mostra index.html: bloqueia qualquer navegacao dela (canal de exfiltracao se houver XSS)
