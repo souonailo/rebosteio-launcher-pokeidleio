@@ -2,11 +2,18 @@
 
 const POINTS_CATALOG_QUERY = 'query($login: String!) { user(login: $login) { id channel { self { communityPoints { balance } } communityPointsSettings { customRewards { id title prompt cost isEnabled isPaused isInStock isUserInputRequired pricingType cooldownExpiresAt } } } } }';
 
+function matchesPokeidle(text) {
+  const normalized = String(text || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[-_]/g, ' ');
+  return normalized.includes('pokeidle') || normalized.includes('poke idle');
+}
+
 function catalog(raw) {
   return (Array.isArray(raw) ? raw : []).flatMap(reward => {
     if (!reward || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(reward.id) || typeof reward.title !== 'string') return [];
-    const text = `${reward.title} ${reward.prompt || ''}`.toLowerCase();
-    if (!text.includes('pokeidle')) return [];
+    const text = `${reward.title} ${reward.prompt || ''} ${reward.description || ''}`.toLowerCase();
+    if (!matchesPokeidle(text)) return [];
     const key = /15%/.test(text) && /xp|exp/.test(text) ? 'exp'
       : /capture|captura|catch/.test(text) ? 'catch' : /lure|secret|isca/.test(text) ? 'lure' : '';
     if (!key) return [];

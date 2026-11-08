@@ -29,7 +29,7 @@ app.whenReady().then(async () => {
   manager.configure({ masterEnabled: false, accounts: Array.from({ length: 4 }, (_, i) => ({ username: 'viewer' + i })) });
   manager.setChannels(['biscoitao']);
   for (let i = 0; i < 4; i++) await manager.refresh(i, true);
-  assert.equal(calls.length, 8);
+  assert.equal(calls.length, 16);
   assert.ok(manager.getStatus().accounts.every(a => a.balances.biscoitao.points === 456));
   points = 0;
   await manager.invalidate(0);

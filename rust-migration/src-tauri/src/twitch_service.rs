@@ -793,11 +793,11 @@ impl TwitchServiceManager {
         let Some(accounts) = journal["accounts"].as_array_mut() else { return; };
         while accounts.len() < 4 { accounts.push(json!({})); }
         let previous = accounts[index].clone();
-        if previous["status"] == "pending" {
+        let elapsed = now_ms().saturating_sub(previous["at"].as_u64().unwrap_or(0));
+        if previous["status"] == "pending" && elapsed < 120_000 {
             state["redemption"] = json!({"status":"paused","message":"Resgate sem confirmação. Automático pausado para evitar duplicação; confira o histórico na Twitch."});
             return;
         }
-        let elapsed = now_ms().saturating_sub(previous["at"].as_u64().unwrap_or(0));
         if (previous["status"] == "rejected" && elapsed < 300_000) || (previous["status"] == "confirmed" && elapsed < 55_000) {
             state["redemption"] = previous; return;
         }
@@ -1147,5 +1147,17 @@ mod tests {
             assert_eq!(acc["refreshing"], false);
             assert!(acc.get("activeRedemption").is_some());
         }
+    }
+
+    #[test]
+    fn pending_redemption_times_out_after_two_minutes() {
+        let current = now_ms();
+        let recent_pending = json!({"status": "pending", "at": current - 60_000});
+        let elapsed_recent = current.saturating_sub(recent_pending["at"].as_u64().unwrap_or(0));
+        assert!(recent_pending["status"] == "pending" && elapsed_recent < 120_000);
+
+        let expired_pending = json!({"status": "pending", "at": current - 130_000});
+        let elapsed_expired = current.saturating_sub(expired_pending["at"].as_u64().unwrap_or(0));
+        assert!(!(expired_pending["status"] == "pending" && elapsed_expired < 120_000));
     }
 }

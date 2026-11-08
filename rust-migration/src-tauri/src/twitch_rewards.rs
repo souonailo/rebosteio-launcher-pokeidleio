@@ -24,6 +24,14 @@ fn duration_hours(text: &str) -> Option<u64> {
     ([1, 3, 5, 10].contains(&first) && hours.iter().all(|h| *h == first)).then_some(first)
 }
 
+pub fn matches_pokeidle(text: &str) -> bool {
+    let lower = text.to_lowercase();
+    let normalized = lower
+        .replace('é', "e")
+        .replace(['-', '_'], " ");
+    normalized.contains("pokeidle") || normalized.contains("poke idle")
+}
+
 /// Parses the `customRewards` array from the official Twitch GQL response.
 ///
 /// Output per reward: `{ key, id, title, cost, available }`
@@ -52,10 +60,11 @@ pub fn catalog(raw: &Value) -> Vec<Value> {
 
             let title_raw = r.get("title").and_then(Value::as_str)?;
             let prompt_raw = r.get("prompt").and_then(Value::as_str).unwrap_or("");
-            let full_text = format!("{} {}", title_raw, prompt_raw).to_lowercase();
+            let desc_raw = r.get("description").and_then(Value::as_str).unwrap_or("");
+            let full_text = format!("{} {} {}", title_raw, prompt_raw, desc_raw).to_lowercase();
 
-            // Must strictly belong to PokeIdle
-            if !full_text.contains("pokeidle") {
+            // Must strictly belong to PokeIdle (supports poke idle, poke-idle, pokéidle)
+            if !matches_pokeidle(&full_text) {
                 return None;
             }
 
@@ -456,5 +465,25 @@ mod tests {
             })),
             "unknown"
         );
+    }
+
+    #[test]
+    fn accepts_pokeidle_variants_in_title_and_description() {
+        let mut r1 = valid_reward();
+        r1["title"] = json!("+15% EXP Poke Idle");
+        assert_eq!(catalog(&json!([r1]))[0]["key"], "exp");
+
+        let mut r2 = valid_reward();
+        r2["title"] = json!("+15% EXP PokéIdle");
+        assert_eq!(catalog(&json!([r2]))[0]["key"], "exp");
+
+        let mut r3 = valid_reward();
+        r3["title"] = json!("+15% EXP (poke-idle)");
+        assert_eq!(catalog(&json!([r3]))[0]["key"], "exp");
+
+        let mut r4 = valid_reward();
+        r4["title"] = json!("+15% EXP Bônus");
+        r4["description"] = json!("1 hora no Poké-Idle");
+        assert_eq!(catalog(&json!([r4]))[0]["key"], "exp");
     }
 }

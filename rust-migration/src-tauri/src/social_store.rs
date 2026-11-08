@@ -57,3 +57,17 @@ pub fn slug(value: &str) -> Option<String> {
             .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-'))
     .then_some(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_slug_normalization() {
+        assert_eq!(slug("@Streamer"), Some("streamer".to_string()));
+        assert_eq!(slug("#streamer"), Some("streamer".to_string()));
+        assert_eq!(slug(""), None);
+        assert_eq!(slug("invalid/user"), None);
+        assert_eq!(slug("valid_user-123"), Some("valid_user-123".to_string()));
+    }
+}

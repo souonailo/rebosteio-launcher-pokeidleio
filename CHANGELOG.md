@@ -1,3 +1,13 @@
+## 2.0.65 — Coleta de bônus e resgate automático em canais offline na Twitch e Kick
+
+- Corrige a consulta de saldos e resgate automático (auto-redeem) para canais parceiros que estiverem offline na Twitch e na Kick:
+  - Twitch: `stSane` preserva `d.twitch.lives`, sanitiza e normaliza logins (removendo `@` e espaços) e computa `aoVivo` cruzando os canais oficiais com a lista de transmissões ativas (`tw.lives`), tratando `ativo !== false` e `bonus !== false`. A função `twitchOfficialChannels` não restringe canais a `ativo === true` estrito, normaliza identificadores antes da validação regex, fornece fallback para a lista oficial de parceiros (`TWITCH_OFFICIAL_PARTNERS`) quando `oficiais` estiver vazio ou inicializando, e fornece todos os canais candidatos (online e offline) para consulta de saldo e resgate automático.
+  - Kick: `kickChannelsFromSnapshot` unifica os 12 parceiros oficiais padrão (`KICK_OFFICIAL_PARTNERS`), os canais com saldo acumulado pelo jogador (`k.pontosPorCanal`) e os canais de telemetria (`k.oficiais`, `k.offline` e `k.lives`), garantindo que streamers offline com pontos acumulados continuem sendo consultados e resgatados. Em `renderKickStreamersList`, prioriza o snapshot da conta selecionada (`kickCachedGameData[kickSelectedAccount]`).
+  - Preservação da separação de responsabilidades: `kickSetPointChannels` e `twitchSetPointChannels` recebem a união de todos os canais candidatos para consulta de pontos e execução do auto-redeem, enquanto `kickSyncLives` e `twitchSyncLives` filtram estritamente transmissões ativas (`aoVivo === true && ativo !== false`) para conexões WebSocket e presença ao vivo.
+  - Timeout de resgates pendentes em Rust: em `twitch_service.rs` e `kick_service.rs`, resgates com status `pending` expiram após 120 segundos (2 minutos), liberando nova verificação de saldo e tentativas subsequentes sem travar indefinidamente a fila.
+  - Flexibilização do catálogo de recompensas: em `twitch_rewards.rs`, `kick_rewards.rs` e no catálogo JavaScript, a identificação de itens PokeIdle aceita variações com espaço, hífen e acento ("poke idle", "poke-idle", "pokéidle"), avaliando título, descrição e prompt.
+  - Limpeza de estado travado: o registro criptografado de resgates da Twitch (`twitch-redemptions-creds.enc`) teve o status `pending` da Conta 0 expirado com segurança para retomar imediatamente a rotina de resgate.
+
 ## 2.0.64 — Menos trabalho visual no painel de batalha
 
 - Suspende a atualização visual do painel enquanto a janela está oculta e mostra o estado mais recente das quatro contas ao voltar.

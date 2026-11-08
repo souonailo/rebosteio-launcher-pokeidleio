@@ -587,7 +587,7 @@ impl KickServiceManager {
             return;
         }
         let _serial = self.redemption_lock.lock().await;
-        if previous["status"] == "pending" {
+        if previous["status"] == "pending" && now().saturating_sub(previous["at"].as_u64().unwrap_or(0)) < 120_000 {
             state["redemption"] = json!({"status":"paused","message":format!("Resgate em @{} sem confirmação. Automático pausado para evitar duplicação; confira o histórico na Kick.", previous["channel"].as_str().unwrap_or(""))});
             return;
         }
@@ -758,6 +758,18 @@ mod tests {
     fn channel_names_cannot_escape_kick_paths() {
         assert!(crate::social_store::slug("../user").is_none());
         assert!(crate::social_store::slug("https://evil.test").is_none());
+    }
+
+    #[test]
+    fn pending_redemption_times_out_after_two_minutes() {
+        let current = now();
+        let recent_pending = json!({"status": "pending", "at": current - 60_000});
+        let elapsed_recent = current.saturating_sub(recent_pending["at"].as_u64().unwrap_or(0));
+        assert!(recent_pending["status"] == "pending" && elapsed_recent < 120_000);
+
+        let expired_pending = json!({"status": "pending", "at": current - 130_000});
+        let elapsed_expired = current.saturating_sub(expired_pending["at"].as_u64().unwrap_or(0));
+        assert!(!(expired_pending["status"] == "pending" && elapsed_expired < 120_000));
     }
 }
 

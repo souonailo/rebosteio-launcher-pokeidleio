@@ -4737,14 +4737,41 @@
       if (d.twitch && typeof d.twitch === 'object') {
         const tw = d.twitch;
         const login = String(tw.login || '').slice(0, 40);
+        const rawLives = Array.isArray(tw.lives) ? tw.lives : [];
+        const liveSet = new Set(rawLives.map(l => {
+          if (!l) return '';
+          if (typeof l === 'string') return l.trim().toLowerCase().replace(/^@/, '');
+          return String(l.login || l.slug || l.channel || l.name || '').trim().toLowerCase().replace(/^@/, '');
+        }).filter(Boolean));
         d.twitch = {
           login,
           vinculado: (tw.vinculado ?? !!login) === true,
           pct: num(tw.pct),
           bonus: Object.fromEntries(['xp', 'captura', 'shiny'].map(key => [key, Math.max(0, num(tw.bonus?.[key]))])),
-          oficiais: Array.isArray(tw.oficiais) ? tw.oficiais.filter(o => o && typeof o === 'object').slice(0, 40).map(o => ({
-            login: String(o.login || '').slice(0, 40), ativo: o.ativo === true, aoVivo: o.aoVivo === true, espectadores: num(o.espectadores)
-          })) : []
+          lives: rawLives.map(item => {
+            if (!item) return null;
+            if (typeof item === 'string') {
+              const clean = item.trim().toLowerCase().replace(/^@/, '').slice(0, 40);
+              return clean ? { login: clean, aoVivo: true, espectadores: 0 } : null;
+            }
+            const l = String(item.login || item.slug || item.channel || item.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
+            if (!l) return null;
+            return {
+              login: l,
+              aoVivo: (item.aoVivo ?? item.online ?? item.live ?? true) === true,
+              espectadores: num(item.espectadores || item.viewers)
+            };
+          }).filter(Boolean),
+          oficiais: Array.isArray(tw.oficiais) ? tw.oficiais.filter(o => o && typeof o === 'object').slice(0, 40).map(o => {
+            const cleanLogin = String(o.login || o.slug || o.channel || o.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
+            return {
+              login: cleanLogin,
+              ativo: o.ativo !== false,
+              bonus: o.bonus !== false,
+              aoVivo: o.aoVivo === true || (cleanLogin ? liveSet.has(cleanLogin) : false),
+              espectadores: num(o.espectadores || o.viewers)
+            };
+          }).filter(o => o.login) : []
         };
       }
       if (d.kick && typeof d.kick === 'object') {
@@ -7440,10 +7467,41 @@
       })();
       return twitchConfigLoading;
     }
+    const TWITCH_OFFICIAL_PARTNERS = [
+      'faasii', 'souonailo', 'biscoitao', 'surskity', 'clovaobengalol',
+      'luccatv', 'matta', 'febatista', 'fiaspogames', 'lukao', 'vitor_p', 'pokeidle'
+    ];
     function twitchOfficialChannels(index) {
       const data = twitchCachedGameData[index];
-      if (!data?.vinculado || !data.login) return [];
-      return (data.oficiais || []).filter(item => item?.ativo === true && /^[a-z0-9_]{1,40}$/i.test(item.login));
+      const account = twitchBonusConfig.accounts?.[index];
+      const hasLink = !!((data?.vinculado && data?.login) || account?.username || account?.linkedUsername);
+      if (!hasLink) return [];
+      const liveSet = new Set(
+        (Array.isArray(data?.lives) ? data.lives : [])
+          .map(l => (typeof l === 'string' ? l : l?.login || '').trim().toLowerCase().replace(/^@/, ''))
+          .filter(Boolean)
+      );
+      if (Array.isArray(data?.oficiais) && data.oficiais.length) {
+        return (data.oficiais || [])
+          .map(item => {
+            const clean = String(item?.login || item?.slug || item?.channel || item?.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
+            return {
+              ...item,
+              login: clean,
+              ativo: item?.ativo !== false,
+              bonus: item?.bonus !== false,
+              aoVivo: item?.aoVivo === true || (clean ? liveSet.has(clean) : false)
+            };
+          })
+          .filter(item => item.ativo !== false && item.bonus !== false && /^[a-z0-9_]{1,40}$/i.test(item.login));
+      }
+      return TWITCH_OFFICIAL_PARTNERS.map(login => ({
+        login,
+        ativo: true,
+        bonus: true,
+        aoVivo: liveSet.has(login.toLowerCase()),
+        espectadores: 0
+      }));
     }
     let twitchLastPartners = '';
     function syncTwitchPartners() {
@@ -7728,9 +7786,54 @@
 
     function kickChannelsFromSnapshot(k) {
       if (!k) return [];
-      // Current game schema: oficiais carries both online and offline channels.
-      if (Array.isArray(k.oficiais) && k.oficiais.length) return k.oficiais;
-      return [...(k.offline || []), ...(k.lives || [])];
+      const map = new Map();
+      const normalize = (slug) => String(slug || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
+
+      for (const partner of KICK_OFFICIAL_PARTNERS) {
+        const clean = normalize(partner);
+        if (clean && /^[a-z0-9_]{1,40}$/i.test(clean)) {
+          map.set(clean, { login: clean, aoVivo: false, ativo: true, espectadores: 0 });
+        }
+      }
+
+      if (k.pontosPorCanal && typeof k.pontosPorCanal === 'object') {
+        for (const raw of Object.keys(k.pontosPorCanal)) {
+          const clean = normalize(raw);
+          if (clean && /^[a-z0-9_]{1,40}$/i.test(clean) && !map.has(clean)) {
+            map.set(clean, { login: clean, aoVivo: false, ativo: true, espectadores: 0 });
+          }
+        }
+      }
+
+      const addFromList = (list, defaultLive = false) => {
+        if (!Array.isArray(list)) return;
+        for (const item of list) {
+          if (!item) continue;
+          const login = normalize(typeof item === 'string' ? item : (item.slug || item.login || item.channel || item.name));
+          if (!login || !/^[a-z0-9_]{1,40}$/i.test(login)) continue;
+          const existing = map.get(login) || { login, aoVivo: false, ativo: true, espectadores: 0 };
+          if (typeof item === 'object') {
+            if (item.aoVivo !== undefined) existing.aoVivo = item.aoVivo === true;
+            else if (item.online !== undefined) existing.aoVivo = item.online === true;
+            else if (item.live !== undefined) existing.aoVivo = item.live === true;
+            else if (defaultLive) existing.aoVivo = true;
+
+            if (item.ativo !== undefined) existing.ativo = item.ativo !== false;
+            if (item.espectadores != null || item.viewers != null) {
+              existing.espectadores = Number(item.espectadores || item.viewers) || 0;
+            }
+          } else if (defaultLive) {
+            existing.aoVivo = true;
+          }
+          map.set(login, existing);
+        }
+      };
+
+      addFromList(k.offline, false);
+      addFromList(Array.isArray(k.oficiais) ? k.oficiais : (Array.isArray(k.canais) ? k.canais : null), false);
+      addFromList(k.lives, true);
+
+      return Array.from(map.values());
     }
 
     function handleKickGameTelemetry(accIndex, kickData) {
@@ -7757,12 +7860,13 @@
       }
 
       kickLatestChannelSnapshot = kickData;
+      const allPointChannels = [...new Set(kickCachedGameData.flatMap(data => data ? kickChannelsFromSnapshot(data).map(c => c.login) : []))];
       if (window.pokeAPI?.kickSetPointChannels) {
-        window.pokeAPI.kickSetPointChannels(kickChannelsFromSnapshot(kickData).map(c => c.login)).catch(() => {});
+        window.pokeAPI.kickSetPointChannels(allPointChannels.length ? allPointChannels : kickChannelsFromSnapshot(kickData).map(c => c.login)).catch(() => {});
       }
-      const allLiveLogins = new Set(kickChannelsFromSnapshot(kickData)
-        .filter(c => c.aoVivo === true && c.ativo !== false)
-        .map(c => c.login));
+      const allLiveLogins = new Set(kickCachedGameData.flatMap(data => data
+        ? kickChannelsFromSnapshot(data).filter(c => c.aoVivo === true && c.ativo !== false).map(c => c.login)
+        : []));
       if (window.pokeAPI && window.pokeAPI.kickSyncLives) {
         window.pokeAPI.kickSyncLives(Array.from(allLiveLogins));
       }
@@ -8105,8 +8209,9 @@
       if (!kickStreamersList) return;
       const streamMap = new Map();
 
-      const channels = kickLatestChannelSnapshot
-        ? kickChannelsFromSnapshot(kickLatestChannelSnapshot)
+      const snapshot = kickCachedGameData[kickSelectedAccount] || kickLatestChannelSnapshot;
+      const channels = snapshot
+        ? kickChannelsFromSnapshot(snapshot)
         : KICK_OFFICIAL_PARTNERS.map(login => ({ login, aoVivo: false, espectadores: 0 }));
       // One received snapshot replaces channel status; old connections cannot revive an offline channel.
       channels.forEach(c => {
