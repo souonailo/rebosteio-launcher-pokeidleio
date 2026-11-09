@@ -1,3 +1,8 @@
+## 2.0.67 — Mostrar todos os saldos confirmados por streamer
+
+- Remove o limite visual de oito canais no tooltip de pontos do HUD para Twitch e Kick; todos os parceiros autorizados com saldo confirmado aparecem individualmente com seus pontos.
+- Preserva a filtragem de parceiros oficiais, a soma total e o resumo de canais sem saldo confirmado; adiciona teste cobrindo 25 canais.
+
 ## 2.0.66 — Lista de streamers baseada nos canais oficiais do jogo
 
 - Remove listas fixas desatualizadas de streamers da Twitch e da Kick: a relação de parceiros depende exclusivamente de `oficiais`/`canais` recebidos do jogo. Apenas canais com autorização explícita (`ativo === true`) entram na consulta de pontos, sem confundir histórico de pontos ou nome citado numa live com parceria.

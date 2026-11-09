@@ -493,8 +493,7 @@
         setSocialText(pointsEl, pointsText);
 
         const pending = balances.length - verified.length;
-        const detailed = verified.slice(0, 8).map(([channel, b]) => `${channel}: ${fmtNumber(b.points)}`);
-        if (verified.length > 8) detailed.push(`Mais ${verified.length - 8} canais com saldo confirmado`);
+        const detailed = verified.map(([channel, b]) => `${channel}: ${fmtNumber(b.points)}`);
         if (pending) detailed.push(`${pending} ${pending === 1 ? 'canal oficial sem saldo confirmado' : 'canais oficiais sem saldo confirmado'}`);
         setHudTitle(pointsEl, detailed.length ? detailed.join('\n')
           : !Array.isArray(official) ? `Aguardando lista oficial da ${platformName} enviada pelo jogo`

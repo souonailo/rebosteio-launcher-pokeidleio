@@ -761,6 +761,27 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     assert.equal(kickPoints0.textContent, '70 pts');
     assert.equal(kickPoints0.title, 'biscoitao: 70');
 
+    // All confirmed channels must be visible, even when the roster exceeds eight.
+    const manyChannels = Array.from({ length: 25 }, (_, i) => `partner_${String(i + 1).padStart(2, '0')}`);
+    const manyBalances = Object.fromEntries(manyChannels.map((channel, i) => [channel, {
+      status: 'verified', points: (i + 1) * 10, checkedAt: Date.now()
+    }]));
+    manyBalances.unrelated_player = { status: 'verified', points: 99999, checkedAt: Date.now() };
+    hud.update(panels[0], 0, {
+      twitch: { oficiais: authorized(...manyChannels) },
+      kick: { oficiais: authorized(...manyChannels) }
+    });
+    listeners.twitchPoints({ accounts: [{ status: 'authenticated', balances: manyBalances }] });
+    listeners.kickPoints({ accounts: [{ status: 'authenticated', balances: manyBalances }] });
+    for (const pointsEl of [twitchPoints0, kickPoints0]) {
+      const details = pointsEl.title.split('\n');
+      assert.equal(details.length, 25, 'tooltip must show all 25 confirmed channels');
+      assert.equal(details[0], 'partner_01: 10');
+      assert.equal(details[24], 'partner_25: 250');
+      assert.doesNotMatch(pointsEl.title, /Mais \d+ canais|unrelated_player/);
+      assert.equal(pointsEl.textContent, '3.250 pts');
+    }
+
     // 5. In-game points fallback for Kick only (Account 3); Twitch has NO game.twitch.pontos fallback
     hud.update(panels[3], 3, {
       kick: { pontos: 888 },
