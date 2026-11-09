@@ -114,7 +114,9 @@ app.whenReady().then(async () => {
     assert.match(result.text, /Ativar acompanhamento da Twitch/);
     assert.ok(result.calls.some(c => c[0] === 'save' && c[1].autoClaim && c[1].autoClaimProtocol === 1 && c[1].accounts[0].gameLinked && c[1].accounts[0].linkedUsername === 'viewer'));
     assert.ok(result.calls.some(c => c[0] === 'save' && c[1].accounts[0].claimPriority === 'catch' && c[1].accounts[1].claimPriority === 'lure'));
-    assert.doesNotMatch(result.initial, /disabled|separate/);
+    assert.match(result.initial, /disabled/);
+    assert.match(result.initial, /Recompensas pendentes/);
+    assert.doesNotMatch(result.initial, /separate/);
     assert.match(result.bonus, /XP: 1h/);
     assert.match(result.stale, /Saldo desatualizado/);
     assert.match(result.connectedChat, /Chat conectado com o acesso salvo/);

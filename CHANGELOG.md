@@ -1,3 +1,10 @@
+## 2.0.66 — Lista de streamers baseada nos canais oficiais do jogo
+
+- Remove listas fixas desatualizadas de streamers da Twitch e da Kick: a relação de parceiros depende exclusivamente de `oficiais`/`canais` recebidos do jogo. Apenas canais com autorização explícita (`ativo === true`) entram na consulta de pontos, sem confundir histórico de pontos ou nome citado numa live com parceria.
+- Preserva o cadastro oficial recebido anteriormente quando chegam atualizações parciais, sem reaproveitar nomes de outra conta; uma lista oficial explicitamente vazia ou um desvínculo remove os canais antigos.
+- Filtra o resumo de saldos do HUD pelos parceiros autorizados daquela conta e resume os saldos não confirmados, evitando o tooltip longo com nomes indevidos e dezenas de entradas "indisponível".
+- Preserva na lista oficial canais ainda sem recompensas habilitadas, identificados como pendentes, sem tentar consultar ou resgatar nesses canais; mantém consultas e resgates dos canais oficiais offline autorizados e acrescenta regressões para contas não oficiais, quatro contas independentes e atualizações parciais.
+
 ## 2.0.65 — Coleta de bônus e resgate automático em canais offline na Twitch e Kick
 
 - Corrige a consulta de saldos e resgate automático (auto-redeem) para canais parceiros que estiverem offline na Twitch e na Kick:

@@ -78,23 +78,26 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
     assert.equal(result.oficiais[0].ativo, true);
     assert.equal(result.oficiais[0].bonus, true);
     assert.equal(result.oficiais[1].aoVivo, true, 'live_from_lives is in tw.lives');
-    assert.equal(result.oficiais[1].ativo, true, 'undefined ativo must default to true');
+    assert.equal(result.oficiais[1].ativo, false, 'a channel without explicit server authorization stays inactive');
     assert.equal(result.oficiais[1].bonus, true, 'undefined bonus must default to true');
     assert.equal(result.oficiais[2].ativo, false);
     assert.equal(result.oficiais[3].bonus, false);
     assert.equal(result.oficiais[3].aoVivo, false);
     assert.equal(result.lives.length, 2);
     assert.equal(result.token, undefined);
+    const partial = context.stSane({ok:true,twitch:{bonus:{xp:0}},kick:{pontos:10}});
+    assert.equal(Object.hasOwn(partial.twitch,'oficiais'), false, 'partial telemetry must not clear a prior official roster');
+    assert.equal(Object.hasOwn(partial.kick,'oficiais'), false, 'partial Kick telemetry must not clear a prior official roster');
   });
 
-  test(`${file}: twitchOfficialChannels supports offline fallback and filters inactive channels`, () => {
+  test(`${file}: Twitch queries only game-authorized official channels, including offline`, () => {
     const html = fs.readFileSync(file, 'utf8');
-    const funcStart = html.indexOf('const TWITCH_OFFICIAL_PARTNERS =');
+    const funcStart = html.indexOf('function twitchOfficialChannels(');
     const funcEnd = html.indexOf('let twitchLastPartners =', funcStart);
     assert.ok(funcStart > 0 && funcEnd > funcStart);
     const context = vm.createContext({
       twitchCachedGameData: [
-        // Account 0: linked with empty oficiais (fallback to official partners, compute live from lives)
+        // A live name alone is insufficient to designate an official partner.
         { login: 'player1', vinculado: true, lives: ['biscoitao'], oficiais: [] },
         // Account 1: linked with specific oficiais including offline and disabled
         {
@@ -103,7 +106,8 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
             { login: '@live_channel', ativo: true },
             { login: 'offline_channel', ativo: true, aoVivo: false },
             { login: 'disabled_channel', ativo: false, aoVivo: true },
-            { login: 'no_bonus_channel', bonus: false, aoVivo: false }
+            { login: 'no_bonus_channel', ativo: true, bonus: false, aoVivo: false },
+            { login: 'missing_authorization', aoVivo: true }
           ]
         },
         // Account 2: unlinked, no username
@@ -122,26 +126,23 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
     });
     vm.runInContext(html.slice(funcStart, funcEnd), context);
 
-    // Account 0: oficiais is empty, falls back to TWITCH_OFFICIAL_PARTNERS, computes aoVivo from lives
+    // A linked account with no official list does not query guessed channels.
     const acc0Channels = context.twitchOfficialChannels(0);
-    assert.equal(acc0Channels.length, 12, 'must fallback to all 12 official partners');
-    const biscoitao = acc0Channels.find(c => c.login === 'biscoitao');
-    assert.ok(biscoitao);
-    assert.equal(biscoitao.aoVivo, true, 'biscoitao is in lives');
-    const matta = acc0Channels.find(c => c.login === 'matta');
-    assert.ok(matta);
-    assert.equal(matta.aoVivo, false, 'matta is offline but returned for balance querying and auto-redeem');
+    assert.equal(acc0Channels.length, 0);
 
-    // Account 1: filters out disabled_channel and no_bonus_channel, retains offline_channel and live_channel
+    // Inactive partners remain recognizable as official, but are not eligible for points.
     const acc1Channels = context.twitchOfficialChannels(1);
-    assert.equal(acc1Channels.length, 2);
+    assert.equal(acc1Channels.length, 5);
     assert.ok(acc1Channels.some(c => c.login === 'live_channel' && c.aoVivo === true));
     assert.ok(acc1Channels.some(c => c.login === 'offline_channel' && c.aoVivo === false));
+    assert.ok(acc1Channels.some(c => c.login === 'disabled_channel' && c.ativo === false));
+    assert.ok(acc1Channels.some(c => c.login === 'no_bonus_channel' && c.ativo === false));
+    assert.ok(acc1Channels.some(c => c.login === 'missing_authorization' && c.ativo === false));
 
     // Account 2: unlinked, returns empty
     assert.equal(context.twitchOfficialChannels(2).length, 0);
 
-    // Account 3: game data null but account configured -> fallback to 12 partners
-    assert.equal(context.twitchOfficialChannels(3).length, 12);
+    // Credentials alone never authorize a streamer's channel.
+    assert.equal(context.twitchOfficialChannels(3).length, 0);
   });
 }

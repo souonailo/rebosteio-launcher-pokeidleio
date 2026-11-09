@@ -472,7 +472,14 @@
 
       const renderPlatformWallet = (pointsEl, channelsEl, platformAccount, gamePoints, platformName) => {
         if (!pointsEl) return;
-        const balances = Object.entries(platformAccount?.balances || {});
+        const official = game[platformName.toLowerCase()]?.oficiais;
+        const eligible = new Set((Array.isArray(official) ? official : [])
+          .filter(item => item?.ativo === true && item?.bonus !== false)
+          .map(item => String(item.login || item.slug || '').trim().toLowerCase().replace(/^@/, ''))
+          .filter(Boolean));
+        // A balance query is not proof of an official partnership.
+        const balances = Object.entries(platformAccount?.balances || {})
+          .filter(([channel]) => eligible.has(channel.toLowerCase()));
         const verified = balances.filter(([, b]) => isFreshVerified(b));
         const total = verified.reduce((n, [, b]) => n + b.points, 0);
         const hasGamePoints = Number.isFinite(gamePoints);
@@ -485,8 +492,12 @@
 
         setSocialText(pointsEl, pointsText);
 
-        setHudTitle(pointsEl, balances.length
-          ? balances.map(([channel, b]) => channel + ': ' + (isFreshVerified(b) ? fmtNumber(b.points) : 'indisponível')).join('\n')
+        const pending = balances.length - verified.length;
+        const detailed = verified.slice(0, 8).map(([channel, b]) => `${channel}: ${fmtNumber(b.points)}`);
+        if (verified.length > 8) detailed.push(`Mais ${verified.length - 8} canais com saldo confirmado`);
+        if (pending) detailed.push(`${pending} ${pending === 1 ? 'canal oficial sem saldo confirmado' : 'canais oficiais sem saldo confirmado'}`);
+        setHudTitle(pointsEl, detailed.length ? detailed.join('\n')
+          : !Array.isArray(official) ? `Aguardando lista oficial da ${platformName} enviada pelo jogo`
           : `Aguardando saldo confirmado pela ${platformName}`);
 
         if (channelsEl) {

@@ -4738,14 +4738,14 @@
         const tw = d.twitch;
         const login = String(tw.login || '').slice(0, 40);
         const rawLives = Array.isArray(tw.lives) ? tw.lives : [];
-        const liveSet = new Set(rawLives.map(l => {
+        const liveSet = new Set(rawLives.filter(l => typeof l === 'string' || (l && l.aoVivo !== false && l.online !== false && l.live !== false)).map(l => {
           if (!l) return '';
           if (typeof l === 'string') return l.trim().toLowerCase().replace(/^@/, '');
           return String(l.login || l.slug || l.channel || l.name || '').trim().toLowerCase().replace(/^@/, '');
         }).filter(Boolean));
         d.twitch = {
           login,
-          vinculado: (tw.vinculado ?? !!login) === true,
+          vinculado: typeof tw.vinculado === 'boolean' ? tw.vinculado : (login ? true : undefined),
           pct: num(tw.pct),
           bonus: Object.fromEntries(['xp', 'captura', 'shiny'].map(key => [key, Math.max(0, num(tw.bonus?.[key]))])),
           lives: rawLives.map(item => {
@@ -4762,16 +4762,16 @@
               espectadores: num(item.espectadores || item.viewers)
             };
           }).filter(Boolean),
-          oficiais: Array.isArray(tw.oficiais) ? tw.oficiais.filter(o => o && typeof o === 'object').slice(0, 40).map(o => {
+          ...(Array.isArray(tw.oficiais) ? { oficiais: tw.oficiais.filter(o => o && typeof o === 'object').slice(0, 40).map(o => {
             const cleanLogin = String(o.login || o.slug || o.channel || o.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
             return {
               login: cleanLogin,
-              ativo: o.ativo !== false,
+              ativo: o.ativo === true,
               bonus: o.bonus !== false,
               aoVivo: o.aoVivo === true || (cleanLogin ? liveSet.has(cleanLogin) : false),
               espectadores: num(o.espectadores || o.viewers)
             };
-          }).filter(o => o.login) : []
+          }).filter(o => o.login) } : {})
         };
       }
       if (d.kick && typeof d.kick === 'object') {
@@ -4779,7 +4779,7 @@
           if (!item) return null;
           if (typeof item === 'string') {
             const clean = item.trim().toLowerCase().replace(/^@/, '').slice(0, 40);
-            return clean ? { login: clean, espectadores: 0, aoVivo: defaultLive, ativo: true } : null;
+            return clean ? { login: clean, espectadores: 0, aoVivo: defaultLive, ativo: false } : null;
           }
           const login = String(item.slug || item.login || item.channel || item.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
           if (!login) return null;
@@ -4787,7 +4787,7 @@
             login,
             espectadores: num(item.espectadores || item.viewers),
             aoVivo: (item.aoVivo ?? item.online ?? item.live ?? defaultLive) === true,
-            ativo: item.ativo !== false
+            ativo: item.ativo === true
           };
         };
 
@@ -4805,7 +4805,7 @@
 
         d.kick = {
           login: String(d.kick.login || '').slice(0, 40),
-          vinculado: !!(d.kick.vinculado || d.kick.login),
+          vinculado: typeof d.kick.vinculado === 'boolean' ? d.kick.vinculado : (d.kick.login ? true : undefined),
           pontos: num(d.kick.pontos),
           pontosPorCanal: sanitizedPontosPorCanal,
           bonusExp: num(d.kick.bonusExp),
@@ -4815,7 +4815,7 @@
           bonusQty: num(d.kick.bonusQty || d.kick.qtd || d.kick.qty || 0),
           bonusExpiresAt: num(d.kick.bonusExpiresAt || d.kick.expiresAt || 0),
           lives: rawLives.map(item => parseKickStreamer(item, true)).filter(Boolean),
-          oficiais: rawOficiais.map(item => parseKickStreamer(item)).filter(Boolean),
+          ...(Array.isArray(d.kick.oficiais) || Array.isArray(d.kick.canais) ? { oficiais: rawOficiais.map(item => parseKickStreamer(item)).filter(Boolean) } : {}),
           offline: rawOffline.map(item => parseKickStreamer(item)).filter(Boolean)
         };
       }
@@ -7467,10 +7467,6 @@
       })();
       return twitchConfigLoading;
     }
-    const TWITCH_OFFICIAL_PARTNERS = [
-      'faasii', 'souonailo', 'biscoitao', 'surskity', 'clovaobengalol',
-      'luccatv', 'matta', 'febatista', 'fiaspogames', 'lukao', 'vitor_p', 'pokeidle'
-    ];
     function twitchOfficialChannels(index) {
       const data = twitchCachedGameData[index];
       const account = twitchBonusConfig.accounts?.[index];
@@ -7478,36 +7474,24 @@
       if (!hasLink) return [];
       const liveSet = new Set(
         (Array.isArray(data?.lives) ? data.lives : [])
+          .filter(l => typeof l === 'string' || l?.aoVivo === true)
           .map(l => (typeof l === 'string' ? l : l?.login || '').trim().toLowerCase().replace(/^@/, ''))
           .filter(Boolean)
       );
-      if (Array.isArray(data?.oficiais) && data.oficiais.length) {
-        return (data.oficiais || [])
-          .map(item => {
-            const clean = String(item?.login || item?.slug || item?.channel || item?.name || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
-            return {
-              ...item,
-              login: clean,
-              ativo: item?.ativo !== false,
-              bonus: item?.bonus !== false,
-              aoVivo: item?.aoVivo === true || (clean ? liveSet.has(clean) : false)
-            };
-          })
-          .filter(item => item.ativo !== false && item.bonus !== false && /^[a-z0-9_]{1,40}$/i.test(item.login));
+      const channels = new Map();
+      for (const item of Array.isArray(data?.oficiais) ? data.oficiais : []) {
+        const login = String(item?.login || item?.slug || item?.channel || '').trim().toLowerCase().replace(/^@/, '');
+        if (!/^[a-z0-9_]{1,40}$/.test(login)) continue;
+        channels.set(login, { ...item, login, ativo: item?.ativo === true && item?.bonus !== false,
+          aoVivo: item?.aoVivo === true || liveSet.has(login) });
       }
-      return TWITCH_OFFICIAL_PARTNERS.map(login => ({
-        login,
-        ativo: true,
-        bonus: true,
-        aoVivo: liveSet.has(login.toLowerCase()),
-        espectadores: 0
-      }));
+      return [...channels.values()];
     }
     let twitchLastPartners = '';
     function syncTwitchPartners() {
       if (!twitchConfigReady) return;
-      const channels = Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).map(c => c.login.toLowerCase()));
-      const lives = [...new Set(Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).filter(c => c.aoVivo).map(c => c.login.toLowerCase())).flat())];
+      const channels = Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).filter(c => c.ativo).map(c => c.login.toLowerCase()));
+      const lives = [...new Set(Array.from({ length: 4 }, (_, i) => twitchOfficialChannels(i).filter(c => c.aoVivo && c.ativo).map(c => c.login.toLowerCase())).flat())];
       const signature = JSON.stringify([channels, lives]);
       if (signature === twitchLastPartners) return;
       twitchLastPartners = signature;
@@ -7599,7 +7583,7 @@
       const list = twitchOfficialChannels(twitchSelectedAccount).slice().sort((a, b) => Number(b.aoVivo) - Number(a.aoVivo));
       twitchStreamersCount.textContent = `${list.filter(s => s.aoVivo).length} no ar`;
       const pointAccount = twitchPointsState?.accounts?.[twitchSelectedAccount];
-      const statuses = list.map(channel => TwitchRewardStatus.forBalance(pointAccount?.balances?.[channel.login.toLowerCase()], twitchAccountPriority(twitchSelectedAccount)));
+      const statuses = list.map(channel => TwitchRewardStatus.forBalance(channel.ativo ? pointAccount?.balances?.[channel.login.toLowerCase()] : null, twitchAccountPriority(twitchSelectedAccount)));
       const ready = statuses.filter(item => item.affordable.length).length;
       document.getElementById('twitchRewardSummary').textContent = ready ? `Buffs para resgatar: ${ready} canal(is)`
         : statuses.some(item => item.known) ? 'Buffs para resgatar: nenhum disponível com este saldo' : 'Buffs para resgatar: aguardando consulta da Twitch';
@@ -7612,9 +7596,9 @@
       document.getElementById('twitchPartnersPrev').disabled = twitchPartnersPage === 0;
       document.getElementById('twitchPartnersNext').disabled = twitchPartnersPage === pages - 1;
       twitchStreamersList.innerHTML = list.slice(twitchPartnersPage * 4, twitchPartnersPage * 4 + 4).map(channel => {
-        const balance = twitchPointsState?.accounts?.[twitchSelectedAccount]?.balances?.[channel.login.toLowerCase()];
+        const balance = channel.ativo ? twitchPointsState?.accounts?.[twitchSelectedAccount]?.balances?.[channel.login.toLowerCase()] : null;
         const fresh = balance?.status === 'verified' && Date.now() - Number(balance.checkedAt) < 120000;
-        const points = fresh ? `${Number(balance.points).toLocaleString('pt-BR')} pontos` : (balance?.checkedAt ? 'Saldo desatualizado' : 'Saldo não consultado');
+        const points = !channel.ativo ? 'Recompensas pendentes' : fresh ? `${Number(balance.points).toLocaleString('pt-BR')} pontos` : (balance?.checkedAt ? 'Saldo desatualizado' : 'Saldo não consultado');
         const rewardStatus = TwitchRewardStatus.forBalance(balance, twitchAccountPriority(twitchSelectedAccount));
         const rewardLabel = rewardStatus.label;
         const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : ' · indisponível'}</div>`).join('')}</details>` : '';
@@ -7681,8 +7665,12 @@
     window.pokeAPI?.onTwitchChatStatus?.(state => { twitchChatState = state; twitchRefreshView(); });
     function handleTwitchGameTelemetry(index, data) {
       if (!Number.isInteger(index) || index < 0 || index >= 4) return;
-      twitchCachedGameData[index] = data || null;
-      if (twitchConfigReady && twitchApplyGameLink(index, data)) {
+      const previous = twitchCachedGameData[index];
+      const current = !data || data.vinculado === false ? (data || null) : { ...(previous || {}), ...data };
+      if (current && !Array.isArray(data.oficiais) && Array.isArray(previous?.oficiais)) current.oficiais = previous.oficiais;
+      if (current && data.vinculado !== false && !data.login && previous?.login) current.login = previous.login;
+      twitchCachedGameData[index] = current;
+      if (twitchConfigReady && twitchApplyGameLink(index, current)) {
         saveTwitchConfig().catch(error => showTwitchFeedback(String(error.message || error), true));
       }
       syncTwitchPartners();
@@ -7777,68 +7765,42 @@
 
 
     const kickCachedGameData = [];
-    const KICK_OFFICIAL_PARTNERS = [
-      'biscoitao', 'surskity', 'clovaobengalol', 'luccatv', 'matta',
-      'souonailo', 'pokeidle', 'faasii', 'febatista', 'fiaspogames', 'lukao', 'vitor_p'
-    ];
     let kickStreamersFilter = 'all';
-    let kickLatestChannelSnapshot = null;
 
     function kickChannelsFromSnapshot(k) {
       if (!k) return [];
       const map = new Map();
-      const normalize = (slug) => String(slug || '').trim().toLowerCase().replace(/^@/, '').slice(0, 40);
-
-      for (const partner of KICK_OFFICIAL_PARTNERS) {
-        const clean = normalize(partner);
-        if (clean && /^[a-z0-9_]{1,40}$/i.test(clean)) {
-          map.set(clean, { login: clean, aoVivo: false, ativo: true, espectadores: 0 });
-        }
+      const normalize = slug => String(slug || '').trim().toLowerCase().replace(/^@/, '');
+      const nameOf = item => normalize(typeof item === 'string' ? item : (item?.slug || item?.login || item?.channel));
+      const oficiais = Array.isArray(k.oficiais) ? k.oficiais : (Array.isArray(k.canais) ? k.canais : []);
+      for (const item of oficiais) {
+        const login = nameOf(item);
+        if (!/^[a-z0-9_]{1,40}$/.test(login)) continue;
+        map.set(login, { login, aoVivo: item.aoVivo === true, ativo: item?.ativo === true,
+          espectadores: Number(item.espectadores || item.viewers) || 0 });
       }
-
-      if (k.pontosPorCanal && typeof k.pontosPorCanal === 'object') {
-        for (const raw of Object.keys(k.pontosPorCanal)) {
-          const clean = normalize(raw);
-          if (clean && /^[a-z0-9_]{1,40}$/i.test(clean) && !map.has(clean)) {
-            map.set(clean, { login: clean, aoVivo: false, ativo: true, espectadores: 0 });
+      // Presence only updates channels already confirmed as official by the game.
+      for (const [list, live] of [[k.offline, false], [k.lives, true]]) {
+        for (const item of Array.isArray(list) ? list : []) {
+          const channel = map.get(nameOf(item));
+          if (!channel) continue;
+          channel.aoVivo = typeof item === 'string' ? live : (item.aoVivo ?? item.online ?? item.live ?? live) === true;
+          if (typeof item === 'object' && (item.espectadores != null || item.viewers != null)) {
+            channel.espectadores = Number(item.espectadores || item.viewers) || 0;
           }
         }
       }
-
-      const addFromList = (list, defaultLive = false) => {
-        if (!Array.isArray(list)) return;
-        for (const item of list) {
-          if (!item) continue;
-          const login = normalize(typeof item === 'string' ? item : (item.slug || item.login || item.channel || item.name));
-          if (!login || !/^[a-z0-9_]{1,40}$/i.test(login)) continue;
-          const existing = map.get(login) || { login, aoVivo: false, ativo: true, espectadores: 0 };
-          if (typeof item === 'object') {
-            if (item.aoVivo !== undefined) existing.aoVivo = item.aoVivo === true;
-            else if (item.online !== undefined) existing.aoVivo = item.online === true;
-            else if (item.live !== undefined) existing.aoVivo = item.live === true;
-            else if (defaultLive) existing.aoVivo = true;
-
-            if (item.ativo !== undefined) existing.ativo = item.ativo !== false;
-            if (item.espectadores != null || item.viewers != null) {
-              existing.espectadores = Number(item.espectadores || item.viewers) || 0;
-            }
-          } else if (defaultLive) {
-            existing.aoVivo = true;
-          }
-          map.set(login, existing);
-        }
-      };
-
-      addFromList(k.offline, false);
-      addFromList(Array.isArray(k.oficiais) ? k.oficiais : (Array.isArray(k.canais) ? k.canais : null), false);
-      addFromList(k.lives, true);
 
       return Array.from(map.values());
     }
 
     function handleKickGameTelemetry(accIndex, kickData) {
       if (!kickData) return;
-      kickCachedGameData[accIndex] = kickData;
+      const previous = kickCachedGameData[accIndex];
+      const current = kickData.vinculado === false ? kickData : { ...(previous || {}), ...kickData };
+      if (kickData.vinculado !== false && !Array.isArray(kickData.oficiais) && Array.isArray(previous?.oficiais)) current.oficiais = previous.oficiais;
+      if (kickData.vinculado !== false && !kickData.login && previous?.login) current.login = previous.login;
+      kickCachedGameData[accIndex] = current;
       // Partial telemetry may omit the login; only an explicit unlink clears it.
       const linkedUsername = kickData.login ? String(kickData.login).trim().toLowerCase().replace(/^@/, '')
         : kickData.vinculado === false ? '' : (kickBonusConfig.accounts[accIndex]?.linkedUsername || '');
@@ -7859,13 +7821,12 @@
         }
       }
 
-      kickLatestChannelSnapshot = kickData;
-      const allPointChannels = [...new Set(kickCachedGameData.flatMap(data => data ? kickChannelsFromSnapshot(data).map(c => c.login) : []))];
+      const allPointChannels = [...new Set(kickCachedGameData.flatMap(data => data ? kickChannelsFromSnapshot(data).filter(c => c.ativo).map(c => c.login) : []))];
       if (window.pokeAPI?.kickSetPointChannels) {
-        window.pokeAPI.kickSetPointChannels(allPointChannels.length ? allPointChannels : kickChannelsFromSnapshot(kickData).map(c => c.login)).catch(() => {});
+        window.pokeAPI.kickSetPointChannels(allPointChannels).catch(() => {});
       }
       const allLiveLogins = new Set(kickCachedGameData.flatMap(data => data
-        ? kickChannelsFromSnapshot(data).filter(c => c.aoVivo === true && c.ativo !== false).map(c => c.login)
+        ? kickChannelsFromSnapshot(data).filter(c => c.aoVivo === true && c.ativo === true).map(c => c.login)
         : []));
       if (window.pokeAPI && window.pokeAPI.kickSyncLives) {
         window.pokeAPI.kickSyncLives(Array.from(allLiveLogins));
@@ -8209,10 +8170,7 @@
       if (!kickStreamersList) return;
       const streamMap = new Map();
 
-      const snapshot = kickCachedGameData[kickSelectedAccount] || kickLatestChannelSnapshot;
-      const channels = snapshot
-        ? kickChannelsFromSnapshot(snapshot)
-        : KICK_OFFICIAL_PARTNERS.map(login => ({ login, aoVivo: false, espectadores: 0 }));
+      const channels = kickChannelsFromSnapshot(kickCachedGameData[kickSelectedAccount]);
       // One received snapshot replaces channel status; old connections cannot revive an offline channel.
       channels.forEach(c => {
         if (!c || !c.login) return;
@@ -8249,20 +8207,21 @@
       filtered.sort((a, b) => {
         if (a.aoVivo !== b.aoVivo) return Number(b.aoVivo) - Number(a.aoVivo);
         if (a.aoVivo && b.aoVivo) return (b.espectadores || 0) - (a.espectadores || 0);
-        const ptsA = kickVerifiedBalance(a.login.toLowerCase())?.points || 0;
-        const ptsB = kickVerifiedBalance(b.login.toLowerCase())?.points || 0;
+        const ptsA = a.ativo ? (kickVerifiedBalance(a.login.toLowerCase())?.points || 0) : 0;
+        const ptsB = b.ativo ? (kickVerifiedBalance(b.login.toLowerCase())?.points || 0) : 0;
         if (ptsB !== ptsA) return ptsB - ptsA;
         return a.login.localeCompare(b.login);
       });
 
       if (filtered.length === 0) {
-        kickStreamersList.innerHTML = `<div style="font-size:12px;color:var(--color-text-secondary);padding:14px;text-align:center;">Nenhum streamer encontrado no filtro.</div>`;
+        const pendingOfficialList = !Array.isArray(kickCachedGameData[kickSelectedAccount]?.oficiais);
+        kickStreamersList.innerHTML = `<div style="font-size:12px;color:var(--color-text-secondary);padding:14px;text-align:center;">${pendingOfficialList ? 'Aguardando parceiros oficiais enviados pelo jogo desta conta.' : 'Nenhum parceiro autorizado encontrado no filtro.'}</div>`;
         return;
       }
 
       kickStreamersList.innerHTML = filtered.map(s => {
         const loginLower = s.login.toLowerCase();
-        const balance = kickVerifiedBalance(loginLower);
+        const balance = s.ativo ? kickVerifiedBalance(loginLower) : null;
         const points = balance?.points ?? null;
 
         const rewardStatus = KickRewardStatus.forBalance(balance, kickAccountPriority(kickSelectedAccount));
@@ -8280,9 +8239,9 @@
             </div>
             <div class="kick-streamer-bottom">
               <span class="kick-points-tag" title="${balance ? 'Consultado na Kick às ' + new Date(balance.checkedAt).toLocaleTimeString('pt-BR') : 'O saldo local antigo não é usado como saldo real'}">
-                <span>${points === null ? 'Saldo indisponível' : '<b>' + points.toLocaleString('pt-BR') + '</b> pts'}</span>
+                <span>${!s.ativo ? 'Recompensas pendentes' : points === null ? 'Saldo indisponível' : '<b>' + points.toLocaleString('pt-BR') + '</b> pts'}</span>
               </span>
-              <button type="button" class="kick-btn-test kick-open-channel" data-channel="${kickEscape(s.login)}">Atualizar saldo</button>
+              ${s.ativo ? `<button type="button" class="kick-btn-test kick-open-channel" data-channel="${kickEscape(s.login)}">Atualizar saldo</button>` : ''}
               <div class="kick-reward-pill ${rewardClass}">
                 ${rewardLabel}
               </div>

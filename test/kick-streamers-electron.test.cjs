@@ -79,11 +79,11 @@ app.whenReady().then(async () => {
  const feed=async (index,k)=>read('handleKickGameTelemetry('+index+',stSane({ok:true,kick:'+JSON.stringify(k)+'}).kick)');
  const snapshot=()=>read(`(()=>({live:document.getElementById('kickCountLive').textContent,all:document.getElementById('kickCountAll').textContent,off:document.getElementById('kickCountOff').textContent,rows:[...document.querySelectorAll('#kickStreamersList .kick-streamer-name')].map(e=>e.textContent)}))()`);
  await feed(0,fixture);
- let state=await snapshot(); assert.equal(state.live,'2');assert.equal(state.all,'3');assert.equal(state.off,'1');assert.equal(state.rows[0],'@biscoitao');assert.ok(!state.rows.includes('@display name'));
+ let state=await snapshot(); assert.equal(state.live,'2');assert.equal(state.all,'3');assert.equal(state.off,'1');assert.equal(state.rows[0],'@biscoitao');assert.ok(!state.rows.includes('@display name'));assert.ok(state.rows.includes('@surskity'));
  await read('kickBonusLiveState={liveChannels:["biscoitao"]}');
  await feed(1,{oficiais:fixture.oficiais.map(c=>({...c,aoVivo:false}))});
- state=await snapshot();assert.equal(state.live,'0');assert.equal(state.all,'3');assert.equal(state.off,'3');
- await feed(0,{lives:['biscoitao'],offline:['matta']});state=await snapshot();assert.equal(state.live,'1');assert.equal(state.all,'2');
+ state=await snapshot();assert.equal(state.live,'2');assert.equal(state.all,'3');assert.equal(state.off,'1');
+ await feed(0,{lives:['biscoitao','not_an_official'],offline:['matta']});state=await snapshot();assert.equal(state.live,'2');assert.equal(state.all,'3');
 
  await read("kickBonusConfig.accounts[0].username='viewer0';kickBonusConfig.accounts[0].channelPoints={biscoitao:999999};renderKickBonusUI()");
  const pointsText=()=>read("document.querySelector('#kickStreamersList .kick-points-tag').textContent.trim()");

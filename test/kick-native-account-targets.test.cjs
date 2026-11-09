@@ -15,9 +15,9 @@ test('four accounts retain twelve distinct live targets each',async()=>{
 });
 
 for (const file of ['index.html', 'rust-migration/ui/index.html']) {
-  test(`${file}: kickChannelsFromSnapshot merges official partners, accumulated points and telemetry`, () => {
+  test(`${file}: Kick only includes game-authorized partners; history cannot add accounts`, () => {
     const html = fs.readFileSync(file, 'utf8');
-    const start = html.indexOf('const KICK_OFFICIAL_PARTNERS =');
+    const start = html.indexOf('function kickChannelsFromSnapshot(');
     const end = html.indexOf('async function handleKickGameTelemetry', start) !== -1
       ? html.indexOf('async function handleKickGameTelemetry', start)
       : html.indexOf('function handleKickGameTelemetry', start);
@@ -28,18 +28,21 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
     // Empty input returns empty array
     assert.equal(context.kickChannelsFromSnapshot(null).length, 0);
 
-    // Snapshot with points accumulated on offline streamer and one live streamer
+    // Historical points, online telemetry and an old hardcoded list cannot add partners.
     const snapshot = {
       pontosPorCanal: {
         souonailo: 1200,
         custom_offline_streamer: 550
       },
       lives: [
-        { login: 'biscoitao', viewers: 42 }
+        { login: 'biscoitao', viewers: 42 },
+        { login: 'not_partner', viewers: 100 }
       ],
       oficiais: [
         { login: 'biscoitao', aoVivo: true, ativo: true },
         { login: 'souonailo', aoVivo: false, ativo: true },
+        { login: 'matta', aoVivo: false, ativo: true },
+        { login: 'missing_authorization', aoVivo: true },
         { login: 'disabled_streamer', aoVivo: true, ativo: false }
       ],
       offline: [
@@ -50,18 +53,13 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
     const channels = context.kickChannelsFromSnapshot(snapshot);
     const byLogin = new Map(channels.map(c => [c.login, c]));
 
-    const expectedPartners = [
-      'biscoitao', 'surskity', 'clovaobengalol', 'luccatv', 'matta',
-      'souonailo', 'pokeidle', 'faasii', 'febatista', 'fiaspogames', 'lukao', 'vitor_p'
-    ];
-    for (const partner of expectedPartners) {
-      assert.ok(byLogin.has(partner), `missing partner: ${partner}`);
+    assert.equal(channels.length, 5);
+    for (const partner of ['biscoitao','souonailo','matta']) assert.ok(byLogin.has(partner));
+    for (const outsider of ['custom_offline_streamer','not_partner','surskity']) {
+      assert.ok(!byLogin.has(outsider), `${outsider} must not be queried as a partner`);
     }
-
-    // Custom streamer with accumulated points must be present even when offline
-    assert.ok(byLogin.has('custom_offline_streamer'), 'custom offline streamer with points must be present');
-    assert.equal(byLogin.get('custom_offline_streamer').aoVivo, false);
-    assert.equal(byLogin.get('custom_offline_streamer').ativo, true);
+    assert.equal(byLogin.get('disabled_streamer').ativo, false);
+    assert.equal(byLogin.get('missing_authorization').ativo, false);
 
     // Live streamer must have aoVivo: true
     assert.equal(byLogin.get('biscoitao').aoVivo, true);
@@ -70,18 +68,17 @@ for (const file of ['index.html', 'rust-migration/ui/index.html']) {
     // Offline partner must have aoVivo: false
     assert.equal(byLogin.get('souonailo').aoVivo, false);
 
-    // Disabled streamer must have ativo: false
-    assert.equal(byLogin.get('disabled_streamer').ativo, false);
-
     // Separation of concerns:
-    // 1. Points query channels: all candidate channels (online + offline + custom points channels)
-    const pointLogins = channels.map(c => c.login);
-    assert.ok(pointLogins.includes('custom_offline_streamer'), 'offline channel with points must be queried for balance/redeem');
+    // 1. Points query includes offline authorized partners.
+    const pointLogins = channels.filter(c => c.ativo).map(c => c.login);
+    assert.ok(!pointLogins.includes('custom_offline_streamer'));
+    assert.ok(!pointLogins.includes('disabled_streamer'));
+    assert.ok(!pointLogins.includes('missing_authorization'));
     assert.ok(pointLogins.includes('souonailo'), 'offline partner must be queried for balance/redeem');
     assert.ok(pointLogins.includes('biscoitao'));
 
-    // 2. Live websocket channels: strictly aoVivo === true && ativo !== false
-    const liveLogins = channels.filter(c => c.aoVivo === true && c.ativo !== false).map(c => c.login);
+    // 2. Live websocket channels: only live authorized partners.
+    const liveLogins = channels.filter(c => c.aoVivo === true && c.ativo === true).map(c => c.login);
     assert.ok(liveLogins.includes('biscoitao'));
     assert.ok(!liveLogins.includes('custom_offline_streamer'), 'offline channel must not connect to live websocket');
     assert.ok(!liveLogins.includes('souonailo'), 'offline partner must not connect to live websocket');

@@ -628,6 +628,12 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     assert.equal(twitchPoints0.textContent, 'Pontos —');
     assert.equal(p0Hud.querySelector('.bsh-twitch-channels').textContent, 'Sem saldo confirmado');
 
+    // The game's official list, rather than point lookups, authorizes visible channels.
+    const authorized = (...logins) => logins.map(login => ({login, ativo: true}));
+    hud.update(panels[0], 0, {twitch: {oficiais: authorized('souonailo')},kick: {oficiais: authorized('biscoitao')}});
+    hud.update(panels[1], 1, {twitch: {oficiais: authorized('oldstream','futurestream')},kick: {oficiais: authorized('biscoitao')}});
+    hud.update(panels[2], 2, {twitch: {oficiais: []},kick: {oficiais: authorized('live_a','live_b')}});
+
     // 1. Independent subscription: update Twitch points for Account 0 only
     listeners.twitchPoints({
       accounts: [
@@ -701,10 +707,10 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     assert.equal(p1Hud.querySelector('.bsh-kick-channels').textContent, '1 canal');
     assert.equal(kickPoints1.title, 'biscoitao: 0');
 
-    // Twitch expired (>120s) and future (>now+5s) balances must NOT count in sum; displays 'Pontos —' and 'indisponível' in title
+    // Expired and future-dated balances do not count; aggregate pending channels in the tooltip.
     assert.equal(twitchPoints1.textContent, 'Pontos —');
     assert.equal(p1Hud.querySelector('.bsh-twitch-channels').textContent, 'Sem saldo confirmado');
-    assert.equal(twitchPoints1.title, 'oldstream: indisponível\nfuturestream: indisponível');
+    assert.equal(twitchPoints1.title, '2 canais oficiais sem saldo confirmado');
 
     // Missing checkedAt is unverified:
     listeners.kickPoints({
@@ -713,7 +719,7 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
       ]
     });
     assert.equal(p0Hud.querySelector('.bsh-kick-points').textContent, 'Pontos —', 'Missing checkedAt must be unverified');
-    assert.equal(p0Hud.querySelector('.bsh-kick-points').title, 'biscoitao: indisponível');
+    assert.equal(p0Hud.querySelector('.bsh-kick-points').title, '1 canal oficial sem saldo confirmado');
 
     // 4. Partial / mixed channels for Account 2
     // Kick: 2 channels (1 verified 500 fresh, 1 stale 200) -> total 500 pts, '1 canal · parcial', tooltip shows breakdown
@@ -735,7 +741,25 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     const kickPoints2 = p2Hud.querySelector('.bsh-kick-points');
     assert.equal(kickPoints2.textContent, '500 pts');
     assert.equal(p2Hud.querySelector('.bsh-kick-channels').textContent, '1 canal · parcial');
-    assert.equal(kickPoints2.title, 'live_a: 500\nlive_b: indisponível');
+    assert.equal(kickPoints2.title, 'live_a: 500\n1 canal oficial sem saldo confirmado');
+
+    // A spurious verified account must not appear or affect the total for either service.
+    listeners.twitchPoints({ accounts: [
+      {status: 'authenticated', balances: {
+        souonailo: {status: 'verified',points: 120,checkedAt: Date.now()},
+        random_account: {status: 'verified',points: 99999,checkedAt: Date.now()}
+      }}
+    ] });
+    assert.equal(twitchPoints0.textContent, '120 pts');
+    assert.equal(twitchPoints0.title, 'souonailo: 120');
+    listeners.kickPoints({ accounts: [
+      {status: 'authenticated', balances: {
+        biscoitao: {status: 'verified',points: 70,checkedAt: Date.now()},
+        unrelated_player: {status: 'verified',points: 99999,checkedAt: Date.now()}
+      }}
+    ] });
+    assert.equal(kickPoints0.textContent, '70 pts');
+    assert.equal(kickPoints0.title, 'biscoitao: 70');
 
     // 5. In-game points fallback for Kick only (Account 3); Twitch has NO game.twitch.pontos fallback
     hud.update(panels[3], 3, {
