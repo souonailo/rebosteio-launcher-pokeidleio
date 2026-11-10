@@ -1,3 +1,53 @@
+## 2.0.74 — VIP e inscrição semanal no painel Headless
+
+- Mostra em cada cartão Headless o status VIP da conta e a quantidade de dias restantes até o vencimento; indica VIP inativo ou pendente de confirmação quando não há dados suficientes.
+- Mostra o World Boss como Inscrito, Não inscrito ou A verificar, vinculado ao ID da edição semanal confirmado pelo servidor. Ao iniciar outra edição, reconectar ou expirar a referência semanal, evita exibir uma confirmação antiga.
+- Inclui regressões para troca de edição, confirmação da inscrição, ausência de dados e vencimento do VIP.
+- Ajusta o HUD em alturas reduzidas para manter os indicadores e os controles visíveis nos quatro painéis.
+
+## 2.0.73 — Lives Twitch selecionadas pelo buff configurado em cada conta
+
+- O supervisor nativo consulta os catálogos dos parceiros oficiais e acompanha somente lives online que ofereçam a recompensa de 1 hora configurada na conta (EXP 300 pts, Captura 500 pts ou Lure 1000 pts). Com "Qualquer buff", acompanha as que disponibilizam ao menos uma dessas três recompensas. Recompensas de maior duração não substituem a oferta de 1 hora escolhida.
+- A seleção não exige já ter pontos para resgatar, permitindo acumular pontos nas lives elegíveis. Resgates continuam exigindo saldo, sessão vinculada e confirmação da Twitch, inclusive para parceiros offline.
+- A lista de canais IRC passou a ser independente para cada uma das quatro contas; mudanças de buff, status online/offline, lista oficial e catálogo geram entradas e saídas automáticas dos canais. A rotina de acompanhamento nativo adota o mesmo filtro e alterna entre no máximo duas lives por ciclo.
+- Preserva a validação separada de recompensas sinalizadas como pausadas pela API, evitando excluir automaticamente uma recompensa que o usuário consegue resgatar manualmente, e não acompanha canais sem catálogo confirmado ou com oferta desativada.
+- Adiciona testes para troca de preferência, isolamento entre contas, ausência da recompensa de 500 pontos, saldo zero, dados expirados, saída de live e rotação de acompanhamento.
+
+## 2.0.72 — Verificação controlada de recompensas Twitch sinalizadas como pausadas
+
+- Corrige a classificação categórica de recompensas como impossíveis de resgatar com base apenas no campo público `isPaused`: o Twitch GQL retorna `true` para Captura 500 pts de `tftoddy`, apesar do relato de resgate manual funcional.
+- O auto-resgate Rust prioriza recompensas que a API apresenta como disponíveis. Quando os demais requisitos estão confirmados, pode tentar uma recompensa com pausa sinalizada, usando o registro persistente de transações; não repete a mesma tentativa após recusa ou confirmação incerta enquanto a API continuar sinalizando pausa.
+- O painel distingue resgate confirmado de disponibilidade que ainda depende de resposta do servidor e mostra o estado `a confirmar` para essas recompensas, sem declará-las disponíveis nem permanentemente bloqueadas.
+- Inclui testes de preço, prioridade, elegibilidade, falha e proteção contra repetição de tentativas.
+
+## 2.0.71 — Registro automático no Boss Semanal
+
+- Adiciona em Ferramentas o controle **Auto registro no Boss Semanal**, desativado por padrão e persistido entre aberturas do launcher.
+- Consulta a Raid Gigantamax via `raid.info` e solicita `raid.inscrever` por conta apenas durante a janela de inscrições, com Bronze Boss Token disponível e ausência de inscrição confirmada pelo servidor.
+- Suporta contas em WebView e no supervisor Rust headless, inclusive com a janela minimizada, respeitando a edição da Raid e um intervalo entre tentativas.
+
+## 2.0.70 — Motivos reais para não resgatar bônus Twitch
+
+- Confirma a elegibilidade pelo catálogo real da Twitch: saldo suficiente para um preço de tabela não autoriza resgatar uma recompensa desativada. Na consulta de 09/11/2026, o canal `denissnidertv` estava com Captura de 1h (500 pts) desativada e a próxima opção habilitada de Captura custava 1.500 pts (3h).
+- No painel Bônus Twitch, indica explicitamente a prioridade selecionada em cada conta e explica a falta de pontos para a próxima recompensa ativa, bem como a existência de outros tipos de bônus resgatáveis quando a preferência bloqueia o resgate.
+- Esclarece no tutorial e no seletor que os preços de 1h dependem da disponibilidade indicada pelo streamer. Mantém a preferência escolhida pelo usuário e exige confirmação real da Twitch antes de gastar pontos.
+- Acrescenta regressão para uma conta com 1.140 pts em canal cuja Captura de 1h está desativada e com outras recompensas ativas, sem resgate indevido na preferência Captura.
+
+## 2.0.69 — Tooltip de pontos compacto e integrado ao tema
+
+- Substitui o painel grande de pontos dos streamers por uma janelinha compacta ao lado do valor no HUD, com a mesma simplicidade do tooltip original e cores do tema atual.
+- Exibe todos os canais oficiais da própria conta/plataforma com seus pontos confirmados ou indicação de indisponibilidade, em uma lista rolável; aparece ao passar o mouse e o clique permite mantê-la aberta.
+- Remove abas, pesquisa, cartões, fundo escurecido e demais controles que não faziam parte do resumo original. Inclui testes de posicionamento, rolagem, atualização, fechamento e isolamento entre contas.
+
+## 2.0.68 — Resgate Twitch com consulta contínua de parceiros online e offline
+
+- Substitui o tooltip branco dos pontos Twitch/Kick no HUD de batalha por um modal integrado ao tema do launcher: abre ao clicar no saldo, permite trocar plataforma e conta, pesquisar streamers, filtrar saldos e consultar todos os canais oficiais com pontos confirmados ou pendentes.
+- Mantém os saldos separados por conta e plataforma, atualiza o modal com novas consultas de pontos e permite fechar por Escape, botão ou clique no fundo. Adiciona testes em DOM real para Electron e para a interface Rust.
+- Evita que a consulta sequencial de até 40 canais Twitch estoure o limite de tempo antes de chegar ao resgate: realiza consultas concorrentes com limite de carga, mantém os saldos já confirmados durante varreduras parciais e alterna a ordem de início para cobrir todo o catálogo oficial.
+- Falhas de consulta específicas de um canal não interrompem a verificação dos demais. Erros de autenticação e limite de requisições continuam sendo tratados como bloqueio da consulta para proteger a sessão.
+- Registra cooldown de resgate por canal: uma recompensa recusada ou sem confirmação impede nova tentativa naquele streamer pelo prazo de segurança, sem bloquear outros parceiros com pontos disponíveis. Migra automaticamente registros anteriores, preservando os comprovantes.
+- Adiciona regressões determinísticas com 40 canais e consultas lentas, parceiros offline, erros de canal, seleção de recompensa em outros streamers e migração do histórico.
+
 ## 2.0.67 — Mostrar todos os saldos confirmados por streamer
 
 - Remove o limite visual de oito canais no tooltip de pontos do HUD para Twitch e Kick; todos os parceiros autorizados com saldo confirmado aparecem individualmente com seus pontos.

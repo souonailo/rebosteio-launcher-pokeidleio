@@ -2615,6 +2615,7 @@
   <link rel="stylesheet" href="src/ui/kick-bonus.css">
   <link rel="stylesheet" href="src/ui/auto-supply-individual.css">
   <link rel="stylesheet" href="src/ui/battle-hud.css">
+  <link rel="stylesheet" href="src/ui/streamer-points-modal.css">
   <link rel="stylesheet" href="src/ui/depot-settings.css">
   <link rel="stylesheet" href="src/ui/sniper-panel.css">
   <script src="src/ui/runtime-performance.js"></script>
@@ -2643,6 +2644,7 @@
   <script src="src/ui/kuromi-xp.js"></script>
   <script src="src/ui/inventory-state.js"></script>
   <script src="src/ui/battle-hud.js"></script>
+  <script src="src/ui/streamer-points-modal.js"></script>
   <script src="src/ui/sniper-panel.js"></script>
 </head>
 
@@ -2714,6 +2716,7 @@
         <button id="sndShiny" title="Toca um som quando um shiny aparece (além da notificação)">✨🔊 Som do
           shiny</button>
         <button id="voltaHunt">↩ Voltar pra hunt</button>
+        <button id="autoRaid" title="Inscrever as contas automaticamente no Boss Semanal enquanto houver inscrições abertas e Bronze Boss Token">👑 Auto registro no boss semanal</button>
         <button id="manBtn" title="Manual: o que cada parte do app faz">📖 Manual</button> <button id="faqBtn"
           title="Perguntas frequentes: abre o FAQ no navegador">❓ FAQ</button> <button id="bkExp"
           title="Salva um arquivo com todas as configurações e o histórico (senhas ficam fora)">💾 Exportar
@@ -3103,8 +3106,8 @@
         <label class="twitch-toggle-label"><input type="checkbox" id="twitchAutoClaimToggle"><span class="twitch-toggle-text"><b>Resgatar automaticamente</b><small>Gasta pontos no buff escolhido, uma vez por consulta.</small></span></label>
         <label class="twitch-priority-label" for="twitchAutoClaimPriority">Buff da conta selecionada:
           <select id="twitchAutoClaimPriority">
-            <option value="exp">+15% EXP (300 pts)</option><option value="catch">+15% Capture (500 pts)</option>
-            <option value="lure">+15% Lure (1000 pts)</option><option value="all">Qualquer buff</option>
+            <option value="exp">+15% EXP (1h: 300 pts)</option><option value="catch">+15% Capture (1h: 500 pts)</option>
+            <option value="lure">+15% Lure (1h: 1000 pts)</option><option value="all">Qualquer buff</option>
           </select>
         </label>
       </div>
@@ -3140,7 +3143,7 @@
             </section>
             <section class="twitch-guide-step" data-guide-panel="4" hidden>
               <h3>5. Acompanhe os bônus</h3>
-              <p>Os bônus de <b>1 hora</b> custam 300 pontos para XP, 500 para Capture Boost e 1000 para Secret Lure. O catálogo também oferece <b>3, 5 e 10 horas</b>. O automático resgata assim que houver saldo para a opção mais barata disponível; as horas se somam.</p>
+              <p>Os bônus de <b>1 hora</b>, quando habilitados pelo streamer, custam 300 pontos para XP, 500 para Capture Boost e 1000 para Secret Lure. O catálogo também oferece <b>3, 5 e 10 horas</b>. Uma opção de 1 hora pode estar desativada mesmo com saldo suficiente; o automático só resgata recompensas ativas do tipo escolhido.</p>
               <p>O tempo mostrado vem do jogo. O antigo adicional por quantidade de lives não se aplica.</p>
             </section>
           </div>
@@ -3447,6 +3450,8 @@
         scHint: 'Rode userscripts (estilo Tampermonkey) dentro de cada painel do jogo. O IV calc já vem pronto. Você pode colar os seus. <b>Só adicione scripts em que você confia</b>, eles têm acesso total à página do jogo.',
         scDrop: 'Solte o arquivo .user.js aqui', scUrlPh: 'Link do script no GitHub (.user.js)', scOuCole: 'ou cole o código', scNamePh: 'Nome do script', scCodePh: 'Cole aqui o código do userscript (@grant none)', scAddBtn: '+ Adicionar script',
         autoSupplyBtn: '📦 Auto Supply', autoSupplyTitle: 'Reabastecimento automático de Pokébolas e Poções com verificação de saldo',
+        autoRaidOn: '👑 Boss semanal: registro automático ligado', autoRaidOff: '👑 Boss semanal: registro automático desligado',
+        autoRaidTitle: 'Inscreve automaticamente cada conta online na Raid Gigantamax durante as inscrições, se tiver pelo menos 1 Bronze Boss Token. Consome 1 token por conta.',
         newInstance: '➕ Nova instância', newInstanceTitle: 'Abre uma nova instância independente do PIO Rebosteio para rodar mais 4 contas (8 contas no total)',
 
       },
@@ -3499,6 +3504,8 @@
         scHint: 'Run userscripts (Tampermonkey style) inside each game panel. The IV calc comes built in. You can paste your own. <b>Only add scripts you trust</b>, they get full access to the game page.',
         scDrop: 'Drop the .user.js file here', scUrlPh: 'Script link on GitHub (.user.js)', scOuCole: 'or paste the code', scNamePh: 'Script name', scCodePh: 'Paste the userscript code here (@grant none)', scAddBtn: '+ Add script',
         autoSupplyBtn: '📦 Auto Supply', autoSupplyTitle: 'Automatic restock of Pokéballs and Potions with budget check',
+        autoRaidOn: '👑 Weekly boss: auto registration on', autoRaidOff: '👑 Weekly boss: auto registration off',
+        autoRaidTitle: 'Automatically registers each online account for the weekly Gigantamax Raid during registration if it has at least 1 Bronze Boss Token. Costs 1 token per account.',
         newInstance: '➕ New instance', newInstanceTitle: 'Opens an independent new instance of PIO Rebosteio to run 4 more accounts (8 accounts total)',
 
       },
@@ -3550,6 +3557,8 @@
         scHint: 'Ejecuta userscripts (estilo Tampermonkey) dentro de cada panel del juego. La calculadora de IV ya viene lista. Puedes pegar los tuyos. <b>Añade solo scripts en los que confías</b>, tienen acceso total a la página del juego.',
         scDrop: 'Suelta el archivo .user.js aquí', scUrlPh: 'Enlace del script en GitHub (.user.js)', scOuCole: 'o pega el código', scNamePh: 'Nombre del script', scCodePh: 'Pega aquí el código del userscript (@grant none)', scAddBtn: '+ Añadir script',
         autoSupplyBtn: '📦 Auto Supply', autoSupplyTitle: 'Reabastecimiento automático de Pokébolas y Pociones con control de saldo',
+        autoRaidOn: '👑 Jefe semanal: registro automático activado', autoRaidOff: '👑 Jefe semanal: registro automático desactivado',
+        autoRaidTitle: 'Inscribe automáticamente cada cuenta conectada en la incursión semanal Gigantamax durante las inscripciones si tiene al menos 1 Bronze Boss Token. Consume 1 token por cuenta.',
         newInstance: '➕ Nueva instancia', newInstanceTitle: 'Abre una nueva instancia independiente de PIO Rebosteio para ejecutar 4 cuentas más (8 cuentas en total)',
 
       }
@@ -3893,6 +3902,7 @@
           wv.executeJavaScript(SELLGUARD).catch(() => { });
           wv.executeJavaScript('window.__pgSellGuardOn=' + (sellGuardOn ? 'true' : 'false') + ';window.__pgSellLock=' + JSON.stringify(sellLock) + ';window.__pgSellTxt=' + JSON.stringify([t('sgAviso'), t('sgConfirma')])).catch(() => { });
           wv.executeJavaScript(QOL_UI).catch(() => { });
+          wv.executeJavaScript('window.__idleioAutoRaidEnabled=' + (autoRaidOn ? 'true' : 'false')).catch(() => { });
           wv.executeJavaScript(chatScript(chatHidden || cardsOn)).catch(() => { });
           wv.executeJavaScript(dockScript(dockHidden)).catch(() => { });
           wv.executeJavaScript(inGameSoundScript(alertsOn)).catch(() => { });
@@ -8848,8 +8858,11 @@
       const pointAccount = twitchPointsState?.accounts?.[twitchSelectedAccount];
       const statuses = list.map(channel => TwitchRewardStatus.forBalance(channel.ativo ? pointAccount?.balances?.[channel.login.toLowerCase()] : null, twitchAccountPriority(twitchSelectedAccount)));
       const ready = statuses.filter(item => item.affordable.length).length;
-      document.getElementById('twitchRewardSummary').textContent = ready ? `Buffs para resgatar: ${ready} canal(is)`
-        : statuses.some(item => item.known) ? 'Buffs para resgatar: nenhum disponível com este saldo' : 'Buffs para resgatar: aguardando consulta da Twitch';
+      const trial = statuses.filter(item => item.trials?.length).length;
+      const preferredBonus = { exp: 'EXP', catch: 'Captura', lure: 'Lure', all: 'Qualquer buff' }[twitchAccountPriority(twitchSelectedAccount)];
+      document.getElementById('twitchRewardSummary').textContent = ready ? `${preferredBonus}: ${ready} canal(is) pronto(s) para resgate`
+        : trial ? `${preferredBonus}: ${trial} canal(is) com pausa informada, a confirmar no resgate`
+        : statuses.some(item => item.known) ? `${preferredBonus}: nenhum resgate disponível com este saldo` : `${preferredBonus}: aguardando catálogo da Twitch`;
       document.getElementById('twitchRedemptionStatus').textContent = !window.__TAURI_INTERNALS__ ? 'Resgate automático disponível na versão Rust.'
         : !twitchBonusConfig.autoClaim ? 'Resgate automático desligado.'
         : pointAccount?.redemption?.message || 'Automático ativo: aguardando saldo e recompensa disponíveis.';
@@ -8864,7 +8877,7 @@
         const points = !channel.ativo ? 'Recompensas pendentes' : fresh ? `${Number(balance.points).toLocaleString('pt-BR')} pontos` : (balance?.checkedAt ? 'Saldo desatualizado' : 'Saldo não consultado');
         const rewardStatus = TwitchRewardStatus.forBalance(balance, twitchAccountPriority(twitchSelectedAccount));
         const rewardLabel = rewardStatus.label;
-        const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : ' · indisponível'}</div>`).join('')}</details>` : '';
+        const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : reward.trialPaused ? ' · Twitch indica pausa; a confirmar' : ' · indisponível'}</div>`).join('')}</details>` : '';
         return `<div class="twitch-streamer-item ${channel.aoVivo ? 'live' : 'off'}"><span class="twitch-streamer-name">@${kickEscape(channel.login)}</span><div class="twitch-streamer-meta"><span class="${channel.aoVivo ? 'twitch-badge-live' : 'twitch-badge-off'}">${channel.aoVivo ? 'Ao vivo' : 'Offline'}</span><span class="twitch-badge-bonus">${points}</span><span class="twitch-field-help">${kickEscape(rewardLabel)}</span>${options}<button type="button" class="twitch-btn-test" data-twitch-channel="${kickEscape(channel.login)}">Abrir canal</button></div></div>`;
       }).join('') || '<div class="twitch-empty-streamers">Aguardando parceiros oficiais enviados pelo jogo desta conta.</div>';
       twitchStreamersList.querySelectorAll('[data-twitch-channel]').forEach(button => {
@@ -10050,6 +10063,22 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
     const voltaBtn = document.getElementById('voltaHunt');
     function applyVoltaHunt() { voltaBtn.textContent = t(voltaHuntOn ? 'voltaOn' : 'voltaOff'); voltaBtn.title = t('voltaTitle'); voltaBtn.classList.toggle('on', voltaHuntOn); lsSet('voltaHunt', voltaHuntOn ? '1' : '0'); }
     voltaBtn.onclick = () => { voltaHuntOn = !voltaHuntOn; applyVoltaHunt(); };
+    // Registro no Gigantamax: a janela e a confirmação são verificadas pelo servidor.
+    let autoRaidOn = lsGet('autoRaid') === '1';
+    const autoRaidBtn = document.getElementById('autoRaid');
+    function applyAutoRaid() {
+      autoRaidBtn.textContent = t(autoRaidOn ? 'autoRaidOn' : 'autoRaidOff');
+      autoRaidBtn.title = t('autoRaidTitle');
+      autoRaidBtn.classList.toggle('on', autoRaidOn);
+      lsSet('autoRaid', autoRaidOn ? '1' : '0');
+      Promise.resolve(window.pokeAPI?.blasterAutoRaid?.(autoRaidOn)).catch(() => {});
+      webviews.forEach((wv, i) => {
+        if (!wv || off[i]) return;
+        wv.executeJavaScript('window.__idleioAutoRaidEnabled=' + (autoRaidOn ? 'true' : 'false')).catch(() => {});
+      });
+      window.__syncAutoRaidBadge?.();
+    }
+    autoRaidBtn.onclick = () => { autoRaidOn = !autoRaidOn; applyAutoRaid(); };
     const VOLTA_JS = (slug) => `(()=>{const P=window.__poke;if(!P)return 'sem-coletor';if(window.__pgVolta)return 'ja';window.__pgVolta=1;const sl=${JSON.stringify(String(slug))};if(!sl||['cerulean','pewter','viridian','cassino','arena_pvp'].includes(sl))return 'cidade';let t0=Date.now(),n=0,tk=0,kl=(P.sess||{}).kills||0;const iv=setInterval(()=>{try{const k=(P.sess||{}).kills||0;if((P.fiT||0)>t0||k>kl||n>=3||++tk>10){clearInterval(iv);return;}kl=k;if(P.sock&&P.sock.readyState===1){P.sock.send(JSON.stringify({type:'enter-hunt',t:'hunt.select',slug:sl}));n++;t0=Date.now();}}catch(e){}},12000);return 'armado';})()`;
     let _ac = null;
     function beepShiny(festa) { // festa = captura: acorde mais longo, pra nao confundir com "apareceu"
@@ -10492,7 +10521,7 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         p.querySelector('.expand').title = t('tExpand');
         p.querySelector('.zpct').title = t('tZoomPct');
       });
-      applyMute(); applyEco(); applyAutoSellLoot(); applyChat(); applyDock(); applyAwake(); applyMinTray(); applyPropNat(); applySndShiny(); applyVoltaHunt(); applyAlerts(); applySellGuard(); applyClean(); aplicaCountLayout();
+      applyMute(); applyEco(); applyAutoSellLoot(); applyChat(); applyDock(); applyAwake(); applyMinTray(); applyPropNat(); applySndShiny(); applyVoltaHunt(); applyAutoRaid(); applyAlerts(); applySellGuard(); applyClean(); aplicaCountLayout();
       if (typeof applyFamilyFocus === 'function') applyFamilyFocus(currentFamilyFocus);
       lsSet('lang', lang);
     }

@@ -443,6 +443,14 @@ async fn blaster_send(
 }
 
 #[tauri::command]
+fn blaster_auto_raid_set(
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    enabled: bool,
+) {
+    manager.auto_raid_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tauri::command]
 async fn session_token_save(
     app: AppHandle,
     manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
@@ -507,12 +515,13 @@ async fn twitch_test(username: String, token: String) -> Result<serde_json::Valu
 
 #[tauri::command]
 async fn twitch_sync_lives(
+    app: AppHandle,
     manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
-    chat: tauri::State<'_, Arc<twitch_chat::TwitchChatServiceManager>>,
     lives: Vec<String>,
 ) -> Result<bool, String> {
-    chat.sync_lives(lives.clone()).await;
-    Ok(manager.sync_lives(lives).await)
+    let success = manager.sync_lives(lives).await;
+    manager.sync_chat_targets(&app).await;
+    Ok(success)
 }
 
 #[tauri::command]
@@ -534,7 +543,11 @@ async fn twitch_session_open(app: AppHandle, manager: tauri::State<'_, Arc<twitc
 async fn twitch_session_close(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize) -> Result<bool,String> { manager.close(&app, index).await }
 
 #[tauri::command]
-async fn twitch_point_channels(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, channels: Vec<Vec<String>>) -> Result<bool,String> { manager.set_channels(channels).await; Ok(true) }
+async fn twitch_point_channels(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, channels: Vec<Vec<String>>) -> Result<bool,String> {
+    manager.set_channels(channels).await;
+    manager.sync_chat_targets(&app).await;
+    Ok(true)
+}
 
 // ----------------- KICK -----------------
 
@@ -990,6 +1003,7 @@ pub fn run() {
             blaster_stop,
             blaster_status,
             blaster_send,
+            blaster_auto_raid_set,
             session_token_save,
             session_token_get,
             telemetry_report,

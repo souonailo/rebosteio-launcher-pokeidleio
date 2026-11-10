@@ -23,7 +23,8 @@ test('game bridge preserves channel-point bonus expirations and partner eligibil
   vm.runInNewContext(fs.readFileSync('rust-migration/src-tauri/src/gameplay_bridge.js', 'utf8'), {
     window, URL, crypto: { randomUUID: () => 'twitch-fixture' }, performance: { now: () => 0 },
     localStorage: { getItem: () => null }, queueMicrotask() {},
-    setTimeout: callback => { timers.push(callback); return timers.length; }
+    setTimeout: callback => { timers.push(callback); return timers.length; },
+    setInterval: () => 0 // Weekly Raid timer is not part of this Twitch fixture.
   });
   const socket = new window.WebSocket('wss://pokeidle.io/ws');
   socket.listeners.open();

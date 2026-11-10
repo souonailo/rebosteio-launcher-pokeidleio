@@ -416,6 +416,58 @@
   text-shadow: 0 0 8px rgba(192, 132, 252, 0.6);
 }
 
+/* Estado de benefícios da conta e inscrição no boss semanal, só no Headless. */
+.bsh-account-flags {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  max-width: 100%;
+  margin: 0 0 4px;
+}
+.panel.is-blaster-active .bsh-account-flags { display: flex; }
+.bsh-account-flag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 19px;
+  padding: 2px 7px;
+  border: 1px solid rgba(148, 163, 184, .28);
+  border-radius: 999px;
+  background: rgba(17, 24, 39, .7);
+  color: #b9c5d6;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  white-space: nowrap;
+  box-sizing: border-box;
+  font-variant-numeric: tabular-nums;
+}
+.bsh-account-flag::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  flex: 0 0 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.bsh-account-flag[data-status="positive"] {
+  border-color: rgba(52, 211, 153, .36);
+  background: rgba(6, 78, 59, .35);
+  color: #8bf0c0;
+}
+.bsh-account-flag[data-status="negative"] {
+  border-color: rgba(251, 191, 36, .3);
+  background: rgba(120, 53, 15, .25);
+  color: #f7c57a;
+}
+@container (max-width: 500px) {
+  .bsh-account-flags { gap: 3px 5px; margin-bottom: 3px; }
+  .bsh-account-flag { font-size: 9px; min-height: 17px; padding: 2px 6px; }
+}
+
 .bsh-controls-row {
   display: flex;
   align-items: center;
@@ -492,3 +544,36 @@
   overflow-wrap: anywhere;
 }
 .bsh-outland-tier[hidden] { display: none; }
+
+/* Em janelas baixas, priorizar benefícios, métricas e ações no cartão. */
+@media (max-height: 800px) {
+  @container (max-width: 500px) {
+    .battle-slot-hud { padding: 3px 8px; justify-content: space-between; }
+    .bsh-mode-banner { display: none; }
+    .bsh-account-flags { flex-shrink: 0; margin: 0; gap: 2px 4px; }
+    .bsh-account-flag { min-height: 15px; padding: 1px 5px; font-size: 8px; }
+    .bsh-social { flex-shrink: 0; margin: 0; padding: 3px 5px; line-height: 1.15; font-size: 8px; }
+    .bsh-social-bonus { font-size: 7px; line-height: 1.1; }
+    .bsh-arena { flex-shrink: 0; gap: 5px; }
+    .bsh-fighter-tag { font-size: 7px; margin-bottom: 0; }
+    .bsh-sprite-stage { width: 35px; height: 36px; }
+    .bsh-sprite { max-width: 33px; max-height: 33px; }
+    .bsh-stage-shadow { width: 32px; height: 8px; }
+    .bsh-fighter-name { font-size: 9px; margin-top: 0; }
+    .bsh-vs-badge { font-size: 9px; }
+    .bsh-outland-tier { font-size: 8px; margin-top: 0; line-height: 1.15; }
+    .bsh-controls-row { flex-shrink: 0; margin-top: 0; }
+    .bsh-pause-btn { font-size: 9px; padding: 2px 4px; }
+    .bsh-switch-mode-btn { font-size: 9px; padding: 2px 5px; }
+    .bsh-divider { flex-shrink: 0; margin: 1px 0; }
+    .bsh-stats-grid { flex-shrink: 0; gap: 1px 4px; }
+    .bsh-stat-label { font-size: 8px; margin-bottom: 0; }
+    .bsh-stat-value { font-size: 10px; }
+    .bsh-important-drops { flex-shrink: 0; gap: 4px; margin-top: 1px; }
+    .bsh-drop-card { min-height: 30px; padding: 1px 3px; }
+    .bsh-drop-icon-wrap { width: 17px; height: 17px; margin-bottom: 0; }
+    .bsh-drop-icon { max-width: 17px; max-height: 17px; }
+    .bsh-drop-qty { font-size: 9px; }
+    .bsh-open-game-btn { flex-shrink: 0; margin-top: 0; padding: 2px 7px; font-size: 9px; }
+  }
+}

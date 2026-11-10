@@ -93,7 +93,7 @@ pub fn catalog(raw: &Value) -> Vec<Value> {
             // isUserInputRequired == false, pricingType == "POINTS", cooldownExpiresAt == null
             let cost_val = r.get("cost").and_then(Value::as_u64).unwrap_or(0);
             let is_enabled = r.get("isEnabled").and_then(Value::as_bool) == Some(true);
-            let is_paused = r.get("isPaused").and_then(Value::as_bool) == Some(false);
+            let paused_flag = r.get("isPaused").and_then(Value::as_bool);
             let is_in_stock = r.get("isInStock").and_then(Value::as_bool) == Some(true);
             let is_user_input_required =
                 r.get("isUserInputRequired").and_then(Value::as_bool) == Some(false);
@@ -104,13 +104,18 @@ pub fn catalog(raw: &Value) -> Vec<Value> {
             let not_on_cooldown = r.get("cooldownExpiresAt").is_some_and(Value::is_null);
 
             let hours = duration_hours(&full_text);
-            let available = hours.and_then(|h| expected_cost.checked_mul(h)) == Some(cost_val)
+            let valid_except_pause = hours.and_then(|h| expected_cost.checked_mul(h)) == Some(cost_val)
                 && is_enabled
-                && is_paused
                 && is_in_stock
                 && is_user_input_required
                 && is_points_pricing
                 && not_on_cooldown;
+            let available = valid_except_pause && paused_flag == Some(false);
+            // The public settings endpoint has reported isPaused=true for
+            // rewards that viewers can redeem manually. Never advertise this
+            // as confirmed availability; a single journal-protected attempt
+            // may instead ask Twitch's redemption endpoint to decide.
+            let trial_paused = valid_except_pause && paused_flag == Some(true);
 
             Some(json!({
                 "key": key,
@@ -119,7 +124,8 @@ pub fn catalog(raw: &Value) -> Vec<Value> {
                 "cost": cost_val,
                 "prompt": r.get("prompt").cloned().unwrap_or(Value::Null),
                 "durationHours": hours,
-                "available": available
+                "available": available,
+                "trialPaused": trial_paused
             }))
         })
         .collect()
@@ -128,6 +134,37 @@ pub fn catalog(raw: &Value) -> Vec<Value> {
 /// Evaluates if an account is eligible to redeem a reward based on verified balance and priority.
 /// Model matches kick_rewards: verified status, fresh balance (<120s), sufficient points.
 pub fn eligible<'a>(balance: &'a Value, priority: &str, now: u64) -> Option<&'a Value> {
+    eligible_by_flag(balance, priority, now, "available")
+}
+
+pub fn eligible_paused_trial<'a>(balance: &'a Value, priority: &str, now: u64) -> Option<&'a Value> {
+    eligible_by_flag(balance, priority, now, "trialPaused")
+}
+
+/// Watching earns points before a viewer can afford the reward. The selection
+/// names the one-hour rewards (EXP 300, Capture 500, Lure 1000): a streamer's
+/// longer duration reward does not substitute for the selected points offer.
+/// Unlike redemption, a positive point balance is not required for watching.
+pub fn offers_selected_buff(balance: &Value, priority: &str, now: u64) -> bool {
+    let Some(checked) = balance["checkedAt"].as_u64() else { return false; };
+    if balance["status"] != "verified" || balance["catalogStatus"] != "verified"
+        || now.checked_sub(checked).is_none_or(|age| age >= 120_000) {
+        return false;
+    }
+    balance["rewards"].as_array().is_some_and(|rewards| rewards.iter().any(|reward| {
+        let base_cost = match reward["key"].as_str().unwrap_or("") {
+            "exp" => 300,
+            "catch" => 500,
+            "lure" => 1000,
+            _ => return false,
+        };
+        (reward["available"] == true || reward["trialPaused"] == true)
+            && (priority == "all" || reward["key"] == priority)
+            && reward["cost"].as_u64() == Some(base_cost)
+    }))
+}
+
+fn eligible_by_flag<'a>(balance: &'a Value, priority: &str, now: u64, flag: &str) -> Option<&'a Value> {
     let checked = balance["checkedAt"].as_u64()?;
     if balance["status"] != "verified"
         || balance["catalogStatus"] != "verified"
@@ -137,7 +174,7 @@ pub fn eligible<'a>(balance: &'a Value, priority: &str, now: u64) -> Option<&'a 
     }
     let points = balance["points"].as_u64()?;
     balance["rewards"].as_array()?.iter().filter(|r| {
-        r["available"] == true
+        r[flag] == true
             && (priority == "all" || r["key"] == priority)
             && r["cost"].as_u64().map(|c| points >= c).unwrap_or(false)
     }).min_by_key(|r| (r["cost"].as_u64().unwrap_or(u64::MAX), r["durationHours"].as_u64().unwrap_or(u64::MAX)))
@@ -352,11 +389,13 @@ mod tests {
         let mut r = valid_reward();
         r["isPaused"] = json!(true);
         assert_eq!(catalog(&json!([r]))[0]["available"], false);
+        assert_eq!(catalog(&json!([r]))[0]["trialPaused"], true);
 
         // isInStock = false
         let mut r = valid_reward();
         r["isInStock"] = json!(false);
         assert_eq!(catalog(&json!([r]))[0]["available"], false);
+        assert_eq!(catalog(&json!([r]))[0]["trialPaused"], false);
 
         // isUserInputRequired = true
         let mut r = valid_reward();
@@ -372,6 +411,53 @@ mod tests {
         let mut r = valid_reward();
         r["cost"] = json!(301);
         assert_eq!(catalog(&json!([r]))[0]["available"], false);
+    }
+
+    #[test]
+    fn reported_pause_only_permits_a_single_server_verified_trial() {
+        let mut reward = valid_reward();
+        reward["title"] = json!("Bônus de +15% Capture Boost");
+        reward["cost"] = json!(500);
+        reward["id"] = json!("147118bf-b3fb-4b34-8666-4d673fb1a5c1");
+        reward["isPaused"] = json!(true);
+        let parsed = catalog(&json!([reward]));
+        assert_eq!(parsed[0]["available"], false);
+        assert_eq!(parsed[0]["trialPaused"], true);
+        let balance = json!({"status":"verified","catalogStatus":"verified","checkedAt":1000,
+          "points":600,"channelId":"1234","rewards":parsed});
+        assert!(eligible(&balance, "catch", 1001).is_none());
+        assert_eq!(eligible_paused_trial(&balance, "catch", 1001).unwrap()["cost"], 500);
+        assert!(eligible_paused_trial(&balance, "exp", 1001).is_none());
+        assert!(eligible_paused_trial(&balance, "catch", 122000).is_none());
+    }
+
+    #[test]
+    fn watching_requires_the_selected_reward_but_not_a_balance_to_redeem_yet() {
+        let now = 200_000;
+        let mut balance = json!({"catalogStatus":"verified","checkedAt":now-1000,"status":"verified",
+            "points":0,"rewards":[
+                {"key":"catch","cost":500,"available":true},
+                {"key":"exp","cost":300,"available":false},
+                {"key":"lure","cost":1000,"available":false,"trialPaused":true}
+            ]});
+        assert!(offers_selected_buff(&balance,"catch",now));
+        assert!(offers_selected_buff(&balance,"lure",now));
+        assert!(offers_selected_buff(&balance,"all",now));
+        assert!(!offers_selected_buff(&balance,"exp",now));
+        assert!(eligible(&balance,"catch",now).is_none(), "redemption still requires points");
+        balance["catalogStatus"] = json!("unavailable");
+        assert!(!offers_selected_buff(&balance,"catch",now));
+        balance["catalogStatus"] = json!("verified");
+        assert!(!offers_selected_buff(&balance,"catch",now+120_000));
+        balance["checkedAt"] = json!(now);
+        balance["rewards"][0]["available"] = json!(false);
+        assert!(!offers_selected_buff(&balance,"catch",now));
+        balance["rewards"][0]["available"] = json!(true);
+        balance["rewards"][0]["cost"] = json!(1500);
+        assert!(!offers_selected_buff(&balance,"catch",now),
+            "Capture 3h at 1500 points is not the configured 500-point offer");
+        balance["status"] = json!("stale");
+        assert!(!offers_selected_buff(&balance,"all",now));
     }
 
     #[test]

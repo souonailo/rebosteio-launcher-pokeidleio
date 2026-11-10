@@ -273,6 +273,29 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
   const banner = hudEl.querySelector('.bsh-mode-banner');
   assert.ok(banner.textContent.includes('Headless'), 'Banner must indicate Master Blaster mode');
 
+  const vipFlag = hudEl.querySelector('.bsh-flag-vip');
+  const raidFlag = hudEl.querySelector('.bsh-flag-raid');
+  assert.ok(vipFlag && raidFlag, 'Each headless card needs VIP and weekly boss indicators');
+  const now = Date.now();
+  PioBattleHud.update(panel, 0, {...fakeState, live: true});
+  assert.equal(vipFlag.textContent, 'VIP · A verificar');
+  assert.equal(raidFlag.textContent, 'World Boss · A verificar');
+  PioBattleHud.update(panel, 0, {...fakeState, live: true, vipAte: now + 2 * 86400000, raidEdicao: 'semana-1', raidInscrito: true, raidVerificadoEm: now});
+  assert.equal(vipFlag.textContent, 'VIP · 2 dias');
+  assert.equal(vipFlag.getAttribute('data-status'), 'positive');
+  assert.equal(raidFlag.textContent, 'World Boss · Inscrito');
+  assert.equal(raidFlag.getAttribute('data-status'), 'positive');
+  PioBattleHud.update(panel, 0, {...fakeState, live: true, vipAte: now + 3600000, raidEdicao: 'semana-2', raidInscrito: false, raidVerificadoEm: now});
+  assert.equal(vipFlag.textContent, 'VIP · 1 dia');
+  assert.equal(raidFlag.textContent, 'World Boss · Não inscrito');
+  PioBattleHud.update(panel, 0, {...fakeState, live: true, vipAte: now - 1, raidEdicao: 'semana-3', raidInscrito: null});
+  assert.equal(vipFlag.textContent, 'VIP · Inativo');
+  assert.equal(raidFlag.textContent, 'World Boss · A verificar');
+  PioBattleHud.update(panel, 0, {...fakeState, live: true, raidEdicao: 'semana-antiga', raidInscrito: true, raidInscricoesDe: now - 8 * 86400000});
+  assert.equal(raidFlag.textContent, 'World Boss · A verificar', 'Old weekly editions cannot remain registered indefinitely');
+  PioBattleHud.update(panel, 0, {...fakeState, live: false, raidEdicao: 'semana-1', raidInscrito: true});
+  assert.equal(raidFlag.textContent, 'World Boss · A verificar', 'Disconnected sessions cannot claim a current registration');
+
   const tierEl = hudEl.querySelector('.bsh-outland-tier');
   PioBattleHud.update(panel, 0, {...fakeState, live: true, outlandTier: 2});
   assert.equal(tierEl.textContent, 'Outland · tier 2');
@@ -649,7 +672,8 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     // Panel 0 Twitch points must update; Kick points must NOT change
     assert.equal(twitchPoints0.textContent, '3.450 pts');
     assert.equal(p0Hud.querySelector('.bsh-twitch-channels').textContent, '1 canal');
-    assert.equal(twitchPoints0.title, 'souonailo: 3.450');
+    assert.equal(twitchPoints0.title, '', 'native tooltip must be removed');
+    assert.equal(hud.pointsSnapshot(0, 'twitch').channels[0].points, 3450);
     assert.equal(kickPoints0.textContent, 'Pontos —', 'Kick points must remain unchanged when Twitch points update');
 
     // 4-Account isolation: Panels 1, 2, 3 Twitch points must remain unconfirmed
@@ -674,7 +698,8 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     // Panel 0 Kick points must update; Twitch points must retain their independent total (never summed together)
     assert.equal(kickPoints0.textContent, '1.200 pts');
     assert.equal(p0Hud.querySelector('.bsh-kick-channels').textContent, '1 canal');
-    assert.equal(kickPoints0.title, 'biscoitao: 1.200');
+    assert.equal(kickPoints0.title, '');
+    assert.equal(hud.pointsSnapshot(0, 'kick').channels[0].points, 1200);
     assert.equal(twitchPoints0.textContent, '3.450 pts', 'Twitch and Kick must have separate sums and never sum together');
 
     // 3. Verified 0 pts vs missing vs stale vs old checkedAt for Account 1
@@ -705,12 +730,14 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     // Kick 0 verified points must display '0 pts', NOT 'Pontos —'
     assert.equal(kickPoints1.textContent, '0 pts');
     assert.equal(p1Hud.querySelector('.bsh-kick-channels').textContent, '1 canal');
-    assert.equal(kickPoints1.title, 'biscoitao: 0');
+    assert.equal(kickPoints1.title, '');
+    assert.equal(hud.pointsSnapshot(1, 'kick').channels[0].points, 0);
 
-    // Expired and future-dated balances do not count; aggregate pending channels in the tooltip.
+    // Expired and future-dated balances must not enter the confirmed total.
     assert.equal(twitchPoints1.textContent, 'Pontos —');
     assert.equal(p1Hud.querySelector('.bsh-twitch-channels').textContent, 'Sem saldo confirmado');
-    assert.equal(twitchPoints1.title, '2 canais oficiais sem saldo confirmado');
+    assert.equal(twitchPoints1.title, '');
+    assert.equal(hud.pointsSnapshot(1, 'twitch').pendingCount, 2);
 
     // Missing checkedAt is unverified:
     listeners.kickPoints({
@@ -719,7 +746,8 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
       ]
     });
     assert.equal(p0Hud.querySelector('.bsh-kick-points').textContent, 'Pontos —', 'Missing checkedAt must be unverified');
-    assert.equal(p0Hud.querySelector('.bsh-kick-points').title, '1 canal oficial sem saldo confirmado');
+    assert.equal(p0Hud.querySelector('.bsh-kick-points').title, '');
+    assert.equal(hud.pointsSnapshot(0, 'kick').pendingCount, 1);
 
     // 4. Partial / mixed channels for Account 2
     // Kick: 2 channels (1 verified 500 fresh, 1 stale 200) -> total 500 pts, '1 canal · parcial', tooltip shows breakdown
@@ -741,7 +769,9 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     const kickPoints2 = p2Hud.querySelector('.bsh-kick-points');
     assert.equal(kickPoints2.textContent, '500 pts');
     assert.equal(p2Hud.querySelector('.bsh-kick-channels').textContent, '1 canal · parcial');
-    assert.equal(kickPoints2.title, 'live_a: 500\n1 canal oficial sem saldo confirmado');
+    assert.equal(kickPoints2.title, '');
+    assert.equal(hud.pointsSnapshot(2, 'kick').verifiedCount, 1);
+    assert.equal(hud.pointsSnapshot(2, 'kick').pendingCount, 1);
 
     // A spurious verified account must not appear or affect the total for either service.
     listeners.twitchPoints({ accounts: [
@@ -751,7 +781,7 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
       }}
     ] });
     assert.equal(twitchPoints0.textContent, '120 pts');
-    assert.equal(twitchPoints0.title, 'souonailo: 120');
+    assert.equal(hud.pointsSnapshot(0, 'twitch').total, 120);
     listeners.kickPoints({ accounts: [
       {status: 'authenticated', balances: {
         biscoitao: {status: 'verified',points: 70,checkedAt: Date.now()},
@@ -759,7 +789,7 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
       }}
     ] });
     assert.equal(kickPoints0.textContent, '70 pts');
-    assert.equal(kickPoints0.title, 'biscoitao: 70');
+    assert.equal(hud.pointsSnapshot(0, 'kick').total, 70);
 
     // All confirmed channels must be visible, even when the roster exceeds eight.
     const manyChannels = Array.from({ length: 25 }, (_, i) => `partner_${String(i + 1).padStart(2, '0')}`);
@@ -773,12 +803,16 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
     });
     listeners.twitchPoints({ accounts: [{ status: 'authenticated', balances: manyBalances }] });
     listeners.kickPoints({ accounts: [{ status: 'authenticated', balances: manyBalances }] });
-    for (const pointsEl of [twitchPoints0, kickPoints0]) {
-      const details = pointsEl.title.split('\n');
-      assert.equal(details.length, 25, 'tooltip must show all 25 confirmed channels');
-      assert.equal(details[0], 'partner_01: 10');
-      assert.equal(details[24], 'partner_25: 250');
-      assert.doesNotMatch(pointsEl.title, /Mais \d+ canais|unrelated_player/);
+    for (const [platform, pointsEl] of [['twitch', twitchPoints0], ['kick', kickPoints0]]) {
+      const details = hud.pointsSnapshot(0, platform);
+      assert.equal(details.channels.length, 25, 'modal must have all 25 confirmed channels');
+      assert.equal(details.channels[0].login, 'partner_01');
+      assert.equal(details.channels[24].points, 250);
+      assert.equal(details.verifiedCount, 25);
+      assert.ok(!details.channels.some(channel => channel.login === 'unrelated_player'));
+      assert.equal(details.total, 3250);
+      assert.equal(pointsEl.title, '', 'native tooltip must stay disabled');
+      assert.equal(pointsEl.tagName, 'BUTTON', 'points must be accessible clickable controls');
       assert.equal(pointsEl.textContent, '3.250 pts');
     }
 

@@ -2614,6 +2614,7 @@
   <link rel="stylesheet" href="src/ui/kick-bonus.css">
   <link rel="stylesheet" href="src/ui/auto-supply-individual.css">
   <link rel="stylesheet" href="src/ui/battle-hud.css">
+  <link rel="stylesheet" href="src/ui/streamer-points-modal.css">
   <link rel="stylesheet" href="src/ui/depot-settings.css">
   <script src="src/ui/runtime-performance.js"></script>
   <script src="src/ui/capture-value.js"></script>
@@ -2627,6 +2628,7 @@
   <script src="src/ui/theme-manager.js"></script>
   <script src="src/ui/kuromi-xp.js"></script>
   <script src="src/ui/battle-hud.js"></script>
+  <script src="src/ui/streamer-points-modal.js"></script>
 </head>
 
 <body>
@@ -3085,8 +3087,8 @@
         <label class="twitch-toggle-label"><input type="checkbox" id="twitchAutoClaimToggle"><span class="twitch-toggle-text"><b>Resgatar automaticamente</b><small>Gasta pontos no buff escolhido, uma vez por consulta.</small></span></label>
         <label class="twitch-priority-label" for="twitchAutoClaimPriority">Buff da conta selecionada:
           <select id="twitchAutoClaimPriority">
-            <option value="exp">+15% EXP (300 pts)</option><option value="catch">+15% Capture (500 pts)</option>
-            <option value="lure">+15% Lure (1000 pts)</option><option value="all">Qualquer buff</option>
+            <option value="exp">+15% EXP (1h: 300 pts)</option><option value="catch">+15% Capture (1h: 500 pts)</option>
+            <option value="lure">+15% Lure (1h: 1000 pts)</option><option value="all">Qualquer buff</option>
           </select>
         </label>
       </div>
@@ -3122,7 +3124,7 @@
             </section>
             <section class="twitch-guide-step" data-guide-panel="4" hidden>
               <h3>5. Acompanhe os bônus</h3>
-              <p>Os bônus de <b>1 hora</b> custam 300 pontos para XP, 500 para Capture Boost e 1000 para Secret Lure. O catálogo também oferece <b>3, 5 e 10 horas</b>. O automático resgata assim que houver saldo para a opção mais barata disponível; as horas se somam.</p>
+              <p>Os bônus de <b>1 hora</b>, quando habilitados pelo streamer, custam 300 pontos para XP, 500 para Capture Boost e 1000 para Secret Lure. O catálogo também oferece <b>3, 5 e 10 horas</b>. Uma opção de 1 hora pode estar desativada mesmo com saldo suficiente; o automático só resgata recompensas ativas do tipo escolhido.</p>
               <p>O tempo mostrado vem do jogo. O antigo adicional por quantidade de lives não se aplica.</p>
             </section>
           </div>
@@ -7585,8 +7587,11 @@
       const pointAccount = twitchPointsState?.accounts?.[twitchSelectedAccount];
       const statuses = list.map(channel => TwitchRewardStatus.forBalance(channel.ativo ? pointAccount?.balances?.[channel.login.toLowerCase()] : null, twitchAccountPriority(twitchSelectedAccount)));
       const ready = statuses.filter(item => item.affordable.length).length;
-      document.getElementById('twitchRewardSummary').textContent = ready ? `Buffs para resgatar: ${ready} canal(is)`
-        : statuses.some(item => item.known) ? 'Buffs para resgatar: nenhum disponível com este saldo' : 'Buffs para resgatar: aguardando consulta da Twitch';
+      const trial = statuses.filter(item => item.trials?.length).length;
+      const preferredBonus = { exp: 'EXP', catch: 'Captura', lure: 'Lure', all: 'Qualquer buff' }[twitchAccountPriority(twitchSelectedAccount)];
+      document.getElementById('twitchRewardSummary').textContent = ready ? `${preferredBonus}: ${ready} canal(is) pronto(s) para resgate`
+        : trial ? `${preferredBonus}: ${trial} canal(is) com pausa informada, a confirmar no resgate`
+        : statuses.some(item => item.known) ? `${preferredBonus}: nenhum resgate disponível com este saldo` : `${preferredBonus}: aguardando catálogo da Twitch`;
       document.getElementById('twitchRedemptionStatus').textContent = !window.__TAURI_INTERNALS__ ? 'Resgate automático disponível na versão Rust.'
         : !twitchBonusConfig.autoClaim ? 'Resgate automático desligado.'
         : pointAccount?.redemption?.message || 'Automático ativo: aguardando saldo e recompensa disponíveis.';
@@ -7601,7 +7606,7 @@
         const points = !channel.ativo ? 'Recompensas pendentes' : fresh ? `${Number(balance.points).toLocaleString('pt-BR')} pontos` : (balance?.checkedAt ? 'Saldo desatualizado' : 'Saldo não consultado');
         const rewardStatus = TwitchRewardStatus.forBalance(balance, twitchAccountPriority(twitchSelectedAccount));
         const rewardLabel = rewardStatus.label;
-        const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : ' · indisponível'}</div>`).join('')}</details>` : '';
+        const options = rewardStatus.options.length ? `<details class="twitch-reward-options"><summary>Durações e custos</summary>${rewardStatus.options.map(reward => `<div>${kickEscape(reward.title)}: ${Number(reward.cost).toLocaleString('pt-BR')} pts${reward.available ? '' : reward.trialPaused ? ' · Twitch indica pausa; a confirmar' : ' · indisponível'}</div>`).join('')}</details>` : '';
         return `<div class="twitch-streamer-item ${channel.aoVivo ? 'live' : 'off'}"><span class="twitch-streamer-name">@${kickEscape(channel.login)}</span><div class="twitch-streamer-meta"><span class="${channel.aoVivo ? 'twitch-badge-live' : 'twitch-badge-off'}">${channel.aoVivo ? 'Ao vivo' : 'Offline'}</span><span class="twitch-badge-bonus">${points}</span><span class="twitch-field-help">${kickEscape(rewardLabel)}</span>${options}<button type="button" class="twitch-btn-test" data-twitch-channel="${kickEscape(channel.login)}">Abrir canal</button></div></div>`;
       }).join('') || '<div class="twitch-empty-streamers">Aguardando parceiros oficiais enviados pelo jogo desta conta.</div>';
       twitchStreamersList.querySelectorAll('[data-twitch-channel]').forEach(button => {

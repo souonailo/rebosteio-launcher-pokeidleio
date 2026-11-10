@@ -61,12 +61,12 @@ pub struct TwitchChatServiceManager {
     pub save_lock: Mutex<()>,
     status: RwLock<Vec<Value>>,
     tasks: Mutex<Vec<Option<tokio::task::JoinHandle<()>>>>,
-    channels: watch::Sender<Vec<String>>,
+    channels: watch::Sender<Vec<Vec<String>>>,
 }
 
 impl TwitchChatServiceManager {
     pub fn new() -> Self {
-        let (channels, _) = watch::channel(Vec::new());
+        let (channels, _) = watch::channel(vec![Vec::new(); 4]);
         Self {
             config: RwLock::new(Vec::new()),
             save_lock: Mutex::new(()),
@@ -177,15 +177,21 @@ impl TwitchChatServiceManager {
         let _ = app.emit_to("main", "twitch:chat-status", self.get_status().await);
     }
 
-    pub async fn sync_lives(&self, lives: Vec<String>) -> bool {
-        let mut names: Vec<_> = lives
-            .iter()
-            .filter_map(|s| crate::social_store::slug(s))
-            .collect();
-        names.sort();
-        names.dedup();
-        names.truncate(20);
-        self.channels.send_replace(names);
+    /// Each Twitch identity joins only the channels whose current catalog
+    /// offers that account's selected buff. Never broadcast a shared roster.
+    pub async fn sync_lives(&self, lives: Vec<Vec<String>>) -> bool {
+        let targets: Vec<Vec<String>> = (0..4).map(|index| {
+            let mut names: Vec<_> = lives.get(index).into_iter().flatten()
+                .filter_map(|s| crate::social_store::slug(s))
+                .collect();
+            names.sort();
+            names.dedup();
+            names.truncate(20);
+            names
+        }).collect();
+        if *self.channels.borrow() != targets {
+            self.channels.send_replace(targets);
+        }
         true
     }
 
@@ -264,7 +270,8 @@ impl TwitchChatServiceManager {
                         return Err("Twitch sem resposta.".into());
                     }
                     if authenticated {
-                        let desired: HashSet<_> = channels.borrow_and_update().iter().cloned().collect();
+                        let desired: HashSet<_> = channels.borrow_and_update()
+                            .get(index).into_iter().flatten().cloned().collect();
                         for channel in requested.difference(&desired) {
                             socket
                                 .send(Message::Text(format!("PART #{}\r\n", channel).into()))
@@ -419,7 +426,7 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let manager = Arc::new(TwitchChatServiceManager::new());
-        manager.sync_lives(vec!["alpha".into()]).await;
+        manager.sync_lives(vec![vec!["alpha".into()]]).await;
         let observer = manager.clone();
 
         let server = tokio::spawn(async move {
@@ -456,7 +463,7 @@ mod tests {
             let pong = socket.next().await.unwrap().unwrap();
             assert!(pong.to_text().unwrap().starts_with("PONG :tmi.twitch.tv"));
 
-            observer.sync_lives(vec!["beta".into()]).await;
+            observer.sync_lives(vec![vec!["beta".into()]]).await;
             let mut commands = String::new();
             while !commands.contains("JOIN #beta") {
                 commands.push_str(socket.next().await.unwrap().unwrap().to_text().unwrap());
@@ -519,6 +526,32 @@ mod tests {
         );
         assert!(!valid_token("abc\r\nJOIN #bad"));
         assert!(crate::social_store::slug("foo\nPASS abc").is_none());
+    }
+
+    #[tokio::test]
+    async fn channel_targets_are_isolated_and_switch_with_each_accounts_buff() {
+        let manager = TwitchChatServiceManager::new();
+        manager.sync_lives(vec![
+            vec!["Catch".into(),"@catch".into(),"offline_channel".into()],
+            vec!["exp".into()],
+            vec![],
+            vec!["lure".into()]
+        ]).await;
+        let first = manager.channels.borrow().clone();
+        assert_eq!(first, vec![
+            vec!["catch","offline_channel"],
+            vec!["exp"],
+            Vec::<&str>::new(),
+            vec!["lure"]
+        ]);
+        manager.sync_lives(vec![vec!["exp".into()],vec!["exp".into()]]).await;
+        let second = manager.channels.borrow().clone();
+        assert_eq!(second,vec![
+            vec!["exp"],
+            vec!["exp"],
+            Vec::<&str>::new(),
+            Vec::<&str>::new()
+        ]);
     }
 
     #[test]

@@ -112,6 +112,29 @@ app.whenReady().then(async () => {
   const fragChaveBadgeDisplay = await read('getComputedStyle(document.querySelectorAll(".panel .bsh-drop-frag_chave .bsh-drop-badge")[0]).display');
   assert.equal(fragChaveBadgeDisplay, 'none', 'Frag Chave badge must be hidden');
 
+  // Real launcher integration: clicking the HUD balance pins the compact points popup.
+  await read(`(() => {
+    const panel = document.querySelectorAll('.panel')[0];
+    PioBattleHud.update(panel, 0, {twitch:{oficiais:[{login:'stream_alpha',ativo:true}]},kick:{oficiais:[{slug:'kick_alpha',ativo:true}]}});
+  })()`);
+  win.webContents.send('twitch:points:update', {accounts:[{status:'authenticated',balances:{stream_alpha:{status:'verified',points:432,checkedAt:Date.now()}}}]});
+  win.webContents.send('kick:points:update', {accounts:[{status:'authenticated',balances:{kick_alpha:{status:'verified',points:123,checkedAt:Date.now()}}}]});
+  await pause(90);
+  const nativeTooltip = await read('document.querySelectorAll(".bsh-twitch-points")[0].title');
+  assert.equal(nativeTooltip, '', 'No white native tooltip on hover');
+  await read('document.querySelectorAll(".bsh-twitch-points")[0].dispatchEvent(new MouseEvent("mouseenter"))');
+  assert.equal(await read('document.querySelector(".spm-popover").hidden'), false, 'hover opens compact popup');
+  assert.equal(await read('document.querySelector(".spm-popover").offsetWidth < 330'), true);
+  await read('document.querySelectorAll(".bsh-twitch-points")[0].click()');
+  assert.equal(await read('document.querySelector(".spm-popover").hidden'), false);
+  assert.equal(await read('document.querySelector(".spm-summary").textContent'), '1 confirmados · 432 pts');
+  assert.equal(await read('document.querySelector(".spm-name").textContent'), 'stream_alpha');
+  await read('document.querySelector(".spm-close").click()');
+  await read('document.querySelectorAll(".bsh-kick-points")[0].click()');
+  assert.equal(await read('document.querySelector(".spm-summary").textContent'), '1 confirmados · 123 pts');
+  assert.equal(await read('document.querySelector(".spm-name").textContent'), 'kick_alpha');
+  await read('document.querySelector(".spm-close").click()');
+
   // 4. Capture screenshot of the HUD rendered inside the panel
   const previewPath = path.join(root, 'scratch', 'battle-hud-preview.png');
   win.showInactive();
@@ -132,6 +155,41 @@ app.whenReady().then(async () => {
   await read('document.querySelectorAll(".panel-header .btn-blaster-hud")[0].click()');
   const isBlasterActive = await read('document.querySelectorAll(".panel")[0].classList.contains("is-blaster-active")');
   assert.equal(isBlasterActive, true, 'Panel 0 must have is-blaster-active class');
+
+  await read(`(() => {
+    const panel = document.querySelectorAll('.panel')[0];
+    const now = Date.now();
+    window.PioBattleHud.update(panel, 0, {
+      live: true, hunt: 'vulpix', vipAte: now + 3 * 86400000,
+      raidEdicao: 'semana-1', raidInscrito: true, raidVerificadoEm: now,
+      a: {seconds: 30, xph: 1500}
+    });
+  })()`);
+  assert.equal(await read('document.querySelectorAll(".panel .bsh-flag-vip")[0].textContent'), 'VIP · 3 dias');
+  assert.equal(await read('document.querySelectorAll(".panel .bsh-flag-raid")[0].textContent'), 'World Boss · Inscrito');
+  assert.equal(await read('getComputedStyle(document.querySelectorAll(".panel .bsh-account-flags")[0]).display'), 'flex');
+  await pause(100);
+  fs.writeFileSync(path.join(root, 'scratch', 'battle-hud-headless-preview.png'), (await win.webContents.capturePage()).toPNG());
+  for (const [width, height] of [[1920, 1032], [1600, 950], [820, 720]]) {
+    win.setSize(width, height);
+    await pause(120);
+    assert.equal(await read('getComputedStyle(document.querySelectorAll(".panel .bsh-account-flags")[0]).display'), 'flex');
+    const geometry = await read(`(() => {
+      const panel = document.querySelectorAll('.panel')[0];
+      const hud = panel.querySelector('.battle-slot-hud').getBoundingClientRect();
+      const flags = panel.querySelector('.bsh-account-flags').getBoundingClientRect();
+      const social = panel.querySelector('.bsh-social').getBoundingClientRect();
+      const open = panel.querySelector('.bsh-open-game-btn').getBoundingClientRect();
+      return {
+        flagsVisible: flags.top >= hud.top - 1 && flags.bottom <= hud.bottom + 1 && flags.left >= hud.left - 1 && flags.right <= hud.right + 1,
+        openVisible: open.top >= hud.top - 1 && open.bottom <= hud.bottom + 1,
+        flagsClearOfSocial: flags.bottom <= social.top + 1
+      };
+    })()`);
+    assert.deepEqual(geometry, {flagsVisible:true, openVisible:true, flagsClearOfSocial:true}, `HUD must fit within ${width}x${height}`);
+    fs.writeFileSync(path.join(root, 'scratch', `battle-hud-headless-${width}x${height}.png`), (await win.webContents.capturePage()).toPNG());
+  }
+  win.setSize(1600, 1000);
 
   const bannerText = await read('document.querySelectorAll(".panel .bsh-mode-banner")[0].textContent');
   assert.ok(bannerText.includes('Headless'), 'Banner must indicate Master Blaster mode');

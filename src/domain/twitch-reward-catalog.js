@@ -21,10 +21,13 @@ function catalog(raw) {
     const hours = durations[0] ?? 1;
     const durationHours = [1,3,5,10].includes(hours) && durations.every(value => value === hours) ? hours : null;
     const cost = reward.cost;
+    const validExceptPause = durationHours !== null && Number.isSafeInteger(cost) &&
+      cost === {exp:300, catch:500, lure:1000}[key] * durationHours &&
+      reward.isEnabled === true && reward.isInStock === true &&
+      reward.isUserInputRequired === false && reward.pricingType === 'POINTS' && reward.cooldownExpiresAt === null;
     return [{key, id:reward.id, title:reward.title, prompt:reward.prompt ?? null, cost, durationHours,
-      available:durationHours !== null && Number.isSafeInteger(cost) && cost === {exp:300, catch:500, lure:1000}[key] * durationHours &&
-      reward.isEnabled === true && reward.isPaused === false && reward.isInStock === true &&
-      reward.isUserInputRequired === false && reward.pricingType === 'POINTS' && reward.cooldownExpiresAt === null}];
+      available:validExceptPause && reward.isPaused === false,
+      trialPaused:validExceptPause && reward.isPaused === true}];
   });
 }
 

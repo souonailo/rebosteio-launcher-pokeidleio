@@ -1,4 +1,6 @@
 use serde_json::{json, Value};
+use futures_util::{stream, StreamExt};
+use std::future::Future;
 use std::{
     collections::BTreeSet,
     sync::{
@@ -217,14 +219,22 @@ fn settle_redemption(receipt: &mut Value, response: &Value, after: Option<u64>) 
     let status = crate::twitch_rewards::response_status(response);
     if status == "rejected" {
         receipt["status"] = json!("rejected");
-        receipt["message"] = json!("A Twitch recusou o resgate. Nova tentativa em 5 minutos.");
+        receipt["message"] = json!(if receipt["reward"]["trialPaused"] == true {
+            "A Twitch recusou a recompensa marcada como pausada. Não haverá nova tentativa desse item enquanto o catálogo continuar assim."
+        } else {
+            "A Twitch recusou o resgate. Nova tentativa em 5 minutos."
+        });
     } else if status == "accepted" && (redemption_id.is_some() || receipt["before"].as_u64().zip(receipt["reward"]["cost"].as_u64())
         .is_some_and(|(before, cost)| cost > 0 && after.is_some() && before.checked_sub(cost) == after)) {
         receipt["status"] = json!("confirmed");
         receipt["message"] = json!("Resgate confirmado na Twitch. O jogo confirma a aplicação do bônus.");
     } else {
         receipt["status"] = json!("pending");
-        receipt["message"] = json!("Resgate sem confirmação. Automático pausado para evitar duplicação; confira o histórico na Twitch.");
+        receipt["message"] = json!(if receipt["reward"]["trialPaused"] == true {
+            "Tentativa em recompensa com pausa informada ficou sem confirmação. Não será reenviada enquanto esse estado persistir."
+        } else {
+            "Resgate sem confirmação. Automático pausado para evitar duplicação; confira o histórico na Twitch."
+        });
     }
 }
 
@@ -232,6 +242,160 @@ fn settle_redemption(receipt: &mut Value, response: &Value, after: Option<u64>) 
 pub const MAX_TWITCH_WATCH_CHANNELS: usize = 2;
 /// Max official balance inquiry channels tracked per account.
 pub const MAX_TWITCH_QUERY_CHANNELS: usize = 40;
+const TWITCH_QUERY_CONCURRENCY: usize = 4;
+const TWITCH_QUERY_BUDGET: Duration = Duration::from_secs(32);
+
+fn rotate_channels(channels: &[String], start: usize) -> Vec<String> {
+    if channels.is_empty() { return Vec::new(); }
+    let split = start % channels.len();
+    channels[split..].iter().chain(&channels[..split]).cloned().collect()
+}
+
+fn account_buff_priority<'a>(config: &'a Value, index: usize) -> &'a str {
+    let priority = config["accounts"][index]["claimPriority"].as_str()
+        .or_else(|| config["claimPriority"].as_str()).unwrap_or("exp");
+    match priority {
+        "exp" | "catch" | "lure" | "all" => priority,
+        _ => "exp",
+    }
+}
+
+fn relevant_live_channels(official: &[String], online: &[String], balances: &Value, priority: &str, now: u64) -> Vec<String> {
+    let live: BTreeSet<_> = online.iter().map(String::as_str).collect();
+    official.iter().filter(|channel| {
+        live.contains(channel.as_str()) &&
+        crate::twitch_rewards::offers_selected_buff(&balances[channel.as_str()], priority, now)
+    }).cloned().collect()
+}
+
+fn account_live_targets(config: &Value, official: &[Vec<String>], online: &[String], points: &[Value], now: u64) -> Vec<Vec<String>> {
+    (0..4).map(|index| {
+        if !is_enabled(config, index) { return Vec::new(); }
+        relevant_live_channels(&official[index], online, &points[index]["balances"],
+            account_buff_priority(config, index), now)
+    }).collect()
+}
+
+fn redemption_on_cooldown(receipt: &Value, now: u64) -> bool {
+    let elapsed = now.saturating_sub(receipt["at"].as_u64().unwrap_or(0));
+    (receipt["status"] == "pending" && elapsed < 120_000)
+        || (receipt["status"] == "rejected" && elapsed < 300_000)
+        || (receipt["status"] == "confirmed" && elapsed < 55_000)
+}
+
+fn migrate_redemption_history(journal: &mut Value, index: usize) {
+    let previous = journal["accounts"][index].clone();
+    if !journal["channels"].is_array() { journal["channels"] = json!([{}, {}, {}, {}]); }
+    let channels = journal["channels"].as_array_mut().unwrap();
+    while channels.len() < 4 { channels.push(json!({})); }
+    if !channels[index].is_object() { channels[index] = json!({}); }
+    if let Some(channel) = previous["channel"].as_str().filter(|s| crate::social_store::slug(s).as_deref() == Some(*s)).map(str::to_owned) {
+        if channels[index].get(&channel).is_none() {
+            channels[index][&channel] = previous;
+        }
+    }
+}
+
+async fn query_roster<F, Fut>(channels: &[String], budget: Duration, fetch: F)
+    -> Vec<(String, Result<Value, (String, String)>)>
+where F: Fn(String) -> Fut, Fut: Future<Output = Result<Value, (String, String)>>
+{
+    let requests = stream::iter(channels.iter().cloned()).map(|channel| {
+        let result = fetch(channel.clone());
+        async move { (channel, result.await) }
+    });
+    // `buffered` keeps the returned prefix ordered, which makes round-robin
+    // continuation safe even if some channels take longer than others.
+    let mut requests = requests.buffered(TWITCH_QUERY_CONCURRENCY);
+    let deadline = tokio::time::Instant::now() + budget;
+    let mut results = Vec::new();
+    while let Ok(Some(result)) = tokio::time::timeout_at(deadline, requests.next()).await {
+        results.push(result);
+    }
+    results
+}
+
+fn redemption_candidate(state: &Value, priority: &str, journal: &Value, index: usize, now: u64)
+    -> Option<(String, String, Value, u64)>
+{
+    let balances = state["balances"].as_object()?;
+    let last_channel = journal["accounts"][index]["channel"].as_str().unwrap_or("");
+    let start = balances.keys().position(|channel| channel.as_str() > last_channel).unwrap_or(0);
+    let select = |trial_paused: bool| {
+        balances.iter().skip(start).chain(balances.iter().take(start)).find_map(|(channel, balance)| {
+            let previous = &journal["channels"][index][channel];
+            if redemption_on_cooldown(previous, now) { return None; }
+            let reward = if trial_paused {
+                crate::twitch_rewards::eligible_paused_trial(balance, priority, now)?
+            } else {
+                crate::twitch_rewards::eligible(balance, priority, now)?
+            };
+            // The API reports a pause. If a single trial was rejected or
+            // remained uncertain, don't submit that reward again on the same
+            // account/channel until Twitch reports it normally available.
+            if trial_paused && previous["reward"]["id"] == reward["id"]
+                && (previous["status"] == "rejected" || previous["status"] == "pending") {
+                return None;
+            }
+            Some((channel.clone(), balance["channelId"].as_str()?.to_string(), reward.clone(), balance["points"].as_u64()?))
+        })
+    };
+    // Prefer rewards that Twitch explicitly reports as available. A paused
+    // flag alone cannot prove a manual redemption is impossible.
+    select(false).or_else(|| select(true))
+}
+
+fn waiting_redemption_message(state: &Value, priority: &str, now: u64) -> String {
+    let chosen = match priority {
+        "exp" => "EXP",
+        "catch" => "Captura",
+        "lure" => "Lure",
+        _ => "Qualquer buff",
+    };
+    let mut catalogs = 0usize;
+    let mut alternatives = 0usize;
+    let mut paused_trials = 0usize;
+    let mut closest: Option<(u64, String)> = None;
+    for (channel, balance) in state["balances"].as_object().into_iter().flatten() {
+        let Some(checked) = balance["checkedAt"].as_u64() else { continue; };
+        if balance["status"] != "verified" || balance["catalogStatus"] != "verified"
+            || now.checked_sub(checked).is_none_or(|age| age >= 120_000) { continue; }
+        catalogs += 1;
+        let Some(points) = balance["points"].as_u64() else { continue; };
+        if priority != "all" && crate::twitch_rewards::eligible(balance, "all", now).is_some() {
+            alternatives += 1;
+        }
+        if crate::twitch_rewards::eligible_paused_trial(balance, priority, now).is_some() {
+            paused_trials += 1;
+        }
+        for reward in balance["rewards"].as_array().into_iter().flatten() {
+            if reward["available"] != true || (priority != "all" && reward["key"] != priority) { continue; }
+            let Some(cost) = reward["cost"].as_u64() else { continue; };
+            if cost > points {
+                let missing = cost - points;
+                if closest.as_ref().is_none_or(|(best, _)| missing < *best) {
+                    closest = Some((missing, channel.clone()));
+                }
+            }
+        }
+    }
+    if catalogs == 0 {
+        return "Aguardando catálogo de recompensas confirmado pela Twitch.".into();
+    }
+    let mut message = format!("{chosen}: nenhuma recompensa resgatável com o saldo atual.");
+    if let Some((missing, channel)) = closest {
+        message.push_str(&format!(" Faltam pelo menos {missing} pts em @{channel} para uma opção ativa."));
+    } else {
+        message.push_str(" A recompensa selecionada pode estar desativada nos canais consultados.");
+    }
+    if alternatives > 0 {
+        message.push_str(&format!(" Há {alternatives} canal(is) com outro buff já disponível; selecione 'Qualquer buff' se quiser resgatá-los."));
+    }
+    if paused_trials > 0 {
+        message.push_str(&format!(" Em {paused_trials} canal(is), a Twitch sinalizou pausa, mas essa informação diverge de resgates manuais; a tentativa automática é controlada e não se repete após recusa ou resultado incerto para a mesma recompensa."));
+    }
+    message
+}
 
 pub struct TwitchServiceManager {
     config: RwLock<Value>,
@@ -245,7 +409,9 @@ pub struct TwitchServiceManager {
     redemption_lock: Mutex<()>,
     jobs: Vec<Mutex<()>>,
     last_refresh: Mutex<Vec<Option<Instant>>>,
+    next_channel: Mutex<Vec<usize>>,
     last_watch: Mutex<Vec<Option<Instant>>>,
+    watch_cursor: Mutex<Vec<usize>>,
     spade_cache: Mutex<Vec<Option<(Instant, String)>>>,
 }
 
@@ -269,7 +435,9 @@ impl TwitchServiceManager {
             redemption_lock: Mutex::new(()),
             jobs: (0..4).map(|_| Mutex::new(())).collect(),
             last_refresh: Mutex::new(vec![None; 4]),
+            next_channel: Mutex::new(vec![0; 4]),
             last_watch: Mutex::new(vec![None; 4]),
+            watch_cursor: Mutex::new(vec![0; 4]),
             spade_cache: Mutex::new(vec![None; 4]),
         }
     }
@@ -294,6 +462,21 @@ impl TwitchServiceManager {
     pub async fn emit(&self, app: &AppHandle) {
         let _ = app.emit_to("main", "twitch:status", self.get_status().await);
         let _ = app.emit_to("main", "twitch:points", self.get_points().await);
+    }
+
+    /// Compute each account's IRC target list from the catalog actually
+    /// checked by the native supervisor. This is independent of the HTML
+    /// view, so changing the selected buff also works in headless/tray mode.
+    pub async fn sync_chat_targets(&self, app: &AppHandle) {
+        let config = self.config.read().await.clone();
+        let official = self.channels.read().await.clone();
+        let online = self.lives.read().await.clone();
+        let points = self.points.read().await.clone();
+        let now = now_ms();
+        let targets = account_live_targets(&config, &official, &online, &points, now);
+        if let Some(chat) = app.try_state::<Arc<crate::twitch_chat::TwitchChatServiceManager>>() {
+            chat.inner().sync_lives(targets).await;
+        }
     }
 
     pub fn start(self: &Arc<Self>, app: AppHandle) {
@@ -333,6 +516,11 @@ impl TwitchServiceManager {
                 config["accounts"][i]["username"] != value["accounts"][i]["username"];
             let now_enabled = is_enabled(value, i);
             let was_enabled = is_enabled(&config, i);
+            if account_buff_priority(&config, i) != account_buff_priority(value, i) {
+                // The catalog contains all reward types: switch chat targets
+                // immediately, and allow the next watch poll to use new ones.
+                self.last_watch.lock().await[i] = None;
+            }
 
             if user_changed || was_enabled != now_enabled {
                 // Invalidate balances and reset refreshing upon user change or toggle
@@ -374,6 +562,7 @@ impl TwitchServiceManager {
         drop(points);
         drop(config);
 
+        self.sync_chat_targets(app).await;
         self.emit(app).await;
     }
 
@@ -385,7 +574,7 @@ impl TwitchServiceManager {
             .collect();
         names.sort();
         names.dedup();
-        names.truncate(20);
+        names.truncate(MAX_TWITCH_QUERY_CHANNELS);
 
         let mut current = self.lives.write().await;
         if *current != names {
@@ -416,6 +605,7 @@ impl TwitchServiceManager {
             *current = next;
             self.revision.fetch_add(1, Ordering::SeqCst);
             *self.last_refresh.lock().await = vec![None; 4];
+            *self.next_channel.lock().await = vec![0; 4];
         }
     }
 
@@ -595,7 +785,9 @@ impl TwitchServiceManager {
             }
             last[index] = Some(Instant::now());
         }
-        let channels = self.channels.read().await[index].clone();
+        let all_channels = self.channels.read().await[index].clone();
+        let start_channel = self.next_channel.lock().await[index];
+        let channels = rotate_channels(&all_channels, start_channel);
         let live_channels = self.lives.read().await.clone();
         let mut state = self.points.read().await[index].clone();
         {
@@ -607,7 +799,7 @@ impl TwitchServiceManager {
         }
         self.emit(app).await;
         let result: Result<(), (String, String)> =
-            tokio::time::timeout(Duration::from_secs(45), async {
+            tokio::time::timeout(Duration::from_secs(150), async {
                 let query = crate::twitch_browser::query_window(app, index)
                     .await
                     .map_err(service_error)?;
@@ -638,28 +830,47 @@ impl TwitchServiceManager {
                 state["error"] = json!("");
                 let previous = state["balances"].clone();
                 state["balances"] = json!({});
+                // Retain confirmed balances only for authorized channels; expiry is
+                // enforced by eligible() and the HUD, even if a poll is deferred.
                 for channel in &channels {
-                    if generation != self.revision.load(Ordering::SeqCst) {
-                        return Ok(());
+                    if let Some(balance) = previous.get(channel) {
+                        state["balances"][channel] = balance.clone();
                     }
-                    let data = query_gql(
-                        &window,
-                        &auth_token,
-                        crate::twitch_browser::POINTS_CATALOG_QUERY,
-                        &json!({"login":channel}),
-                    )
-                    .await?;
-                    let value = data
-                        .pointer("/user/channel/self/communityPoints/balance")
-                        .and_then(Value::as_u64);
-                    state["balances"][channel] = match value {
-                        Some(points) => observed_balance(&previous[channel], points, now_ms()),
-                        None => json!({"status":"unavailable","checkedAt":now_ms()}),
-                    };
-                    let rewards = data.pointer("/user/channel/communityPointsSettings/customRewards");
-                    state["balances"][channel]["channelId"] = data["user"]["id"].clone();
-                    state["balances"][channel]["catalogStatus"] = json!(if rewards.is_some_and(Value::is_array) { "verified" } else { "unavailable" });
-                    state["balances"][channel]["rewards"] = json!(crate::twitch_rewards::catalog(rewards.unwrap_or(&Value::Null)));
+                }
+                // A single slow or offline channel cannot exhaust the entire refresh.
+                // Query the whole official roster with bounded concurrency; rotate the
+                // starting point each cycle so large rosters receive fair coverage.
+                let view = &window;
+                let token = &auth_token;
+                let scanned = query_roster(&channels, TWITCH_QUERY_BUDGET, |channel| async move {
+                    query_gql(view, token, crate::twitch_browser::POINTS_CATALOG_QUERY,
+                        &json!({"login":channel})).await
+                }).await;
+                let queried = scanned.len();
+                for (channel, result) in scanned {
+                    if generation != self.revision.load(Ordering::SeqCst) { return Ok(()); }
+                    match result {
+                        Ok(data) => {
+                            let value = data.pointer("/user/channel/self/communityPoints/balance").and_then(Value::as_u64);
+                            state["balances"][&channel] = match value {
+                                Some(points) => observed_balance(&previous[&channel], points, now_ms()),
+                                None => json!({"status":"unavailable","checkedAt":now_ms()}),
+                            };
+                            let rewards = data.pointer("/user/channel/communityPointsSettings/customRewards");
+                            state["balances"][&channel]["channelId"] = data["user"]["id"].clone();
+                            state["balances"][&channel]["catalogStatus"] = json!(if rewards.is_some_and(Value::is_array) { "verified" } else { "unavailable" });
+                            state["balances"][&channel]["rewards"] = json!(crate::twitch_rewards::catalog(rewards.unwrap_or(&Value::Null)));
+                        }
+                        Err((status, message)) if status == "login_required" || status == "rate_limited" => {
+                            return Err((status, message));
+                        }
+                        Err((_, message)) => {
+                            state["balances"][&channel] = json!({"status":"unavailable","error":message,"checkedAt":now_ms()});
+                        }
+                    }
+                }
+                if !channels.is_empty() {
+                    self.next_channel.lock().await[index] = (start_channel + queried) % channels.len();
                 }
                 self.auto_redeem(&window, &auth_token, index, generation, &config, &mut state).await;
                 // An accepted analytics request is only an attempt, never proof of points or bonus time.
@@ -674,11 +885,15 @@ impl TwitchServiceManager {
                 };
                 if watch_due {
                     state["attempts"] = json!({});
-                    for channel in channels
-                        .iter()
-                        .filter(|s| live_channels.contains(s))
-                        .take(MAX_TWITCH_WATCH_CHANNELS)
-                    {
+                    let live_targets = relevant_live_channels(&all_channels, &live_channels,
+                        &state["balances"], account_buff_priority(&config, index), now_ms());
+                    let mut watch_cursor = self.watch_cursor.lock().await;
+                    let ordered = rotate_channels(&live_targets, watch_cursor[index]);
+                    if !ordered.is_empty() {
+                        watch_cursor[index] = (watch_cursor[index] + MAX_TWITCH_WATCH_CHANNELS) % ordered.len();
+                    }
+                    drop(watch_cursor);
+                    for channel in ordered.iter().take(MAX_TWITCH_WATCH_CHANNELS) {
                         if generation != self.revision.load(Ordering::SeqCst) {
                             return Ok(());
                         }
@@ -774,6 +989,7 @@ impl TwitchServiceManager {
             }
         }
         self.emit(app).await;
+        self.sync_chat_targets(app).await;
         Ok(self.get_points().await)
     }
 
@@ -794,20 +1010,30 @@ impl TwitchServiceManager {
         while accounts.len() < 4 { accounts.push(json!({})); }
         let previous = accounts[index].clone();
         let elapsed = now_ms().saturating_sub(previous["at"].as_u64().unwrap_or(0));
-        if previous["status"] == "pending" && elapsed < 120_000 {
-            state["redemption"] = json!({"status":"paused","message":"Resgate sem confirmação. Automático pausado para evitar duplicação; confira o histórico na Twitch."});
+        // Legacy receipts without a known channel are ambiguous: never risk spending twice.
+        if previous["status"] == "pending" && previous["channel"].as_str().is_none() && elapsed < 120_000 {
+            state["redemption"] = json!({"status":"paused","message":"Resgate anterior sem canal identificado. Confira o histórico na Twitch."});
             return;
         }
-        if (previous["status"] == "rejected" && elapsed < 300_000) || (previous["status"] == "confirmed" && elapsed < 55_000) {
+        migrate_redemption_history(&mut journal, index);
+        // A confirmed spend limits the next request for this account; an individual
+        // rejected/pending channel must not hold up unrelated streamers.
+        if previous["status"] == "confirmed" && elapsed < 55_000 {
             state["redemption"] = previous; return;
         }
-        state["redemption"] = json!({"status":"waiting_points","message":"Automático ativo: aguardando saldo e recompensa disponíveis."});
+        state["redemption"] = json!({"status":"waiting_points","message":"Automático ativo: verificando saldo e recompensas da preferência escolhida."});
         let priority = config["accounts"][index]["claimPriority"].as_str().or_else(||config["claimPriority"].as_str()).unwrap_or("exp");
-        let candidate = state["balances"].as_object().into_iter().flatten().find_map(|(channel, balance)| {
-            let reward = crate::twitch_rewards::eligible(balance, priority, now_ms())?;
-            Some((channel.clone(), balance["channelId"].as_str()?.to_string(), reward.clone(), balance["points"].as_u64()?))
-        });
-        let Some((channel, channel_id, reward, before)) = candidate else { return; };
+        let candidate = redemption_candidate(state, priority, &journal, index, now_ms());
+        let Some((channel, channel_id, reward, before)) = candidate else {
+            state["redemption"]["message"] = json!(waiting_redemption_message(state, priority, now_ms()));
+            if previous["status"] == "pending" && elapsed < 120_000 {
+                state["redemption"] = previous;
+                state["redemption"]["message"] = json!("Resgate anterior sem confirmação neste canal; outros canais serão consultados.");
+            } else if previous["status"] == "rejected" && elapsed < 300_000 {
+                state["redemption"] = previous;
+            }
+            return;
+        };
         // Match the Kick flow: a setting change cannot race submission of a spend.
         let _configuration = self.configure_lock.lock().await;
         if generation != self.revision.load(Ordering::SeqCst) { return; }
@@ -820,6 +1046,7 @@ impl TwitchServiceManager {
         let mut receipt = json!({"status":"pending","channel":channel,"reward":reward,"transaction":transaction,
             "username":state["username"],"before":before,"at":now_ms(),"message":"Resgate enviado; aguardando confirmação."});
         journal["accounts"][index] = receipt.clone();
+        journal["channels"][index][&channel] = receipt.clone();
         if crate::social_store::save("twitch-redemptions", &journal).is_err() {
             state["redemption"] = json!({"status":"paused","message":"Falha ao registrar resgate; nenhum ponto foi gasto."}); return;
         }
@@ -838,6 +1065,7 @@ impl TwitchServiceManager {
             state["balances"][&channel]["status"] = json!("stale");
         }
         journal["accounts"][index] = receipt.clone();
+        journal["channels"][index][&channel] = receipt.clone();
         if crate::social_store::save("twitch-redemptions", &journal).is_err() {
             receipt["status"] = json!("paused");
             receipt["message"] = json!("Falha ao salvar a confirmação. Automático pausado; confira o histórico na Twitch.");
@@ -984,6 +1212,19 @@ mod tests {
         assert_eq!(receipt["status"], "pending");
         settle_redemption(&mut receipt, &json!({"status":403}), None);
         assert_eq!(receipt["status"], "rejected");
+    }
+
+    #[test]
+    fn trial_receipt_tells_user_when_an_api_pause_prevents_a_second_attempt() {
+        let original = json!({"before":600,"reward":{"cost":500,"trialPaused":true}});
+        let mut receipt = original.clone();
+        settle_redemption(&mut receipt,&json!({"status":403}),None);
+        assert_eq!(receipt["status"],"rejected");
+        assert!(receipt["message"].as_str().unwrap().contains("Não haverá nova tentativa"));
+        let mut receipt = original;
+        settle_redemption(&mut receipt,&Value::Null,None);
+        assert_eq!(receipt["status"],"pending");
+        assert!(receipt["message"].as_str().unwrap().contains("Não será reenviada"));
     }
 
     #[test]
@@ -1159,5 +1400,198 @@ mod tests {
         let expired_pending = json!({"status": "pending", "at": current - 130_000});
         let elapsed_expired = current.saturating_sub(expired_pending["at"].as_u64().unwrap_or(0));
         assert!(!(expired_pending["status"] == "pending" && elapsed_expired < 120_000));
+    }
+
+    #[tokio::test]
+    async fn roster_queries_remain_fair_with_many_online_and_offline_channels() {
+        let channels: Vec<_> = (0..40).map(|n| format!("partner_{n:02}")).collect();
+        let first = rotate_channels(&channels, 0);
+        let scanned = query_roster(&first, Duration::from_millis(35), |channel| async move {
+            tokio::time::sleep(Duration::from_millis(12)).await;
+            Ok(json!({"name":channel}))
+        }).await;
+        assert!(scanned.len() >= TWITCH_QUERY_CONCURRENCY);
+        assert!(scanned.len() < channels.len(), "bounded scan cannot stall redeem behind 40 channel queries");
+        assert_eq!(scanned[0].0, "partner_00");
+        let continued = rotate_channels(&channels, scanned.len());
+        assert_eq!(continued[0], channels[scanned.len()]);
+
+        let results = query_roster(&["offline".into(), "online".into(), "other_offline".into()],
+            Duration::from_secs(1), |channel| async move {
+                if channel == "online" { Err(("error".into(), "channel unavailable".into())) }
+                else { Ok(json!({"channel":channel})) }
+            }).await;
+        assert_eq!(results.len(), 3);
+        assert!(results[0].1.is_ok());
+        assert!(results[1].1.is_err());
+        assert!(results[2].1.is_ok());
+    }
+
+    #[test]
+    fn rejected_channel_does_not_block_other_partner_with_points() {
+        let now = 500_000;
+        let balance = |points| json!({
+            "status":"verified", "catalogStatus":"verified", "checkedAt":now - 1_000,
+            "points": points, "channelId":"12345",
+            "rewards":[{"key":"exp","available":true,"cost":300,"durationHours":1}]
+        });
+        let state = json!({"balances":{
+            "offline_a":balance(450), "online_b":balance(300), "offline_c":balance(600)
+        }});
+        let mut journal = json!({"accounts":[
+            {"channel":"offline_a", "status":"rejected", "at":now - 1_000},{},{},{}
+        ]});
+        migrate_redemption_history(&mut journal, 0);
+        assert_eq!(redemption_candidate(&state, "exp", &journal, 0, now).unwrap().0, "offline_c");
+        journal["channels"][0]["offline_c"] = json!({"status":"pending","at":now - 500});
+        assert_eq!(redemption_candidate(&state, "exp", &journal, 0, now).unwrap().0, "online_b");
+        journal["channels"][0]["offline_c"] = Value::Null;
+        journal["accounts"][0] = json!({"channel":"offline_c","status":"confirmed","at":now - 60_000});
+        assert_eq!(redemption_candidate(&state, "exp", &journal, 0, now).unwrap().0, "online_b", "alternate streamers receive their turn before returning to the first channel");
+        assert!(redemption_on_cooldown(&journal["channels"][0]["offline_a"], now));
+        assert!(!redemption_on_cooldown(&journal["channels"][0]["offline_a"], now + 301_000));
+    }
+
+    #[test]
+    fn migration_preserves_legacy_pending_without_overwriting_newer_channel_history() {
+        let mut journal = json!({"accounts":[
+            {"channel":"offline_a","status":"pending","at":100},{},{},{}
+        ], "channels":[{"offline_a":{"status":"confirmed","at":200}}, {}, {}, {}]});
+        migrate_redemption_history(&mut journal, 0);
+        assert_eq!(journal["channels"][0]["offline_a"]["status"], "confirmed");
+        journal["accounts"][0] = json!({"channel":"offline_b","status":"pending","at":300});
+        migrate_redemption_history(&mut journal, 0);
+        assert_eq!(journal["channels"][0]["offline_b"]["status"], "pending");
+    }
+
+    #[test]
+    fn paused_reward_trial_prefers_confirmed_options_and_never_repeats_uncertain_or_rejected_spend() {
+        let now = 900_000u64;
+        let reward_id = "147118bf-b3fb-4b34-8666-4d673fb1a5c1";
+        let pending = json!({"key":"catch","id":reward_id,"cost":500,"available":false,"trialPaused":true});
+        let mut state = json!({"balances":{
+            "tftoddy":{"status":"verified","catalogStatus":"verified","checkedAt":now-1000,
+                "points":900,"channelId":"123","rewards":[pending]},
+            "zzactive":{"status":"verified","catalogStatus":"verified","checkedAt":now-1000,
+                "points":550,"channelId":"456","rewards":[
+                    {"key":"catch","id":"12345678-1234-1234-1234-123456789abc","cost":500,"available":true}
+                ]}
+        }});
+        let mut journal = json!({"accounts":[{},{},{},{}], "channels":[{},{},{},{}]});
+        assert_eq!(redemption_candidate(&state,"catch",&journal,0,now).unwrap().0,"zzactive");
+        state["balances"].as_object_mut().unwrap().remove("zzactive");
+        assert_eq!(redemption_candidate(&state,"catch",&journal,0,now).unwrap().0,"tftoddy");
+
+        journal["channels"][0]["tftoddy"] = json!({"status":"rejected","at":now-600_000,
+          "reward":{"id":reward_id}});
+        assert!(redemption_candidate(&state,"catch",&journal,0,now).is_none(),
+          "an API-rejected paused reward is never retried while its flag remains unchanged");
+        journal["channels"][0]["tftoddy"]["status"] = json!("pending");
+        assert!(redemption_candidate(&state,"catch",&journal,0,now).is_none(),
+          "unknown outcome never triggers another paused trial");
+        state["balances"]["tftoddy"]["rewards"][0]["trialPaused"] = json!(false);
+        state["balances"]["tftoddy"]["rewards"][0]["available"] = json!(true);
+        assert_eq!(redemption_candidate(&state,"catch",&journal,0,now).unwrap().0,"tftoddy",
+          "a later authoritative available status can be considered normally after cooldown");
+    }
+
+    #[test]
+    fn real_channel_catalog_does_not_spend_points_on_disabled_one_hour_capture() {
+        let now = 900_000;
+        let reward = |key: &str, cost: u64, available: bool| {
+            json!({"key":key,"cost":cost,"available":available,"durationHours": if cost >= 1500 {3} else {1}})
+        };
+        // Observed catalogue: denissnidertv has the 500-point Capture reward
+        // disabled, while its 1500-point Capture and 900-point EXP are enabled.
+        let state = json!({"balances":{
+            "denissnidertv":{
+                "status":"verified","catalogStatus":"verified","checkedAt":now-500,
+                "channelId":"123","points":1140,
+                "rewards":[reward("catch",500,false),reward("catch",1500,true),reward("exp",900,true)]
+            },
+            "clovaobengala":{
+                "status":"verified","catalogStatus":"verified","checkedAt":now-500,
+                "channelId":"456","points":410,
+                "rewards":[reward("catch",500,true),reward("exp",300,true)]
+            }
+        }});
+        let journal = json!({"accounts":[{},{},{},{}],"channels":[{},{},{},{}]});
+        assert!(redemption_candidate(&state,"catch",&journal,0,now).is_none());
+        assert_eq!(redemption_candidate(&state,"all",&journal,0,now).unwrap().0,"clovaobengala");
+        assert_eq!(redemption_candidate(&state,"exp",&journal,0,now).unwrap().0,"clovaobengala");
+        let message = waiting_redemption_message(&state,"catch",now);
+        assert!(message.contains("Captura"));
+        assert!(message.contains("90 pts em @clovaobengala"));
+        assert!(message.contains("2 canal(is) com outro buff"));
+        assert!(message.contains("Qualquer buff"));
+    }
+
+    #[test]
+    fn per_account_live_targets_follow_chosen_buff_and_game_live_status() {
+        let now = 200_000;
+        let cat = |key: &str, available: bool, trial: bool| json!({
+            "catalogStatus":"verified","checkedAt":now-500,"status":"verified","points":0,
+            "rewards":[{"key":key,"cost":match key { "exp" => 300, "lure" => 1000, _ => 500 },
+                "available":available,"trialPaused":trial}]
+        });
+        let points = vec![
+            json!({"balances":{
+                "catchlive":cat("catch",true,false),
+                "explive":cat("exp",true,false),
+                "pausedlive":cat("catch",false,true),
+                "disabled":cat("catch",false,false),
+                "offline":cat("catch",true,false),
+                "missing":{"status":"verified","points":2000},
+                "longonly":{"catalogStatus":"verified","checkedAt":now-500,"status":"verified",
+                    "points":1800,"rewards":[{"key":"catch","cost":1500,"available":true}]},
+                "uncatalogued":cat("catch",true,false)
+            }}),
+            json!({"balances":{"catchlive":cat("catch",true,false),"explive":cat("exp",true,false)}}),
+            json!({"balances":{"pausedlive":cat("catch",false,true),"explive":cat("exp",true,false)}}),
+            json!({"balances":{"catchlive":cat("catch",true,false)}}),
+        ];
+        let official = vec![
+            vec!["catchlive".into(),"disabled".into(),"explive".into(),"longonly".into(),"missing".into(),"offline".into(),"pausedlive".into()],
+            vec!["catchlive".into(),"explive".into()],
+            vec!["explive".into(),"pausedlive".into()],
+            vec!["catchlive".into()]
+        ];
+        let online = vec!["catchlive".into(),"disabled".into(),"explive".into(),"missing".into(),
+            "longonly".into(),"pausedlive".into(),"uncatalogued".into()];
+        let mut config = json!({"masterEnabled":true,"accounts":[
+            {"enabled":true,"claimPriority":"catch"},
+            {"enabled":true,"claimPriority":"exp"},
+            {"enabled":true,"claimPriority":"lure"},
+            {"enabled":false,"claimPriority":"catch"}
+        ]});
+        let targets = account_live_targets(&config,&official,&online,&points,now);
+        assert_eq!(targets[0],vec!["catchlive","pausedlive"],
+            "offline, disabled, missing and non-official channels must not receive a connection");
+        assert_eq!(targets[1],vec!["explive"]);
+        assert!(targets[2].is_empty());
+        assert!(targets[3].is_empty());
+
+        config["accounts"][0]["claimPriority"] = json!("exp");
+        config["accounts"][2]["claimPriority"] = json!("catch");
+        let targets = account_live_targets(&config,&official,&online,&points,now);
+        assert_eq!(targets[0],vec!["explive"]);
+        assert_eq!(targets[1],vec!["explive"], "one account's change cannot alter another");
+        assert_eq!(targets[2],vec!["pausedlive"]);
+
+        config["accounts"][0]["claimPriority"] = json!("all");
+        assert_eq!(account_live_targets(&config,&official,&online,&points,now)[0],
+            vec!["catchlive","explive","pausedlive"]);
+        assert!(account_live_targets(&config,&official,&online,&points,now+121_000)[0].is_empty(),
+            "stale catalogs must disconnect previously selected lives");
+        assert_eq!(rotate_channels(&targets[0],1),vec!["explive"]);
+    }
+
+    #[test]
+    fn watch_rotation_covers_more_than_two_eligible_lives_without_selecting_others() {
+        let eligible = vec!["one".to_string(),"two".to_string(),"three".to_string(),"four".to_string()];
+        let first: Vec<_> = rotate_channels(&eligible,0).into_iter().take(MAX_TWITCH_WATCH_CHANNELS).collect();
+        let second: Vec<_> = rotate_channels(&eligible,2).into_iter().take(MAX_TWITCH_WATCH_CHANNELS).collect();
+        assert_eq!(first,vec!["one","two"]);
+        assert_eq!(second,vec!["three","four"]);
     }
 }

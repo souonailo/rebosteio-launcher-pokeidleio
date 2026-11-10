@@ -13,8 +13,23 @@ test('Twitch availability requires the real reward, exact price and complete ava
   for (const changes of [{cost:500},{isPaused:true},{isInStock:false},{isUserInputRequired:true},{pricingType:'BITS'},{cooldownExpiresAt:'2030-01-01'}]) {
     assert.equal(catalog([{...reward,...changes}])[0].available,false);
   }
+  assert.equal(catalog([{...reward,isPaused:true}])[0].trialPaused,true);
+  assert.equal(catalog([{...reward,isPaused:true,isEnabled:false}])[0].trialPaused,false);
+  assert.equal(catalog([{...reward,isPaused:true,isInStock:false}])[0].trialPaused,false);
   assert.deepEqual(catalog([{...reward,title:'Unrelated prize'},{...reward,id:'not-a-uuid'},null]),[]);
   assert.deepEqual(catalog(null),[]);
+});
+
+test('Twitch reports a pause but the UI distinguishes pending confirmation from confirmed availability', () => {
+  const {forBalance} = require('../src/ui/twitch-reward-status');
+  const paused = {...reward, id:'147118bf-b3fb-4b34-8666-4d673fb1a5c1', title:'Bônus de +15% Capture Boost',
+    prompt:'1 hora de bônus PokeIdle',cost:500,isPaused:true};
+  const balance={status:'verified',catalogStatus:'verified',checkedAt:1000,points:600,rewards:catalog([paused])};
+  const view=forBalance(balance,'catch',1001);
+  assert.equal(view.affordable.length,0);
+  assert.equal(view.trials.length,1);
+  assert.match(view.label,/pausa.*confirmar/i);
+  assert.equal(forBalance(balance,'exp',1001).trials.length,0);
 });
 
 test('real catalog preserves all twelve duration/cost variants and exact redemption descriptions', () => {

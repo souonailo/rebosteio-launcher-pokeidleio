@@ -2,6 +2,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, RwLock};
@@ -90,6 +91,15 @@ pub struct HeadlessState {
     pub passe_vip_ate: Option<u64>,
     #[serde(default)]
     pub vip_dias: Option<u32>,
+    /// Inscrição confirmada pelo servidor para a edição indicada (None = ainda não verificado).
+    #[serde(default)]
+    pub raid_inscrito: Option<bool>,
+    #[serde(default)]
+    pub raid_edicao: Option<String>,
+    #[serde(default)]
+    pub raid_inscricoes_de: Option<u64>,
+    #[serde(default)]
+    pub raid_verificado_em: Option<u64>,
     #[serde(default)]
     pub passe_dias: Option<u32>,
     #[serde(default)]
@@ -172,6 +182,10 @@ impl HeadlessState {
             vip_ate: None,
             passe_vip_ate: None,
             vip_dias: None,
+            raid_inscrito: None,
+            raid_edicao: None,
+            raid_inscricoes_de: None,
+            raid_verificado_em: None,
             passe_dias: None,
             boost_xp: None,
             initial_gold: None,
@@ -198,8 +212,100 @@ pub struct BlasterHandle {
 }
 
 #[derive(Default)]
+struct WeeklyRaidGuard {
+    attempted_edition: Option<String>,
+    attempted_at: u64,
+    confirmed_edition: Option<String>,
+}
+
+impl WeeklyRaidGuard {
+    fn should_enroll(&mut self, message: &serde_json::Value, tokens: u64, local_now: u64) -> bool {
+        let m = message.get("data").unwrap_or(message);
+        if m["recusa"].is_string() { return false; }
+        let Some(edition) = m.get("edicao") else { return false; };
+        let Some(id) = edition.get("id").filter(|v| v.is_string() || v.is_u64()) else { return false; };
+        let id = if let Some(s) = id.as_str() { s.to_string() } else { id.to_string() };
+        if m["eu"]["inscrito"] == true || m["acao"] == "inscreveu" {
+            self.confirmed_edition = Some(id);
+            return false;
+        }
+        if m["eu"]["inscrito"] != false || self.confirmed_edition.as_deref() == Some(id.as_str()) || tokens < 1 {
+            return false;
+        }
+        let Some(server_now) = m["agora"].as_u64() else { return false; };
+        let in_window = if let (Some(opens), Some(closes)) = (
+            edition["inscricoesDe"].as_u64(), edition["inscricoesAte"].as_u64()
+        ) {
+            opens <= server_now && server_now < closes
+        } else {
+            // Horário oficial em Brasília (UTC-3): terça 12h até segunda 16h.
+            let brazil_ms = server_now.saturating_sub(3 * 60 * 60_000);
+            let weekday = (brazil_ms / 86_400_000 + 4) % 7; // domingo = 0
+            let hour = (brazil_ms / 3_600_000) % 24;
+            match weekday {
+                1 => hour < 16,
+                2 => hour >= 12,
+                _ => true,
+            }
+        };
+        if !in_window { return false; }
+        if self.attempted_edition.as_deref() == Some(id.as_str())
+            && local_now.saturating_sub(self.attempted_at) < 5 * 60_000 {
+            return false;
+        }
+        self.attempted_edition = Some(id);
+        self.attempted_at = local_now;
+        true
+    }
+}
+
+#[cfg(test)]
+mod weekly_raid_tests {
+    use super::WeeklyRaidGuard;
+    use serde_json::json;
+
+    #[test]
+    fn weekly_raid_uses_server_state_and_throttles_attempts() {
+        let tuesday = 1_783_433_600_000_u64; // epoch usado como relógio fictício no teste
+        let packet = json!({
+            "t":"raid","agora":tuesday,"edicao":{
+                "id":"week-42","inscricoesDe":tuesday-1000,"inscricoesAte":tuesday+1000
+            },"eu":{"inscrito":false}
+        });
+        let mut guard = WeeklyRaidGuard::default();
+        assert!(!guard.should_enroll(&packet, 0, 1));
+        assert!(guard.should_enroll(&packet, 1, 1));
+        assert!(!guard.should_enroll(&packet, 1, 2));
+        assert!(guard.should_enroll(&packet, 1, 300_002));
+        let confirmed = json!({"t":"raid","edicao":{"id":"week-42"},"eu":{"inscrito":true}});
+        assert!(!guard.should_enroll(&confirmed, 1, 300_003));
+        assert!(!guard.should_enroll(&packet, 1, 1_000_000));
+        let next = json!({"t":"raid","agora":tuesday,"edicao":{
+            "id":"week-43","inscricoesDe":tuesday-1000,"inscricoesAte":tuesday+1000
+        },"eu":{"inscrito":false}});
+        assert!(guard.should_enroll(&next, 1, 1_000_001));
+    }
+
+    #[test]
+    fn weekly_raid_rejects_unknown_or_closed_windows() {
+        let mut guard = WeeklyRaidGuard::default();
+        let now = 1_700_000_000_000_u64;
+        for packet in [
+            json!({"t":"raid","agora":now,"eu":{"inscrito":false}}),
+            json!({"t":"raid","agora":now,"edicao":{"id":"a","inscricoesDe":now+10,"inscricoesAte":now+20},"eu":{"inscrito":false}}),
+            json!({"t":"raid","agora":now,"edicao":{"id":"b","inscricoesDe":now-20,"inscricoesAte":now-10},"eu":{"inscrito":false}}),
+            json!({"t":"raid","agora":now,"edicao":{"id":"c","inscricoesDe":now-20,"inscricoesAte":now+20}}),
+            json!({"t":"raid","agora":now,"edicao":{"id":"d","inscricoesDe":now-20,"inscricoesAte":now+20},"eu":{"inscrito":false},"recusa":"raid.recusa.semToken"}),
+        ] {
+            assert!(!guard.should_enroll(&packet, 1, now), "rejected packet: {packet}");
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct GameHeadlessManager {
     pub auth_locks: [tokio::sync::Mutex<()>; 4],
+    pub auto_raid_enabled: AtomicBool,
     clients: RwLock<HashMap<usize, BlasterHandle>>,
     tokens: RwLock<HashMap<usize, String>>,
     nicks: RwLock<HashMap<usize, String>>,
@@ -225,6 +331,7 @@ impl GameHeadlessManager {
         }).collect();
         Self {
             auth_locks: std::array::from_fn(|_| tokio::sync::Mutex::new(())),
+            auto_raid_enabled: AtomicBool::new(false),
             clients: RwLock::new(HashMap::new()),
             tokens: RwLock::new(sessions.iter().map(|(i,s)| (*i, s.token.clone())).collect()),
             nicks: RwLock::new(sessions.iter().filter_map(|(i,s)| s.nick.clone().map(|n| (*i,n))).collect()),
@@ -559,6 +666,8 @@ impl GameHeadlessManager {
                 let mut ping_interval = tokio::time::interval(Duration::from_secs(25));
                 let mut sec_interval = tokio::time::interval(Duration::from_secs(1));
                 let mut sniper_interval = tokio::time::interval(Duration::from_millis(100));
+                let mut raid_interval = tokio::time::interval(Duration::from_secs(60));
+                let mut raid_guard = WeeklyRaidGuard::default();
                 let mut last_activity = Instant::now();
                 let mut user_stopped = false;
 
@@ -571,6 +680,13 @@ impl GameHeadlessManager {
                         }
                         Some(outgoing) = out_rx.recv() => {
                             if write.send(outgoing).await.is_err() {
+                                break;
+                            }
+                        }
+                        _ = raid_interval.tick() => {
+                            let enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
+                                .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
+                            if enabled && write.send(Message::Text(json!({"t":"raid.info"}).to_string().into())).await.is_err() {
                                 break;
                             }
                         }
@@ -640,6 +756,17 @@ impl GameHeadlessManager {
                                 Some(Ok(Message::Text(txt))) => {
                                     last_activity = Instant::now();
                                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
+                                        let enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
+                                            .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
+                                        if enabled && val["t"] == "raid" {
+                                            let now = crate::daily_pass::now_ms().max(0) as u64;
+                                            let tokens = state.inv_map.get("70000").and_then(|v| v.as_u64()).unwrap_or(0);
+                                            if state.inventory_known && raid_guard.should_enroll(&val, tokens, now) {
+                                                if write.send(Message::Text(json!({"t":"raid.inscrever"}).to_string().into())).await.is_err() {
+                                                    break;
+                                                }
+                                            }
+                                        }
                                         for cmd in crate::sniper::on_message(index, &val, Some(&app_handle)) {
                                             if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
                                                 crate::sniper::on_send_failure(index, &cmd);
@@ -971,6 +1098,36 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         return true;
     }
 
+    if t == "raid" {
+        // Nunca atribua inscrição sem uma edição identificada pelo servidor.
+        if let Some(edition) = data.get("edicao") {
+            let id = edition.get("id").and_then(|value| value.as_str().map(str::to_owned)
+                .or_else(|| value.as_u64().map(|id| id.to_string())));
+            if state.raid_edicao != id {
+                state.raid_inscrito = None;
+                state.raid_verificado_em = None;
+            }
+            state.raid_edicao = id.clone();
+            state.raid_inscricoes_de = edition.get("inscricoesDe").and_then(|v| v.as_u64());
+            if id.is_some() {
+                let confirmado = if data["acao"] == "inscreveu" || data["eu"]["inscrito"] == true {
+                    Some(true)
+                } else {
+                    data["eu"]["inscrito"].as_bool()
+                };
+                if let Some(inscrito) = confirmado {
+                    // Uma resposta atrasada não deve desfazer a confirmação desta edição.
+                    if inscrito || state.raid_inscrito != Some(true) {
+                        state.raid_inscrito = Some(inscrito);
+                        state.raid_verificado_em = Some(crate::daily_pass::now_ms().max(0) as u64);
+                    }
+                }
+            }
+            changed = true;
+        }
+        return changed;
+    }
+
     if t == "welcome" || t == "estado" {
         let player = data.get("estado").unwrap_or(data);
         // Preserve absence as unknown: only an explicit server value may update this.
@@ -978,7 +1135,14 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             state.outland_tier = Some(tier);
             changed = true;
         }
-        if t == "welcome" { state.twitch = None; state.kick = None; }
+        if t == "welcome" {
+            state.twitch = None;
+            state.kick = None;
+            state.raid_inscrito = None;
+            state.raid_edicao = None;
+            state.raid_inscricoes_de = None;
+            state.raid_verificado_em = None;
+        }
         let full = t == "welcome" || player.get("cheio").and_then(|v| v.as_bool()) == Some(true);
         if full {
             changed = true;
@@ -1522,6 +1686,30 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn weekly_boss_status_tracks_confirmed_edition_without_guessing() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        assert_eq!(state.raid_inscrito, None);
+        assert!(parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1","inscricoesDe":1000},"eu":{"inscrito":false}}), &mut state));
+        assert_eq!(state.raid_edicao.as_deref(), Some("semana-1"));
+        assert_eq!(state.raid_inscrito, Some(false));
+        assert_eq!(state.raid_inscricoes_de, Some(1000));
+        assert_eq!(serde_json::to_value(&state).unwrap()["raidInscrito"], false);
+        assert!(parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1"},"acao":"inscreveu"}), &mut state));
+        assert_eq!(state.raid_inscrito, Some(true));
+        // Uma resposta tardia desta edição não desfaz a confirmação.
+        parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1"},"eu":{"inscrito":false}}), &mut state);
+        assert_eq!(state.raid_inscrito, Some(true));
+        parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-2"}}), &mut state);
+        assert_eq!(state.raid_edicao.as_deref(), Some("semana-2"));
+        assert_eq!(state.raid_inscrito, None);
+        parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-2"},"eu":{"inscrito":false}}), &mut state);
+        assert_eq!(state.raid_inscrito, Some(false));
+        parse_game_message(&json!({"t":"welcome","estado":{"eu":{"nick":"Fixture"}}}), &mut state);
+        assert_eq!(state.raid_edicao, None);
+        assert_eq!(state.raid_inscrito, None);
+    }
 
     #[test]
     fn twitch_point_bonuses_preserve_server_expiry_and_clear_on_reconnect() {

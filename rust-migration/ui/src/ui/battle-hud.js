@@ -88,6 +88,34 @@
     return Math.round(a).toLocaleString('pt-BR');
   }
 
+  function updateHeadlessIndicators(hud, state) {
+    const vip = hud.querySelector('.bsh-flag-vip');
+    const raid = hud.querySelector('.bsh-flag-raid');
+    const now = Date.now();
+    if (vip) {
+      const expiresAt = state?.vipAte != null ? Number(state.vipAte) : NaN;
+      const hasExpiry = Number.isFinite(expiresAt);
+      const days = hasExpiry ? Math.max(0, Math.ceil((expiresAt - now) / 86400000)) : Number(state?.vipDias);
+      const known = hasExpiry || (state?.vipDias != null && Number.isFinite(days));
+      const active = known && days > 0;
+      setSocialText(vip, active ? `VIP · ${days} ${days === 1 ? 'dia' : 'dias'}` : known ? 'VIP · Inativo' : 'VIP · A verificar');
+      setHudAttribute(vip, 'data-status', active ? 'positive' : known ? 'negative' : 'unknown');
+      setHudTitle(vip, hasExpiry ? (active ? `VIP válido até ${new Date(expiresAt).toLocaleString('pt-BR')}` : 'VIP expirado') : 'Status VIP recebido da conta');
+    }
+    if (raid) {
+      const edition = state?.raidEdicao;
+      const opens = Number(state?.raidInscricoesDe);
+      const checked = Number(state?.raidVerificadoEm);
+      const expired = (state?.raidInscricoesDe != null && Number.isFinite(opens) && now >= opens + 7 * 86400000)
+        || (state?.raidInscricoesDe == null && state?.raidVerificadoEm != null && Number.isFinite(checked) && now >= checked + 7 * 86400000);
+      const known = !!edition && !expired && state?.live !== false && typeof state?.raidInscrito === 'boolean';
+      const status = !known ? 'unknown' : state.raidInscrito ? 'positive' : 'negative';
+      setSocialText(raid, `World Boss · ${status === 'positive' ? 'Inscrito' : status === 'negative' ? 'Não inscrito' : 'A verificar'}`);
+      setHudAttribute(raid, 'data-status', status);
+      setHudTitle(raid, known ? `Inscrição da edição ${edition} confirmada pelo servidor.` : 'Aguardando confirmação da inscrição na edição semanal pelo servidor.');
+    }
+  }
+
   function setSocialText(element, text) {
     if (element.textContent !== text) element.textContent = text;
   }
@@ -142,11 +170,17 @@
 
   const social = { twitch: null, kick: null, points: null };
   const gameSocial = new Map();
+  const isFreshVerified = balance => {
+    if (!balance || balance.status !== 'verified' || !Number.isSafeInteger(balance.points) || balance.points < 0) return false;
+    if (!Number.isFinite(balance.checkedAt)) return false;
+    return Date.now() >= balance.checkedAt && Date.now() - balance.checkedAt < 120000;
+  };
   function refreshSocial() {
     if (!presentationVisible()) return;
     const grid = document.getElementById('grid');
     if (!grid) return;
     Array.from(grid.children).forEach((panel, i) => PioBattleHud.updateSocial(panel, i));
+    window.PioStreamerPoints?.refresh();
   }
 
   const pausedPanels = new Set();
@@ -412,6 +446,31 @@
   }
 
   const PioBattleHud = {
+    pointsSnapshot(index, platform) {
+      if (!Number.isInteger(index) || index < 0 || index >= 4 || !['twitch', 'kick'].includes(platform)) return null;
+      const telemetry = gameSocial.get(index)?.[platform];
+      const account = platform === 'twitch' ? social.twitchPoints?.accounts?.[index]
+        : social.kickPoints?.accounts?.[index] || social.points?.accounts?.[index];
+      const official = telemetry?.oficiais;
+      const channels = [];
+      const seen = new Set();
+      for (const partner of Array.isArray(official) ? official : []) {
+        const login = String(partner?.login || partner?.slug || '').trim().toLowerCase().replace(/^@/, '');
+        if (!/^[a-z0-9_]{1,40}$/.test(login) || seen.has(login)) continue;
+        seen.add(login);
+        const eligible = partner.ativo === true && partner.bonus !== false;
+        const balance = eligible ? account?.balances?.[login] : null;
+        const verified = eligible && isFreshVerified(balance);
+        const status = !eligible ? 'pending' : verified ? 'verified'
+          : balance?.checkedAt ? 'stale' : 'unavailable';
+        channels.push({ login, eligible, verified, status, points: verified ? balance.points : null,
+          hasBalance: !!balance });
+      }
+      return { platform, index, hasOfficialList: Array.isArray(official), channels,
+        total: channels.reduce((total, channel) => total + (channel.points ?? 0), 0),
+        verifiedCount: channels.filter(channel => channel.verified).length,
+        pendingCount: channels.filter(channel => !channel.verified).length };
+    },
     outlandTierLabel(state) {
       const tier = state?.outlandTier;
       return state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100
@@ -462,26 +521,12 @@
           setSocialText(bonusEl, kickBonusText);
         }
       }
-      const isFreshVerified = b => {
-        if (!b || b.status !== 'verified' || !Number.isSafeInteger(b.points) || b.points < 0) return false;
-        if (!Number.isFinite(b.checkedAt)) return false;
-        const now = Date.now();
-        const checked = Number(b.checkedAt);
-        return now >= checked && (now - checked) < 120000;
-      };
-
       const renderPlatformWallet = (pointsEl, channelsEl, platformAccount, gamePoints, platformName) => {
         if (!pointsEl) return;
-        const official = game[platformName.toLowerCase()]?.oficiais;
-        const eligible = new Set((Array.isArray(official) ? official : [])
-          .filter(item => item?.ativo === true && item?.bonus !== false)
-          .map(item => String(item.login || item.slug || '').trim().toLowerCase().replace(/^@/, ''))
-          .filter(Boolean));
-        // A balance query is not proof of an official partnership.
-        const balances = Object.entries(platformAccount?.balances || {})
-          .filter(([channel]) => eligible.has(channel.toLowerCase()));
-        const verified = balances.filter(([, b]) => isFreshVerified(b));
-        const total = verified.reduce((n, [, b]) => n + b.points, 0);
+        const snapshot = this.pointsSnapshot(i, platformName.toLowerCase());
+        const balances = snapshot.channels.filter(channel => channel.eligible && channel.hasBalance);
+        const verified = balances.filter(channel => channel.verified);
+        const total = snapshot.total;
         const hasGamePoints = Number.isFinite(gamePoints);
 
         const pointsText = verified.length
@@ -492,12 +537,8 @@
 
         setSocialText(pointsEl, pointsText);
 
-        const pending = balances.length - verified.length;
-        const detailed = verified.map(([channel, b]) => `${channel}: ${fmtNumber(b.points)}`);
-        if (pending) detailed.push(`${pending} ${pending === 1 ? 'canal oficial sem saldo confirmado' : 'canais oficiais sem saldo confirmado'}`);
-        setHudTitle(pointsEl, detailed.length ? detailed.join('\n')
-          : !Array.isArray(official) ? `Aguardando lista oficial da ${platformName} enviada pelo jogo`
-          : `Aguardando saldo confirmado pela ${platformName}`);
+        // Native title creates a white, unscrollable tooltip. The points button opens the themed modal.
+        setHudTitle(pointsEl, '');
 
         if (channelsEl) {
           const channelsText = verified.length
@@ -758,15 +799,19 @@
         <div class="bsh-mode-banner ${isBlaster ? 'is-blaster' : 'is-eco'}">
           ${isBlaster ? 'Headless' : 'Painel de batalha'}
         </div>
+        <div class="bsh-account-flags" aria-label="Benefícios e inscrição semanal da conta">
+          <span class="bsh-account-flag bsh-flag-vip" data-status="unknown">VIP · A verificar</span>
+          <span class="bsh-account-flag bsh-flag-raid" data-status="unknown">World Boss · A verificar</span>
+        </div>
         <aside class="bsh-social" aria-label="Twitch, Kick e pontos desta conta">
           <div class="bsh-social-twitch">
-            <div class="bsh-social-heading"><span class="bsh-social-brand">Twitch</span><span class="bsh-twitch-points" aria-label="Pontos Twitch">Pontos —</span></div>
+            <div class="bsh-social-heading"><span class="bsh-social-brand">Twitch</span><button type="button" class="bsh-twitch-points bsh-points-open" aria-label="Ver pontos Twitch da conta ${i + 1}" aria-haspopup="dialog">Pontos —</button></div>
             <span class="bsh-social-status bsh-twitch-status">Aguardando</span>
             <span class="bsh-social-bonus bsh-twitch-bonus">Bônus —</span>
             <span class="bsh-twitch-channels" hidden>Sem saldo confirmado</span>
           </div>
           <div class="bsh-social-kick">
-            <div class="bsh-social-heading"><span class="bsh-social-brand">Kick</span><span class="bsh-social-points bsh-kick-points" aria-label="Pontos Kick">Pontos —</span></div>
+            <div class="bsh-social-heading"><span class="bsh-social-brand">Kick</span><button type="button" class="bsh-social-points bsh-kick-points bsh-points-open" aria-label="Ver pontos Kick da conta ${i + 1}" aria-haspopup="dialog">Pontos —</button></div>
             <span class="bsh-social-status bsh-kick-status">Aguardando</span>
             <span class="bsh-social-bonus bsh-kick-bonus">Bônus —</span>
             <span class="bsh-social-channels bsh-kick-channels" hidden>Sem saldo confirmado</span>
@@ -839,6 +884,12 @@
       `;
 
       // Eventos internos do HUD
+      hud.querySelector('.bsh-twitch-points').onclick = event => window.PioStreamerPoints?.open(i, 'twitch', event.currentTarget);
+      hud.querySelector('.bsh-kick-points').onclick = event => window.PioStreamerPoints?.open(i, 'kick', event.currentTarget);
+      hud.querySelector('.bsh-twitch-points').onmouseenter = event => window.PioStreamerPoints?.preview(i, 'twitch', event.currentTarget);
+      hud.querySelector('.bsh-kick-points').onmouseenter = event => window.PioStreamerPoints?.preview(i, 'kick', event.currentTarget);
+      hud.querySelector('.bsh-twitch-points').onmouseleave = () => window.PioStreamerPoints?.leave();
+      hud.querySelector('.bsh-kick-points').onmouseleave = () => window.PioStreamerPoints?.leave();
       const pauseBtn = hud.querySelector('.bsh-pause-btn');
       pauseBtn.onclick = () => {
         this.togglePause(i);
@@ -937,6 +988,7 @@
       }
 
       state = window.PioInventory.project(state);
+      updateHeadlessIndicators(hud, state);
       const a = (state && state.a) || {};
 
       // 1. Líder do Jogador

@@ -164,6 +164,7 @@
     <button class="leaf-tool-item" data-old="sniperBtn" id="leafSniperBtn"><span class="ico">🎯</span><span>Auto-Sniper Central</span><span class="leaf-tool-badge" id="leafSniperBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSellBtn"><span class="ico">💰</span><span>Venda do Depot</span><span class="leaf-tool-badge" id="leafAutoSellBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSupplyBtn"><span class="ico">📦</span><span>Auto Supply</span><span class="leaf-tool-badge" id="leafAutoSupplyBadge">OFF</span></button>
+    <button class="leaf-tool-item" data-old="autoRaid" title="Inscrição automática na Raid Gigantamax durante o período de inscrição; custo de 1 Bronze Boss Token por conta"><span class="ico">👑</span><span>Auto registro Boss Semanal</span><span class="leaf-tool-badge" id="leafAutoRaidBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="dispatchHuntBtn"><span class="ico">🎯</span><span>Despachar Contas</span></button>
     <button class="leaf-tool-item" data-old="newInstanceBtn"><span class="ico">➕</span><span>Nova instância (8 contas)</span></button>
     <button class="leaf-tool-item" data-old="scriptsBtn"><span class="ico">🧩</span><span>Scripts & Extensões</span></button>
@@ -368,6 +369,14 @@
     badge.textContent = isOn ? 'ON' : 'OFF';
     badge.classList.toggle('is-on', isOn);
   }
+  function syncAutoRaidBadge() {
+    const badge = $('#leafAutoRaidBadge');
+    if (!badge) return;
+    const enabled = oldOn('autoRaid');
+    badge.textContent = enabled ? 'ON' : 'OFF';
+    badge.classList.toggle('is-on', enabled);
+  }
+  window.__syncAutoRaidBadge = syncAutoRaidBadge;
   function syncTwitchBonusBadge() {
     const badge = $('#leafTwitchBonusBadge');
     if (!badge) return;
@@ -408,6 +417,7 @@
 
   syncAutoSellBadge();
   syncAutoSupplyBadge();
+  syncAutoRaidBadge();
   syncTwitchBonusBadge();
   syncKickBonusBadge();
   syncSniperBadge();
@@ -416,7 +426,7 @@
     e.stopPropagation();
     const opening = !document.body.classList.contains('leaf-tools-open');
     closeSurfaces();
-    if (opening) { document.body.classList.add('leaf-tools-open'); tools.inert = false; $('#leafToolsBtn').setAttribute('aria-expanded', 'true'); syncAutoSellBadge(); syncAutoSupplyBadge(); syncTwitchBonusBadge(); syncKickBonusBadge(); tools.querySelector('button')?.focus(); }
+    if (opening) { document.body.classList.add('leaf-tools-open'); tools.inert = false; $('#leafToolsBtn').setAttribute('aria-expanded', 'true'); syncAutoSellBadge(); syncAutoSupplyBadge(); syncAutoRaidBadge(); syncTwitchBonusBadge(); syncKickBonusBadge(); tools.querySelector('button')?.focus(); }
   };
   $('#leafSettingsBtn').onclick = () => {
     const opening = !document.body.classList.contains('leaf-settings-open');
@@ -425,7 +435,7 @@
   };
   $('#leafMoreBtn').onclick = () => $('#leafSettingsBtn').click();
   $('#leafDrawerClose').onclick = () => closeSurfaces(true);
-  $$('#leafToolsMenu [data-old],#leafSettingsDrawer [data-old]').forEach(b => b.onclick = () => { clickOld(b.dataset.old); closeSurfaces(); syncAutoSellBadge(); syncAutoSupplyBadge(); syncTwitchBonusBadge(); });
+  $$('#leafToolsMenu [data-old],#leafSettingsDrawer [data-old]').forEach(b => b.onclick = () => { clickOld(b.dataset.old); closeSurfaces(); syncAutoSellBadge(); syncAutoSupplyBadge(); syncAutoRaidBadge(); syncTwitchBonusBadge(); });
   document.addEventListener('click', e => { if (!tools.contains(e.target) && e.target !== $('#leafToolsBtn') && document.body.classList.contains('leaf-tools-open')) closeSurfaces(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSurfaces(true); });
 

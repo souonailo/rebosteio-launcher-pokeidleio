@@ -179,6 +179,7 @@
       return results;
     },
     blasterSend: (index, data) => invoke('blaster_send', { index, data }).catch(() => false),
+    blasterAutoRaid: (enabled) => invoke('blaster_auto_raid_set', { enabled }),
     sessionTokenSave: (index, token, nick) => invoke('session_token_save', { index, token, nick }).catch(() => false),
     sessionTokenGet: (index) => invoke('session_token_get', { index }).catch(() => null),
     onSessionToken: (cb) => listen('session:token', (e) => cb(e.payload)),

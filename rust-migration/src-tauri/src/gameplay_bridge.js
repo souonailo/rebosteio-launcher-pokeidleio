@@ -5,6 +5,49 @@
   const NativeWebSocket = window.WebSocket;
   let latestSocket, activeSession, pending = [], pendingBytes = 0, inFlight = false, timer;
   let awaitingSnapshot = false, handedOff = false;
+  let raidTokensKnown = false, raidTokens = 0, raidRequestAt = 0;
+  let raidAttemptEdition = null, raidAttemptAt = 0, raidConfirmedEdition = null;
+  function observeRaidTokens(value) {
+    if (!value) return;
+    const owner = value.eu && Object.hasOwn(value.eu, 'items') ? value.eu : value;
+    if (!Object.hasOwn(owner, 'items')) return;
+    const items = owner.items;
+    raidTokensKnown = !!items && typeof items === 'object';
+    raidTokens = raidTokensKnown ? Number(items['70000'] ?? 0) : 0;
+  }
+  function requestWeeklyRaid() {
+    if (handedOff || window.__idleioAutoRaidEnabled !== true || latestSocket?.readyState !== NativeWebSocket.OPEN) return;
+    if (Date.now() - raidRequestAt < 60_000) return;
+    raidRequestAt = Date.now();
+    latestSocket.send(JSON.stringify({ t: 'raid.info' }));
+  }
+  function onWeeklyRaid(data) {
+    if (handedOff || window.__idleioAutoRaidEnabled !== true || !data || data.recusa) return;
+    const edition = data.edicao;
+    const id = edition?.id;
+    if (typeof id !== 'string' && !Number.isSafeInteger(id)) return;
+    const key = String(id);
+    if (data.eu?.inscrito === true || data.acao === 'inscreveu') {
+      raidConfirmedEdition = key;
+      return;
+    }
+    if (data.eu?.inscrito !== false || raidConfirmedEdition === key || !raidTokensKnown || raidTokens < 1) return;
+    const now = Number(data.agora);
+    if (!Number.isSafeInteger(now) || now <= 0) return;
+    const hasWindow = Number.isFinite(Number(edition.inscricoesDe)) && Number.isFinite(Number(edition.inscricoesAte))
+      && edition.inscricoesDe != null && edition.inscricoesAte != null;
+    // Calendário oficial: de terça, 12h, a segunda, 16h (Brasília, UTC-3).
+    const br = new Date(now - 3 * 60 * 60_000);
+    const day = br.getUTCDay(), hour = br.getUTCHours();
+    const weeklyWindow = day === 2 ? hour >= 12 : day === 1 ? hour < 16 : true;
+    if (hasWindow ? !(Number(edition.inscricoesDe) <= now && now < Number(edition.inscricoesAte)) : !weeklyWindow) return;
+    if (raidAttemptEdition === key && Date.now() - raidAttemptAt < 5 * 60_000) return;
+    if (latestSocket?.readyState !== NativeWebSocket.OPEN) return;
+    raidAttemptEdition = key;
+    raidAttemptAt = Date.now();
+    latestSocket.send(JSON.stringify({ t: 'raid.inscrever' }));
+  }
+  setInterval(requestWeeklyRaid, 30_000);
   window.__idleioFreezeGameplay = () => {
     handedOff = true;
     pending = []; pendingBytes = 0;
@@ -117,6 +160,7 @@
       try { url = new URL(args[0], window.location.href); } catch { return socket; }
       if (url.hostname !== 'pokeidle.io') return socket;
       latestSocket = socket;
+      raidTokensKnown = false; raidTokens = 0; raidRequestAt = 0;
       const session = crypto.randomUUID();
       const origSend = socket.send;
       socket.send = function(data) {
@@ -130,7 +174,12 @@
         } catch (_) {}
         return origSend.apply(this, arguments);
       };
-      socket.addEventListener('open', () => { if (socket === latestSocket) report(session, { t: 'reset' }); });
+      socket.addEventListener('open', () => {
+        if (socket === latestSocket) {
+          report(session, { t: 'reset' });
+          setTimeout(requestWeeklyRaid, 4_000);
+        }
+      });
       socket.addEventListener('close', () => { if (socket === latestSocket) report(session, { t: 'disconnected' }); });
       socket.addEventListener('message', message => {
         if (handedOff) { message.stopImmediatePropagation(); return; }
@@ -138,6 +187,7 @@
         try {
           const raw = JSON.parse(message.data), t = raw.t ?? raw.type, data = raw.data ?? raw;
           if (t === 'welcome') {
+            observeRaidTokens(data.estado);
             try {
               const sessToken = localStorage.getItem('sessao');
               const sessNick = localStorage.getItem('nick');
@@ -150,7 +200,11 @@
           }
           else if (t === 'campo' || t === 'campo.init') report(session, { t, data: { ...pick(data, ['slug','centro','pvp','casa','fora']), mobs: (data.mobs ?? []).map(m => pick(m,['s','x','xr'])) } });
           else if (t === 'batalha') report(session, { t, data: { ev: (data.ev ?? []).filter(e => ['bola','morte','bossMorto','capturado'].includes(e.k ?? e.t)).map(e => ({...pick(e,['k','t','ballId','slot','sucesso','quem','nome','ouro','valor','xp','xpTreinador','xpPokemon']), ...(Array.isArray(e.drops) ? {drops:e.drops.map(d => pick(d,['nome','qtd']))} : {}), ...(e.pokemon ? {pokemon:{...pick(e.pokemon,[...pokemonKeys,'pokeId','potency','grade','nota','iv_hp','iv_atk','iv_def','iv_spa','iv_spd','iv_spe']),ivs:pick(e.pokemon.ivs,['hp','atk','def','spAtk','spa','spDef','spd','speed','spe'])}} : {})})) } });
-          else if (t === 'estado') report(session, { t, data: player(data.estado ?? data) });
+          else if (t === 'estado') {
+            observeRaidTokens(data.estado ?? data);
+            report(session, { t, data: player(data.estado ?? data) });
+          }
+          else if (t === 'raid') onWeeklyRaid(data);
           else if (t === 'market') report(session, { t, data: { aba: data.aba, itemId: data.itemId, moeda: data.moeda, total: data.total, pagina: data.pagina, resumo: data.resumo, linhas: data.linhas, anuncio: data.anuncio } });
           else if (t === 'erro') report(session, { t, data: pick(data, ['chave','msg']) });
           else if (t === 'capturado') {

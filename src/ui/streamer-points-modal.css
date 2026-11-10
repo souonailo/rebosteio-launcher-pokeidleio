@@ -1,0 +1,105 @@
+/* A compact themed channel list, anchored to the HUD points. */
+.bsh-social-heading > .bsh-points-open {
+  appearance: none;
+  display: inline-block;
+  margin: 0;
+  padding: 1px 2px;
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border: 0;
+  border-bottom: 1px dashed currentColor;
+  border-radius: 3px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.bsh-social-heading > .bsh-twitch-points { color: #d8b4fe; }
+.bsh-social-heading > .bsh-kick-points { color: #ffc966; }
+.bsh-points-open:hover { background: rgba(174,192,246,.13); }
+.bsh-points-open:focus-visible { outline: 2px solid #d8b4fe; outline-offset: 2px; }
+
+.spm-popover {
+  --spm-accent: #c9a0ff;
+  position: fixed;
+  z-index: 100000;
+  width: min(310px, calc(100vw - 20px));
+  max-height: min(390px, calc(100vh - 20px));
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1px solid var(--border-strong, #526d97);
+  border-top: 2px solid var(--spm-accent);
+  border-radius: 11px;
+  background: var(--color-bg-elevated, #111b30);
+  color: var(--color-text-primary, #f3f6fc);
+  box-shadow: 0 14px 36px rgba(0,0,0,.4);
+  font: 12px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+.spm-popover[hidden] { display: none !important; }
+.spm-popover.is-kick { --spm-accent: #78dba8; }
+.spm-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--border-subtle, #3b5478);
+  background: var(--color-surface-1, #18243a);
+}
+.spm-headlines { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.spm-heading { color: var(--spm-accent); font-size: 12px; font-weight: 800; }
+.spm-summary { color: var(--color-text-muted, #9aabc5); font-size: 10px; }
+.spm-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--border-subtle, #3b5478);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-secondary, #c5d5ea);
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+.spm-close:hover { background: var(--color-surface-hover, #294565); }
+.spm-close:focus-visible { outline: 2px solid var(--spm-accent); }
+.spm-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 5px 8px 7px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong, #688dbb) transparent;
+}
+.spm-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 6px;
+  border-radius: 5px;
+  color: var(--color-text-secondary, #c5d5ea);
+  font-variant-numeric: tabular-nums;
+}
+.spm-row:nth-child(even) { background: var(--color-surface-1, #18243a); }
+.spm-row:hover { background: var(--color-surface-hover, #294565); }
+.spm-name { min-width: 0; overflow-wrap: anywhere; }
+.spm-value { flex: none; color: var(--color-text-muted, #9aabc5); font-size: 11px; }
+.spm-row.is-confirmed .spm-value { color: var(--spm-accent); font-weight: 750; }
+.spm-empty { padding: 18px 8px; text-align: center; color: var(--color-text-muted, #9aabc5); }
+@media (prefers-reduced-motion: no-preference) {
+  .spm-popover { animation: spm-pop .13s ease-out; }
+  @keyframes spm-pop { from { opacity: .45; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+}
