@@ -113,3 +113,15 @@ pokeidle_maps/
 
 # PIO: dados locais do fork (notas, extrações, logs e configurações por conta). Nunca versionar.
 claude/
+
+# Analisador do RMT local (não publicar o código nem os recursos)
+rust-migration/src-tauri/capabilities/rmt.json
+rust-migration/src-tauri/permissions/rmt.toml
+rust-migration/src-tauri/src/rmt/
+rust-migration/src-tauri/src/rmt_sprites.rs
+rust-migration/src-tauri/src/rmt_transport.js
+rust-migration/ui/rmt.html
+rust-migration/ui/src/ui/assets/rmt-*
+rust-migration/ui/src/ui/rmt-*
+test/fixtures/rmt-*
+test/rmt-*

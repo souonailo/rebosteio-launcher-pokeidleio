@@ -1426,3 +1426,37 @@ test('histórico do painel filtra exclusivamente compras confirmadas e formata i
   assert.equal(ingestedBatch.length, 1, 'Flush só deve enviar logs CONFIRMADO para o backend');
   assert.equal(ingestedBatch[0].id, 'win_1');
 });
+
+test('histórico do sniper separa sorteios confirmados de compras normais, recusas e falhas de rede', () => {
+  const bought = { id: 'ok_regular', status: 'CONFIRMADO', details: '✅ Entregue na mochila' };
+  const won = { id: 'ok_lottery', status: 'CONFIRMADO', lotteryResult: 'win', lotteryEvidence: 'mktSorteio' };
+  const oldWon = { id: 'ok_old', status: 'CONFIRMADO', details: '✅ Confirmado pelo servidor: Venceu o sorteio de liberação!' };
+  const oldVisualWon = { id: 'sorteio_ok_123_2', status: 'CONFIRMADO', details: 'Anúncio #12 · Regra: Pedra' };
+  const lost = { id: 'sorteio_perdeu_123_2', status: 'RECUSADO', details: '❌ Recusado pelo servidor' };
+  const explicitLost = { id: 'x1', status: 'RECUSADO', lotteryResult: 'loss' };
+  const oldServerLost = { id: 'err_1', status: 'RECUSADO', details: 'Recusado pelo servidor: market.sorteioPerdeu' };
+  const networkFailure = { id: 'err', status: 'RECUSADO', details: 'Timeout da conexão' };
+  const pending = { id: 'pending', status: 'PROGRESSO', details: '⏳ Sorteio de liberação: fase lista' };
+  assert.equal(SniperPanel.isLotteryWinLog(won), true);
+  assert.equal(SniperPanel.isLotteryWinLog(oldWon), true);
+  assert.equal(SniperPanel.isLotteryWinLog(oldVisualWon), true);
+  assert.equal(SniperPanel.isLotteryWinLog(bought), false);
+  assert.equal(SniperPanel.isLotteryWinLog(pending), false);
+  assert.equal(SniperPanel.isLotteryLossLog(lost), true);
+  assert.equal(SniperPanel.isLotteryLossLog(explicitLost), true);
+  assert.equal(SniperPanel.isLotteryLossLog(oldServerLost), true);
+  assert.equal(SniperPanel.isLotteryLossLog(networkFailure), false);
+  assert.equal(SniperPanel.isLotteryLossLog(pending), false);
+  assert.equal(SniperPanel.isLotteryLossLog(won), false);
+});
+
+test('data do sorteio exibe dia da semana e data, sem inventar data de registros antigos', () => {
+  const instant = Date.UTC(2026, 10, 9, 15, 30);
+  const dateMs = SniperPanel.formatSniperLogDate({ timestamp: instant });
+  const dateSec = SniperPanel.formatSniperLogDate({ timestamp: instant / 1000 });
+  assert.equal(dateMs, dateSec);
+  assert.match(dateMs, /09\/11\/2026/);
+  assert.match(dateMs, /segunda-feira/);
+  assert.equal(SniperPanel.formatSniperLogDate({}), 'Data indisponível');
+  assert.equal(SniperPanel.formatSniperLogDate({ timestamp: 'não é data' }), 'Data indisponível');
+});

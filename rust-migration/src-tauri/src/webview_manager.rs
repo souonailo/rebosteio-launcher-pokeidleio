@@ -284,6 +284,7 @@ impl WebviewManager {
             .initialization_script(crate::webview_memory::background_economy_script())
             .initialization_script(&session_script)
             .initialization_script(include_str!("hunt_session_bridge.js"))
+            .initialization_script(include_str!("rmt_transport.js"))
             .initialization_script(include_str!("gameplay_bridge.js"))
             .initialization_script(include_str!("../../ui/src/ui/inventory-state.js"))
             .initialization_script(include_str!("launcher_gameplay.js"))

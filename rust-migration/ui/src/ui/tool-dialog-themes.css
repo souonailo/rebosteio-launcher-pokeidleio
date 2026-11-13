@@ -1,0 +1,292 @@
+/* Tool dialogs use the same palette as the launcher. Keep status colors semantic. */
+/* The account summary inherits a fixed light skin from absol-theme.css. */
+body[data-theme] #stats {
+  color: var(--color-text-primary) !important;
+  border-color: var(--border-strong) !important;
+  background: var(--color-bg-elevated) !important;
+}
+body[data-theme] #stats .sb-top { background: var(--color-accent) !important; }
+body[data-theme] #stats :is(.st-head, .st-tabs, .st-body, .st-cfg) {
+  color: var(--color-text-primary) !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--color-surface-1) !important;
+}
+body[data-theme] #stats :is(.st-tab, .cfg-row, .cfg-search, .kpi.g, .kpi.b, .kpi.n, .sec .rt, .saldo) {
+  color: var(--color-text-primary) !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--color-surface-2) !important;
+}
+body[data-theme] #stats .st-tab.on {
+  color: var(--color-text-primary) !important;
+  background: var(--color-surface-selected) !important;
+}
+body[data-theme] #stats :is(.st-empty, .cfg-h, .cfg-grip, .r .l, .tl-sub, .it, .drop .dn,
+  .loc, .gl, .kl, .sec .lb, .cat .cn, .bg .bn) { color: var(--color-text-secondary) !important; }
+body[data-theme] #stats :is(.cfg-chk, .cfg-toggle, .r .v, .drop .dn b, .bg .bt,
+  .nm, .kv, .g4 .v, .sec .rt) { color: var(--color-text-primary) !important; }
+body[data-theme] #stats :is(.div, .baggrid) { background: var(--border-subtle) !important; }
+body[data-theme] #stats .bg { background: var(--color-surface-1) !important; }
+body[data-theme] #stats :is(.st-body, .st-cfg)::-webkit-scrollbar-thumb { background: var(--border-strong) !important; }
+body[data-theme] #stats :is(input[type=checkbox], input[type=radio]) { accent-color: var(--color-accent); }
+
+body[data-theme] :is(.pio-boss-overlay, #sniperOverlay, #depotSettingsDialog) {
+  color: var(--color-text-primary);
+  color-scheme: var(--theme-color-scheme, dark);
+  background: color-mix(in srgb, var(--color-bg-base) 82%, transparent);
+}
+
+/* Auto Boss: configuration and history share one dialog. */
+body[data-theme] .pio-boss-dialog {
+  color: var(--color-text-primary);
+  border-color: var(--border-strong);
+  background: var(--color-bg-elevated);
+}
+body[data-theme] :is(.pio-boss-head, .pio-boss-account-strip, .pio-boss-footer) {
+  border-color: var(--border-subtle);
+  background: var(--color-surface-1);
+}
+body[data-theme] :is(.pio-boss-catalog, .pio-boss-history-intro, .pio-boss-history-groups) { border-color: var(--border-subtle); }
+body[data-theme] .pio-boss-heading-icon {
+  color: var(--color-accent);
+  border-color: var(--border-strong);
+  background: var(--color-accent-soft);
+}
+body[data-theme] :is(.pio-boss-head h2, .pio-boss-section-head h3, .pio-boss-hero-copy h3,
+  .pio-boss-history-intro strong, .pio-boss-history-entry strong, .pio-boss-progress strong,
+  .pio-boss-supplies strong, .pio-boss-history-items strong, .pio-boss-profile-heading strong,
+  .pio-boss-profile-fields label) { color: var(--color-text-primary); }
+body[data-theme] :is(.pio-boss-head p, .pio-boss-account-meta small, .pio-boss-option-label small,
+  .pio-boss-data-note, .pio-boss-empty, .pio-boss-hero-copy p, .pio-boss-drop-info small,
+  .pio-boss-progress, .pio-boss-switch-line small, .pio-boss-mode small, .pio-boss-supplies,
+  .pio-boss-history-intro p, .pio-boss-history-groups span, .pio-boss-history-entry small,
+  .pio-boss-feedback, .pio-boss-profile-heading span, .pio-boss-profile-fields small,
+  .pio-boss-profile-bottom p) { color: var(--color-text-secondary); }
+body[data-theme] :is(.pio-boss-eyebrow, .pio-boss-account-num, .pio-boss-history-intro span,
+  .pio-boss-avatar, .pio-boss-hero-portrait) { color: var(--color-accent); }
+body[data-theme] :is(.pio-boss-view-tabs, .pio-boss-x, .pio-boss-search, .pio-boss-section-head > span,
+  .pio-boss-level, .pio-boss-tags span, .pio-boss-drop-icon, .pio-boss-history-items span) {
+  color: var(--color-text-secondary);
+  border-color: var(--border-subtle);
+  background: var(--color-surface-2);
+}
+body[data-theme] .pio-boss-view-tabs button { color: var(--color-text-secondary); }
+body[data-theme] .pio-boss-view-tabs button.is-active { color: var(--color-text-primary); background: var(--color-surface-selected); }
+body[data-theme] :is(.pio-boss-view-tabs button:hover:not(.is-active), .pio-boss-x:hover) {
+  color: var(--color-text-primary);
+  background: var(--color-surface-hover);
+}
+body[data-theme] :is(.pio-boss-account, .pio-boss-option, .pio-boss-drop, .pio-boss-switch-line,
+  .pio-boss-mode, .pio-boss-member, .pio-boss-history-groups button, .pio-boss-history-entry,
+  .pio-boss-refresh, .pio-boss-save, .pio-boss-once, .pio-boss-profile) {
+  color: var(--color-text-primary);
+  border-color: var(--border-subtle);
+  background: var(--color-surface-1);
+}
+body[data-theme] :is(.pio-boss-account.is-selected, .pio-boss-option.is-selected,
+  .pio-boss-mode.is-selected, .pio-boss-member.is-selected, .pio-boss-history-groups button.is-selected,
+  .pio-boss-save) {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-surface-selected);
+}
+body[data-theme] :is(.pio-boss-account:hover, .pio-boss-option:hover, .pio-boss-member:hover:not(:disabled),
+  .pio-boss-history-groups button:hover, .pio-boss-refresh:hover, .pio-boss-save:hover) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-hover);
+}
+body[data-theme] .pio-boss-option:disabled:hover { border-color: var(--border-subtle); background: var(--color-surface-1); }
+body[data-theme] :is(.pio-boss-avatar, .pio-boss-hero-portrait, .pio-boss-hero) {
+  border-color: var(--border-subtle);
+  background: var(--color-surface-2);
+}
+body[data-theme] :is(.pio-boss-search input, .pio-boss-limit input, .pio-boss-profile-fields select) {
+  color: var(--color-text-primary);
+  border-color: var(--border-subtle);
+  background: var(--color-bg-base);
+}
+body[data-theme] .pio-boss-search input { background: transparent; border: 0; }
+body[data-theme] .pio-boss-search input::placeholder { color: var(--color-text-muted); }
+body[data-theme] :is(.pio-boss-empty, .pio-boss-hero, .pio-boss-switch-line) { border-color: var(--border-subtle); }
+body[data-theme] .pio-boss-switch { background: var(--border-strong); }
+body[data-theme] .pio-boss-switch::before { background: var(--color-text-primary); }
+body[data-theme] .pio-boss-switch-line input:checked + .pio-boss-switch { background: var(--color-action-primary); }
+body[data-theme] .pio-boss-mode input { accent-color: var(--color-accent); }
+body[data-theme] .pio-boss-profile-bottom button { color: var(--color-text-primary); border-color: var(--color-accent); background: var(--color-surface-selected); }
+body[data-theme] .pio-boss-history-entry p { color: var(--color-text-secondary); }
+body[data-theme] :is(.pio-boss-list, .pio-boss-details, .pio-boss-drop-grid,
+  .pio-boss-history-groups, .pio-boss-history-list)::-webkit-scrollbar-thumb { background: var(--border-strong); }
+body[data-theme] :is(.pio-boss-dialog button, .pio-boss-dialog input, .pio-boss-dialog select):focus-visible { outline-color: var(--color-accent); }
+
+/* Depot settings previously had a fixed blue and gold palette. */
+body[data-theme] #depotSettingsDialog .depot-panel {
+  color: var(--color-text-primary);
+  border-color: var(--border-strong);
+  background: var(--color-bg-elevated);
+}
+body[data-theme] #depotSettingsDialog :is(h3, .depot-account-name) { color: var(--color-text-primary); }
+body[data-theme] #depotSettingsDialog :is(.depot-intro, .depot-section-label, .depot-account-state, .depot-footnote) { color: var(--color-text-secondary); }
+body[data-theme] #depotSettingsDialog :is(.depot-eyebrow, .depot-chip:first-child) { color: var(--color-accent); }
+body[data-theme] #depotSettingsDialog :is(.depot-close, .depot-chip, .depot-account) {
+  color: var(--color-text-secondary);
+  border-color: var(--border-subtle);
+  background-color: var(--color-surface-1);
+}
+body[data-theme] #depotSettingsDialog .depot-chip:first-child { border-color: var(--color-accent); background-color: var(--color-accent-soft); }
+body[data-theme] #depotSettingsDialog .depot-account[data-enabled=true] { border-color: var(--color-accent); background: var(--color-surface-selected); }
+body[data-theme] #depotSettingsDialog .depot-account input { border-color: var(--border-strong); background: var(--color-surface-2); }
+body[data-theme] #depotSettingsDialog .depot-account input::before { background: var(--color-text-secondary); }
+body[data-theme] #depotSettingsDialog .depot-account input:checked { border-color: var(--color-accent); background: var(--color-action-primary); }
+body[data-theme] #depotSettingsDialog .depot-account input:checked::before { background: var(--color-text-primary); }
+body[data-theme] #depotSettingsDialog .depot-account[data-enabled=true] .depot-account-state { color: var(--color-text-primary); }
+body[data-theme] #depotSettingsDialog .depot-footnote { border-color: var(--border-subtle); }
+body[data-theme] #depotSettingsDialog button:hover { background-color: var(--color-surface-hover); }
+body[data-theme] #depotSettingsDialog :is(button, input):focus-visible { outline-color: var(--color-accent); }
+
+/* Auto-Sniper already uses most launcher tokens; cover its remaining generic surfaces. */
+body[data-theme] #sniperModal { color: var(--color-text-primary); }
+body[data-theme] #sniperModal :is(.sniper-form-card, .sniper-history-entry, .sniper-rule-icon,
+  .sniper-autocomplete-list) { border-color: var(--border-subtle); }
+body[data-theme] #sniperModal :is(.sniper-form-card, .sniper-history-entry) { background: var(--color-surface-1); }
+body[data-theme] #sniperModal :is(input, select, textarea) { color-scheme: var(--theme-color-scheme, dark); accent-color: var(--color-accent); }
+body[data-theme] #sniperModal .sniper-btn.primary { color: var(--color-text-primary) !important; background: var(--color-action-primary) !important; border-color: var(--color-accent) !important; }
+body[data-theme] #sniperModal .sniper-btn.primary:hover:not(:disabled) { background: var(--color-action-primary-hover) !important; }
+body[data-theme] #sniperModal .sniper-btn.secondary { color: var(--color-text-primary); background: var(--color-surface-2); border-color: var(--border-subtle); }
+body[data-theme] #sniperModal .sniper-btn.secondary:hover:not(:disabled) { color: var(--color-text-primary); background: var(--color-surface-hover); }
+body[data-theme] #sniperModal .sniper-switch { background: var(--color-surface-2); border-color: var(--border-strong); }
+body[data-theme] #sniperModal .sniper-switch::before { background: var(--color-text-secondary); }
+body[data-theme] #sniperModal .sniper-switch:checked { background: var(--color-action-primary); border-color: var(--color-accent); }
+body[data-theme] #sniperModal .sniper-switch:checked::before { background: var(--color-text-primary); }
+
+/* Older tool dialogs still carry fixed Absol colors in their inner controls. */
+body[data-theme] :is(#scModal, #tlModal, #dtModal, #atModal, #dispatchModal)
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  color: var(--color-text-primary) !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--color-surface-1) !important;
+  color-scheme: var(--theme-color-scheme, dark);
+}
+body[data-theme] :is(#scModal, #tlModal, #dtModal, #atModal, #dispatchModal)
+  :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea):focus {
+  border-color: var(--color-accent) !important;
+  box-shadow: 0 0 0 2px var(--color-accent-soft) !important;
+}
+body[data-theme] :is(#scModal, #tlModal, #dtModal, #atModal, #dispatchModal)
+  :is(input, select, textarea, button):focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+body[data-theme] :is(#scModal, #tlModal, #dtModal, #atModal, #dispatchModal)
+  :is(input, select, textarea) { accent-color: var(--color-accent); }
+body[data-theme] :is(#scModal .sc-row, #tlModal .tl-row, #dtModal .tl-row) {
+  color: var(--color-text-primary);
+  border-color: var(--border-subtle);
+  background: var(--color-surface-1);
+}
+body[data-theme] :is(#scModal .sc-tag, #scModal .sc-meta, #tlModal .tl-sub, #dtModal .tl-sub) { color: var(--color-text-secondary); }
+body[data-theme] :is(#tlChips button.on, #dtCtl button.on) {
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-accent) !important;
+  background: var(--color-surface-selected) !important;
+}
+
+/* Hunt dispatch: its old component stylesheet hardcodes a complete blue skin. */
+body[data-theme] #dispatchModal {
+  color: var(--color-text-primary) !important;
+  border-color: var(--border-strong) !important;
+  background: var(--color-bg-elevated) !important;
+}
+body[data-theme] #dispatchModal :is(h2, .dispatch-acc-name, .dispatch-hunt-name) { color: var(--color-text-primary); }
+body[data-theme] #dispatchModal :is(.hint, .dispatch-sec-title, .dispatch-field label,
+  .dispatch-acc-metric-pill, .dispatch-selected-hunt-banner, .dispatch-matches,
+  .dispatch-outland-tier-desc) { color: var(--color-text-secondary); }
+body[data-theme] #dispatchModal :is(.dispatch-close, .dispatch-selected-count,
+  .dispatch-search-ico, .dispatch-selected-hunt-banner strong, .dispatch-hunt-check) { color: var(--color-accent); }
+body[data-theme] #dispatchModal :is(.dispatch-matches, .dispatch-status-bar, .dispatch-acc-card,
+  .dispatch-acc-avatar-wrap, .dispatch-acc-metric-pill, .dispatch-selected-hunt-banner,
+  .dispatch-hunts-cards-grid, .dispatch-hunt-card, .dispatch-hunt-img-wrap,
+  .dispatch-outland-tiers-row) {
+  border-color: var(--border-subtle);
+  background: var(--color-surface-1);
+}
+body[data-theme] #dispatchModal :is(.dispatch-acc-card:hover:not(.is-off), .dispatch-hunt-card:hover) {
+  border-color: var(--color-accent);
+  background: var(--color-surface-hover);
+}
+body[data-theme] #dispatchModal :is(.dispatch-acc-card.is-selected, .dispatch-hunt-card.is-selected,
+  .dispatch-selected-hunt-banner.has-selection) {
+  color: var(--color-text-primary);
+  border-color: var(--color-accent);
+  background: var(--color-surface-selected);
+  box-shadow: none;
+}
+body[data-theme] #dispatchModal :is(.dispatch-mini-btn, .dispatch-chip, .dispatch-tier-chip,
+  .dispatch-banner-outland-select),
+body[data-theme] #dispatchModal #dispatchCancel {
+  color: var(--color-text-secondary) !important;
+  border-color: var(--border-subtle) !important;
+  background: var(--color-surface-2) !important;
+  box-shadow: none !important;
+}
+body[data-theme] #dispatchModal :is(.dispatch-mini-btn:hover, .dispatch-chip:hover,
+  .dispatch-tier-chip:hover),
+body[data-theme] #dispatchModal #dispatchCancel:hover {
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-accent) !important;
+  background: var(--color-surface-hover) !important;
+}
+body[data-theme] #dispatchModal :is(.dispatch-chip.active, .dispatch-tier-chip.active) {
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-accent) !important;
+  background: var(--color-surface-selected) !important;
+  box-shadow: none !important;
+}
+body[data-theme] #dispatchModal button.primary {
+  color: var(--color-text-primary) !important;
+  border-color: var(--color-accent) !important;
+  background: var(--color-action-primary) !important;
+}
+body[data-theme] #dispatchModal button.primary:hover:not(:disabled) { background: var(--color-action-primary-hover) !important; }
+body[data-theme] #dispatchModal .dispatch-clear-btn { color: var(--color-text-secondary) !important; }
+body[data-theme] #dispatchModal .dispatch-clear-btn:hover { color: var(--color-text-primary) !important; }
+
+/* Auto Supply: the outer panel was themed, but several labels kept dark-theme ink. */
+body[data-theme] #autoSupplyModal :is(.supply-panel-title h3, .supply-rules-title h3,
+  .supply-rule-check, .supply-foot-opt) { color: var(--color-text-primary); }
+body[data-theme] #autoSupplyModal :is(.supply-rules-sub, .supply-input-field label) { color: var(--color-text-secondary); }
+body[data-theme] #autoSupplyModal :is(.supply-rule-check input, .supply-foot-opt input) { accent-color: var(--color-accent); }
+
+/* Status messages retain their meaning and readable contrast on light palettes. */
+body[data-theme-tone="light"] .pio-boss-notice.is-warning { color: #815315; }
+body[data-theme-tone="light"] .pio-boss-notice.is-alert { color: #9e2f3a; }
+body[data-theme-tone="light"] #sniperModal .sniper-banner.error { color: #a42b22; }
+
+/* Settings drawer: the layout label came from the fixed dark stylesheet. */
+body[data-theme] #leafSettingsDrawer .leaf-layout-setting { color: var(--color-text-primary); }
+
+/* Reward chart was a fixed blue and purple island inside the Boss history. */
+body[data-theme] .pio-boss-chart {
+  color: var(--color-text-primary);
+  border-color: var(--border-subtle);
+  background: var(--color-surface-1);
+}
+body[data-theme] :is(.pio-boss-chart-heading h4, .pio-boss-chart-row > span, .pio-boss-chart-row strong) { color: var(--color-text-primary); }
+body[data-theme] :is(.pio-boss-chart-heading span, .pio-boss-chart-empty, .pio-boss-chart-row small) { color: var(--color-text-secondary); }
+body[data-theme] .pio-boss-chart-track { background: var(--color-surface-2); }
+body[data-theme] .pio-boss-chart-track i { background: var(--color-accent); box-shadow: none; }
+body[data-theme-tone="light"] .pio-boss-history-warning { color: #815315; }
+body[data-theme] .pio-boss-chart-page :is(.pio-boss-temporal-chart, .pio-boss-chart-empty-state, .pio-boss-chart-battle, select) {
+  background: var(--color-surface-1);
+  border-color: var(--border-subtle);
+  color: var(--color-text-primary);
+}
+body[data-theme] .pio-boss-chart-page :is(h3, strong, p, label) { color: var(--color-text-primary); }
+body[data-theme] .pio-boss-chart-page :is(small, em, .pio-boss-chart-legend) { color: var(--color-text-secondary); }
+body[data-theme] .pio-boss-temporal-svg text { fill: var(--color-text-secondary); }
+body[data-theme] .pio-boss-temporal-svg line { stroke: var(--border-subtle); }
+body[data-theme] .pio-boss-temporal-svg polyline { stroke: var(--color-accent); }
+
+@media (max-width: 880px) {
+  #kickBonusModal .kick-global-card > .kick-global-row:nth-child(2) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+  #kickBonusModal .kick-global-card > .kick-global-row:nth-child(2) > * { max-width: 100%; }
+}

@@ -2618,6 +2618,8 @@
   <link rel="stylesheet" href="src/ui/streamer-points-modal.css">
   <link rel="stylesheet" href="src/ui/depot-settings.css">
   <link rel="stylesheet" href="src/ui/sniper-panel.css">
+  <link rel="stylesheet" href="src/ui/auto-boss-panel.css">
+  <link rel="stylesheet" href="src/ui/tool-dialog-themes.css">
   <script src="src/ui/runtime-performance.js"></script>
   <script src="src/ui/capture-value.js"></script>
   <script src="src/ui/auto-depot.js"></script>
@@ -2643,9 +2645,12 @@
   <script src="src/ui/theme-manager.js"></script>
   <script src="src/ui/kuromi-xp.js"></script>
   <script src="src/ui/inventory-state.js"></script>
+  <script src="src/ui/boss-history.js"></script>
+  <script src="src/ui/boss-item-catalog.js"></script>
   <script src="src/ui/battle-hud.js"></script>
   <script src="src/ui/streamer-points-modal.js"></script>
   <script src="src/ui/sniper-panel.js"></script>
+  <script src="src/ui/auto-boss-panel.js"></script>
 </head>
 
 <body>
@@ -5367,19 +5372,55 @@
       70083: "Mythic Bicycle", 70084: "Legendary Bicycle", 999999: "Diamantes"
     };
     const PIO_RARO_RE = /boss token|key fragment|fragmento de chave|shiny stone|bicicleta|bike|mega stone|fragmento de mega|tm disk|pe[çc]a de tm|mystic ticket|safari ticket|ovo shiny|shiny egg/i;
-    function pioTipoItem(nome) {
-      let n = String(nome || '').trim();
-      if (/^\d+$/.test(n)) {
-        const num = Number(n);
-        if (itensCache && itensCache[num] && itensCache[num].n) n = itensCache[num].n;
-        else if (PIO_STATIC_ITEMS[num]) n = PIO_STATIC_ITEMS[num];
+    // O catálogo do Sniper contém todos os itens rastreados. A classificação por
+    // nome antigo permanece como fallback para históricos de versões anteriores.
+    const PIO_CATS_RAROS = new Set(['tm', 'rare_loot', 'beast', 'casa', 'box', 'bicicleta', 'fragment', 'ticket']);
+    const pioNomeNormalizado = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
+    let pioCatalogRef = null, pioCatalogId = new Map(), pioCatalogNome = new Map();
+    function pioCatalogItem(nome) {
+      const itens = window.PioSniperPanel?.getState()?.itemsCatalog || window.__SNIPER_CATALOG__ || [];
+      if (itens !== pioCatalogRef) {
+        pioCatalogRef = itens; pioCatalogId = new Map(); pioCatalogNome = new Map();
+        for (const item of itens) {
+          if (!item || !item.name) continue;
+          if (Number.isSafeInteger(+item.id) && +item.id > 0) pioCatalogId.set(+item.id, item);
+          for (const nomeItem of [item.name, ...(Array.isArray(item.aliases) ? item.aliases : [])])
+            pioCatalogNome.set(pioNomeNormalizado(nomeItem), item);
+        }
       }
+      const chave = String(nome == null ? '' : nome).trim();
+      const id = /^(?:item\s*#\s*)?(\d+)$/i.exec(chave);
+      return id ? pioCatalogId.get(+id[1]) || null : pioCatalogNome.get(pioNomeNormalizado(chave)) || null;
+    }
+    function pioNomeItem(nome) {
+      const item = pioCatalogItem(nome);
+      if (item) return item.name;
+      const chave = String(nome == null ? '' : nome).trim();
+      const id = /^(?:item\s*#\s*)?(\d+)$/i.exec(chave);
+      if (!id) return chave;
+      const num = +id[1];
+      return (typeof itensCache !== 'undefined' && itensCache?.[num]?.n) || PIO_STATIC_ITEMS[num] || chave;
+    }
+    function pioTipoItem(nome) {
+      const item = pioCatalogItem(nome);
+      const n = pioNomeItem(nome);
+      if (item && PIO_CATS_RAROS.has(item.category)) return 'raro';
       if (PIO_RARO_RE.test(n)) return 'raro';
+      if (item?.category === 'stone') return 'pedra';
       if (/\bstone\b/i.test(n) && !/fragment|fragmento/i.test(n)) return 'pedra';
       return null;
     }
     let pioDrops = pioLer('pio-drops-v1', []);
     if (!Array.isArray(pioDrops)) pioDrops = [];
+    // Migra apenas registros existentes: nenhuma aquisição é inventada ao atualizar.
+    let pioDropsMigrados = false;
+    for (const drop of pioDrops) {
+      if (!drop || drop.item == null) continue;
+      const nome = pioNomeItem(drop.item), tipo = pioTipoItem(nome);
+      if (tipo && drop.tipo !== tipo) { drop.tipo = tipo; pioDropsMigrados = true; }
+      if (nome !== String(drop.item)) { drop.item = nome; pioDropsMigrados = true; }
+    }
+    if (pioDropsMigrados) pioGravar('pio-drops-v1', pioDrops);
     const pioDropsUlt = {};
     let pioPrecos = {};
     let pioRmt = pioLer('pio-rmt-means-v1', { at:0, items:{} });
@@ -5398,6 +5439,7 @@
       const p = pioPrecos[String(nome || '').toLowerCase()]; if (!p) return null; const coinsBruto = p[2] || p[1] || 0, gemasBruto = p[4] || p[3] || 0;
       return { coins: pioLiquidoVenda(coinsBruto), gemas: pioLiquidoVenda(gemasBruto), coinsBruto, gemasBruto }; }
     function pioRegistrarDrop(conta, nick, item, qtd, origem, extra = {}) {
+      item = pioNomeItem(item);
       const tipo = pioTipoItem(item);
       if (!tipo || !(qtd > 0)) return;
       const ev = { t: Date.now(), conta, nick, item, qtd, tipo, origem, ...extra };
@@ -5415,17 +5457,18 @@
     }
     function pioDropsTrack(conta, d) {
       if (!d || !d.sess) return;
+      if (d.sockOk === false) { delete pioDropsUlt[conta]; return; }
       const st = d.sess.st, cur = {};
       for (const [k, v] of Object.entries(d.drops || {})) {
         if (/^\d+$/.test(k) && v && v.name && d.drops[v.name]) continue;
-        const nm = (v && v.name) || k;
+        const nm = pioNomeItem((v && v.name) || k);
         cur[nm] = (cur[nm] || 0) + (+(v && v.qty) || 0);
       }
       const ult = pioDropsUlt[conta];
-      pioDropsUlt[conta] = { st, cur };
-      if (!ult) return; // primeira leitura depois de abrir: vira base (não conta a sessão restaurada)
-      const mesma = ult.st === st;
-      for (const nm in cur) { const dq = cur[nm] - (mesma ? (ult.cur[nm] || 0) : 0); if (dq > 0) pioRegistrarDrop(conta, d.nick, nm, dq, 'drop', { hunt: d.slug || '' }); }
+      pioDropsUlt[conta] = { st, nick: d.nick, cur };
+      // Primeira leitura, troca de sessão ou de personagem: o total recebido é uma nova base, não um drop.
+      if (!ult || ult.st !== st || ult.nick !== d.nick) return;
+      for (const nm in cur) { const dq = cur[nm] - (ult.cur[nm] || 0); if (dq > 0) pioRegistrarDrop(conta, d.nick, nm, dq, 'drop', { hunt: d.slug || '' }); }
     }
     function pioDropsDesde(dias) { const t0 = new Date(); t0.setHours(0, 0, 0, 0); return +t0 - (dias ? (dias - 1) * 86400000 : 0); }
     function pioDropsResumo(dias) {
@@ -5502,10 +5545,125 @@
         passeDias: (() => { try { const m = ((document.querySelector('.game-hud-tl') || document.body).textContent || '').match(/Passe Premium\\s*(\\d+)\\s*dias/i); return m ? +m[1] : null; } catch (x) { return null; } })(),
         topCatch: e.topCatch ? { s: e.topCatch.s, n: e.topCatch.n } : null,
         rankCatch: (() => { try { const a = JSON.parse(localStorage.getItem('pio-autodex-v021') || 'null'); return a && a.rankCatch ? a.rankCatch : null; } catch (x) { return null; } })(),
-        sniper: Array.isArray(logs) ? logs.slice(0, 40).map(l => ({ id: l.id, t: l.timestamp, s: l.status, n: l.targetName, p: l.price, m: l.currency, q: l.qty, o: l.offerId })) : [] };
+        sniper: Array.isArray(logs) ? logs.slice(0, 80).map(l => ({
+          id: l.id, t: l.timestamp || l.time, s: l.status, n: l.targetName || l.item,
+          p: l.price, m: l.currency, q: l.qty, o: l.offerId, details: l.details,
+          lotteryResult: l.lotteryResult || l.sorteioResultado, seller: l.seller
+        })) : [] };
     })()`;
     const pioEstado = {};
     const pioSniperUlt = {};
+    function pioNormalizarSniperLog(raw) {
+      if (!raw || typeof raw !== 'object') return null;
+      const tempo = Number(raw.t ?? raw.timestamp ?? raw.time ?? 0);
+      const t = tempo > 0 && Number.isFinite(tempo) ? (tempo < 1e12 ? tempo * 1000 : tempo) : 0;
+      let nomeBruto = String(raw.n || raw.targetName || raw.item || '').trim();
+      if (/^(?:Item\s*#\d+|Pedras|TMs|Loots Raros|Beast Balls|Casas|Boxes|Bicicletas|Fragmentos|Tickets)$/i.test(nomeBruto)) {
+        const descr = String(raw.details || raw.detalhes || '');
+        const encontrado = /Confirmado pelo servidor:\s*(.+)$/i.exec(descr);
+        const exato = (encontrado ? encontrado[1] : '').split('·')[0].replace(/^\s*\d+\s*[x×]\s*/i, '').trim();
+        if (exato && !/^(?:An[uú]ncio\s*#|Entregue|Venceu o sorteio)/i.test(exato)) nomeBruto = exato;
+      }
+      const qtdNome = /^(\d+)\s*[x×]\s*/i.exec(nomeBruto);
+      const qtd = Number(raw.q ?? raw.qty);
+      return {
+        id: String(raw.id || ''), t,
+        s: String(raw.s || raw.status || '').toUpperCase(),
+        n: pioNomeItem(nomeBruto.replace(/^\d+\s*[x×]\s*/i, '')) || 'Item',
+        q: Number.isFinite(qtd) && qtd > 0 ? Math.floor(qtd) : (qtdNome ? +qtdNome[1] : 1),
+        p: raw.p ?? raw.price ?? null, m: raw.m || raw.currency || 'gold',
+        o: raw.o ?? raw.offerId ?? null,
+        details: String(raw.details || raw.detalhes || ''),
+        lotteryResult: String(raw.lotteryResult || raw.sorteioResultado || '').toLowerCase()
+      };
+    }
+    function pioResultadoSorteio(l) {
+      const ganhou = l.s === 'CONFIRMADO' || l.s === 'OK';
+      const perdeu = l.s === 'RECUSADO' || l.s === 'PERDIDO';
+      if (l.lotteryResult) {
+        if (ganhou && ['won', 'win', 'ganho'].includes(l.lotteryResult)) return 'vitoria';
+        if (perdeu && ['lost', 'loss', 'perdido'].includes(l.lotteryResult)) return 'derrota';
+        return null;
+      }
+      // IDs gerados exclusivamente nos ramos terminais de sorteio dos scripts visuais.
+      if (ganhou && /^sorteio_ok_/.test(l.id)) return 'vitoria';
+      if (perdeu && /^sorteio_perdeu_/.test(l.id)) return 'derrota';
+      if (ganhou && /venceu o sorteio/i.test(l.details)) return 'vitoria';
+      if (perdeu && /market\.sorteioperdeu|outro jogador levou (?:no |o )?sorteio|perdeu o sorteio/i.test(l.details)) return 'derrota';
+      return null;
+    }
+    function pioProcessarSniperLogs(conta, nick, rawLogs) {
+      if (!Array.isArray(rawLogs) || !rawLogs.length) return;
+      if (!pioAv.vistos || typeof pioAv.vistos !== 'object') pioAv.vistos = {};
+      const vistos = pioAv.vistos[conta] = Array.isArray(pioAv.vistos[conta]) ? pioAv.vistos[conta] : [];
+      // Histórico visual e nativo compartilham a chave estável do anúncio/estado.
+      // Um limite temporal persiste além dos IDs retidos; reler 500+ logs não cria
+      // avisos novos quando a lista do armazenamento antigo já foi truncada.
+      if (!pioAv.sniperVistos || typeof pioAv.sniperVistos !== 'object') pioAv.sniperVistos = {};
+      const registro = pioAv.sniperVistos[conta] = pioAv.sniperVistos[conta] || { ate: 0, chaves: [] };
+      if (!Array.isArray(registro.chaves)) registro.chaves = [];
+      registro.ate = Number(registro.ate) || 0;
+      const chaves = new Set(registro.chaves.map(e => e.k));
+      let mudou = false;
+      const logs = rawLogs.map(pioNormalizarSniperLog).filter(Boolean).sort((a, b) => a.t - b.t);
+      for (const l of logs) {
+        if (!l.t || l.t < pioInicio - 60000) continue;
+        const sorteio = pioResultadoSorteio(l);
+        const id = l.id ? 's' + l.id : '';
+        const estadoChave = sorteio === 'derrota' ? 'SORTEIO_PERDIDO' : (l.s === 'OK' ? 'CONFIRMADO' : l.s);
+        const chaveAnuncio = l.o != null && l.o !== '' ? 'sn:' + l.o + ':' + estadoChave : id || 'sn:legacy:' + l.t + ':' + estadoChave + ':' + l.n;
+        if (l.t <= registro.ate || chaves.has(chaveAnuncio) || (id && vistos.includes(id)) || vistos.includes(chaveAnuncio)) continue;
+        registro.chaves.push({ k: chaveAnuncio, t: l.t });
+        chaves.add(chaveAnuncio);
+        mudou = true;
+        const par = l.o != null ? logs.find(x => x.o === l.o && Number(x.p) > 0) : null;
+        const preco = Number(l.p || par?.p) > 0 ? Number(l.p || par?.p) : null;
+        const moedaBruta = l.p ? l.m : (par?.m || l.m);
+        const gemas = /^(orb|orbs|gem|gems|gema|gemas|diamond|diamonds)$/i.test(moedaBruta);
+        const moeda = gemas ? 'gemas' : 'Coins';
+        const valor = preco ? ' por ' + pioNum(preco) + ' ' + moeda : '';
+        const anuncio = l.o != null ? ' (anúncio #' + l.o + ')' : '';
+        if (sorteio === 'derrota') {
+          pioAvisar(conta, 'Sniper', 'perdeu o sorteio de ' + l.q + '× ' + l.n + anuncio, 'aviso', l.t);
+          pioCsvLinha('sniper/perdas.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t), conta, nick, l.n, l.q, preco || '', moeda, l.o ?? l.id]);
+        } else if (sorteio === 'vitoria' || l.s === 'CONFIRMADO' || l.s === 'OK') {
+          pioAvisar(conta, 'Sniper', (sorteio === 'vitoria' ? 'venceu o sorteio e comprou ' : 'comprou ') + l.q + '× ' + l.n + valor + anuncio, 'ok', l.t);
+          pioRegistrarDrop(conta, nick, l.n, l.q, 'sniper', { preco, moeda });
+          pioCsvLinha('sniper/compras.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t), conta, nick, l.n, l.q, preco || '', moeda, l.o ?? l.id]);
+        } else if (l.s === 'PERDIDO') {
+          // Legado: PERDIDO pode indicar uma oportunidade; não afirmar derrota no sorteio sem evento terminal.
+          pioCsvLinha('sniper/perdas.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t), conta, nick, l.n, l.q, preco || '', moeda, l.o ?? l.id]);
+        } else {
+          const nomes = { SALDO_INSUFICIENTE: 'sem saldo para', RECUSADO: 'compra recusada de', SLOTS_LOTADOS: 'slots lotados ao comprar' };
+          const prefixo = nomes[l.s];
+          if (!prefixo) continue;
+          const ch = conta + '|' + l.s + '|' + l.n, ultima = pioSniperUlt[ch] || 0;
+          if (Date.now() - ultima > 30 * 60000) {
+            pioSniperUlt[ch] = Date.now();
+            pioAvisar(conta, 'Sniper', prefixo + ' ' + l.q + '× ' + l.n + valor, 'aviso', l.t);
+          }
+        }
+      }
+      if (mudou) {
+        if (registro.chaves.length > 800) {
+          registro.chaves.sort((a, b) => a.t - b.t);
+          const antigos = registro.chaves.splice(0, registro.chaves.length - 800);
+          registro.ate = Math.max(registro.ate, antigos[antigos.length - 1].t);
+        }
+        pioGravar(PIO_AV_KEY, pioAv);
+      }
+    }
+    function pioReceberSniperSnapshot(snapshot) {
+      for (const contaState of snapshot?.accounts || []) {
+        const indice = Number(contaState.index);
+        if (!Number.isInteger(indice) || indice < 0 || indice >= 4) continue;
+        const conta = indice + 1;
+        pioProcessarSniperLogs(conta, pioUltimo[conta]?.nick || '', contaState.logs);
+      }
+    }
+    if (typeof window.pokeAPI?.onSniperUpdated === 'function') {
+      window.pokeAPI.onSniperUpdated(pioReceberSniperSnapshot).catch(() => {});
+    }
     window.getPioHeadlessColeta = function(i) {
       const conta = i + 1;
       const antes = (typeof pioUltimo !== 'undefined' && pioUltimo[conta]) || {};
@@ -5680,33 +5838,7 @@
           pioCsvLinha('diagnostico/atrasos.csv', ['dataHora', 'conta', 'nick', 'atrasoMs', 'jogoOculto', 'autodexRodando', 'testeRodando'], [pioDataHora(x.t), conta, d.nick, x.atraso, x.oculto ? 'sim' : 'nao', x.autodex ? 'sim' : 'nao', x.teste ? 'sim' : 'nao']);
           if (x.atraso > 10000 && (x.autodex || x.teste)) { const ch = conta + '|lag'; if (Date.now() - (pioSniperUlt[ch] || 0) > 30 * 60000) { pioSniperUlt[ch] = Date.now(); pioAvisar(conta, 'Diagnóstico', 'scripts atrasaram ' + Math.round(x.atraso / 1000) + ' s' + (x.oculto ? ' com o jogo oculto' : '') + (x.autodex ? ' (AutoDex rodando)' : ' (teste rodando)') + '.', 'aviso', x.t); } }
         }
-        const nomes = { CONFIRMADO: ['comprou', 'ok'], SALDO_INSUFICIENTE: ['sem saldo para', 'aviso'], RECUSADO: ['compra recusada de', 'aviso'], SLOTS_LOTADOS: ['slots lotados ao comprar', 'aviso'] };
-        const logsSn = d.sniper || [];
-        for (const l of logsSn.slice().sort((x, y) => (x.t || 0) - (y.t || 0))) {
-          if (l.s === 'PERDIDO') {
-            if (novo('s' + l.id, l.t)) { const nomeP = String(l.n || 'item').replace(/^\d+\s*[x×]\s*/i, '');
-              pioCsvLinha('sniper/perdas.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t || Date.now()), conta, d.nick, nomeP, l.q || 1, l.p || '', l.m === 'orb' ? 'gemas' : 'Coins', l.o != null ? l.o : l.id]); }
-            continue;
-          }
-          const k = nomes[l.s];
-          if (!k) { novo('s' + l.id, 0); continue; }
-          if (novo('s' + l.id, l.t)) {
-            // A confirmação nem sempre traz preço e moeda: pega do agendamento/disparo do mesmo anúncio.
-            const par = l.o != null ? logsSn.find(x => x.o === l.o && x.p) : null;
-            const preco = l.p || (par && par.p) || null, moeda = (l.p ? l.m : par && par.m) || l.m;
-            const nome = String(l.n || 'item').replace(/^\d+\s*[x×]\s*/i, '');
-            const msg = k[0] + ' ' + (l.q || 1) + 'x ' + nome + (preco ? ' por ' + pioNum(preco) + ' ' + (moeda === 'orb' ? 'gemas' : 'Coins') : '');
-            if (l.s === 'CONFIRMADO') {
-              pioAvisar(conta, 'Sniper', msg, k[1], l.t || Date.now());
-              pioRegistrarDrop(conta, d.nick, nome, +l.q || 1, 'sniper', { preco, moeda: moeda === 'orb' ? 'gemas' : 'Coins' });
-              pioCsvLinha('sniper/compras.csv', ['dataHora', 'conta', 'nick', 'item', 'qtd', 'preco', 'moeda', 'anuncio'], [pioDataHora(l.t || Date.now()), conta, d.nick, nome, l.q || 1, preco, moeda === 'orb' ? 'gemas' : 'Coins', l.o != null ? l.o : l.id]);
-            } else {
-              // Sem saldo / recusado / slots: um aviso por item a cada 30 min (o Sniper repete várias vezes por segundo).
-              const ch = conta + '|' + l.s + '|' + nome, st0 = pioSniperUlt[ch] || 0;
-              if (Date.now() - st0 > 30 * 60000) { pioSniperUlt[ch] = Date.now(); pioAvisar(conta, 'Sniper', msg, k[1], l.t || Date.now()); }
-            }
-          }
-        }
+        pioProcessarSniperLogs(conta, d.nick, d.sniper);
         if (vistos.length > 400) vistos.splice(0, vistos.length - 400);
         if (mudou) pioGravar(PIO_AV_KEY, pioAv);
         // Conta parada: desconectada, sem abates na hunt ou esquecida no Centro.
@@ -5719,6 +5851,14 @@
         }
         if (d.sockOk && d.noCentro) { st.centro = st.centro || agora; if (!st.centroAv && agora - st.centro > 10 * 60000) { st.centroAv = true; pioAvisar(conta, 'Grid', 'parada no Centro desde ' + pioHora(st.centro) + '.', 'aviso', agora); } }
         else { st.centro = 0; st.centroAv = false; }
+      }
+      // O supervisor nativo continua coletando o Sniper em Headless, mesmo sem WebView.
+      // Processar depois do visual preserva deduplicação entre os dois registros do mesmo anúncio.
+      if (typeof window.pokeAPI?.sniperGetState === 'function') {
+        try {
+          const snapshot = await window.pokeAPI.sniperGetState();
+          pioReceberSniperSnapshot(snapshot);
+        } catch (e) { /* A leitura visual prossegue se o estado nativo estiver indisponível. */ }
       }
       pioKickChip();
       if (document.getElementById('pioMetasPanel')?.classList.contains('show')) pioRenderMetas();
@@ -10071,7 +10211,10 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
       autoRaidBtn.title = t('autoRaidTitle');
       autoRaidBtn.classList.toggle('on', autoRaidOn);
       lsSet('autoRaid', autoRaidOn ? '1' : '0');
-      Promise.resolve(window.pokeAPI?.blasterAutoRaid?.(autoRaidOn)).catch(() => {});
+      Promise.resolve(window.pokeAPI?.blasterAutoRaid?.(autoRaidOn)).catch((error) => {
+        console.error('Falha ao salvar inscrição automática no boss semanal:', error);
+        autoRaidBtn.title = String(error?.message || error || 'Falha ao salvar a configuração');
+      });
       webviews.forEach((wv, i) => {
         if (!wv || off[i]) return;
         wv.executeJavaScript('window.__idleioAutoRaidEnabled=' + (autoRaidOn ? 'true' : 'false')).catch(() => {});
@@ -12892,7 +13035,8 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
         const alvo = pioAlvo();
         const blocos = ordered.map(r => {
           const d = pioD[r.i], u = pioUltimo[r.i + 1] || {}, main = r.i === 0, cor = main ? pioCorMain : pioCorAlt;
-          const tierLine = '<div class="cd-outland-tier" style="font-size:11px;color:var(--cd-secondary, #adbac7);margin:4px 0 6px">' + esc(window.PioBattleHud.outlandTierLabel(d)) + '</div>';
+          const outlandTier = window.PioBattleHud.outlandTierLabel(d);
+          const tierLine = outlandTier ? '<div class="cd-outland-tier" style="font-size:11px;color:var(--cd-secondary, #adbac7);margin:4px 0 6px">' + esc(outlandTier) + '</div>' : '';
           if (!d || r.st !== 'on') return '<div style="border:1px solid var(--cd-border, #30363d);border-radius:10px;padding:10px;opacity:.6"><b>' + esc(r.name) + '</b> · ' + (r.st === 'off' ? t('cdOff') : t('cdWaiting')) + tierLine + '</div>';
           const z = pioSess(r.i), cd = pioLeitura[r.i] || {};
           const at = cd.ativo, ld0 = (d.team || []).find(p => p && p.ld) || (d.team || [])[0] || null;
@@ -13044,10 +13188,11 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const stTxt = r.st === 'off' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdOff') + '</span>'
             : r.st === 'wait' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdWaiting') + '</span>'
               : '<span style="color:var(--cd-positive, #3fb950)">' + t('cdHunting') + '</span>' + folegoTxt(r); // o pokémon em uso agora tem coluna própria
+          const outlandTier = window.PioBattleHud.outlandTierLabel(stCache[r.i]?.d);
           const pioVelho = (r.velho || 0) > 60000;
           s += '<tr data-i="' + r.i + '"' + (pioVelho ? ' style="opacity:.5" title="Dado antigo: a última leitura desta conta falhou"' : '') + '><td><span class="cd-dot" style="background:' + r.dot + '"></span>' + esc(r.name) + (pioVelho ? ' <span style="font-size:10px;color:var(--cd-muted, #7d8590)">lido há ' + Math.round(r.velho / 60000) + ' min</span>' : '') + '</td>'
             + '<td>' + (r.lead ? (r.lead.shiny ? '✨ ' : '') + esc(r.lead.name) + ' <b style="color:var(--cd-secondary, #adbac7)">Lv' + nf(r.lead.level) + '</b>' : '—') + '</td>'
-            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + '<div class="cd-outland-tier">' + esc(window.PioBattleHud.outlandTierLabel(stCache[r.i]?.d)) + '</div></td>'
+            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + (outlandTier ? '<div class="cd-outland-tier">' + esc(outlandTier) + '</div>' : '') + '</td>'
             + '<td style="color:var(--cd-secondary, #adbac7)">' + (r.st === 'on' ? tsec(r.secs) : '—') + '</td>'
             + '<td style="color:' + ((r.gph || 0) < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (r.st === 'on' ? ((r.secs || 0) >= 3600 ? ncs(r.gph) : '<span style="opacity:.65" title="Ouro por hora só depois de 1 h na mesma hunt">medindo ' + Math.floor((r.secs || 0) / 60) + ' min</span>') : '—') + '</td>'
             + '<td style="color:var(--cd-xp, #79c0ff)">' + (r.st === 'on' ? nc(r.xph) : '—') + '</td>'

@@ -100,6 +100,45 @@ const category = {id: 'stones', targetType: 'category', targetCategory: 'stone',
 const pokemon = (id, extra = {}) => ({id, tipo: 'pokemon', pokemonNome: 'Pikachu', preco: 100, moeda: 'gold', qtd: 1, ficha: {speciesId: 25, nome: 'Pikachu'}, ...extra});
 const presets = ['rust-migration/ui/presets/auto-sniper.js', 'rust-migration/presets/auto-sniper.js'];
 for (const preset of presets) {
+  test(preset + ': manual coordination distinguishes concurrent automatic offers and their ACKs', () => {
+    const h=harness(preset,{},[{...category,maxQty:10}]);
+    h.offers([985,986].map(id=>({id,tipo:'item',itemId:142,preco:100,moeda:'gold',qtd:1})));
+    assert.equal(h.sent.filter(x=>x.t==='market.comprar').length,2);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),true);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(986),true);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(123),false);
+    h.receive({t:'marketComprado',id:986,qtd:1});
+    assert.equal(h.ctx.__rotomSniperHasInFlight(986),false);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),true);
+    h.receive({t:'marketComprado',id:123,qtd:1});
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),true);
+    h.receive({t:'erro',id:985,op:'centro.curar',chave:'saldo_insuficiente'});
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),true);
+    h.receive({t:'marketComprado',id:985,qtd:1});
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),false);
+  });
+  test(preset + ': manual RMT coordination preserves enabled rules and holds automatic in-flight state', () => {
+    const h = harness(preset, {}, [category]);
+    const ruleBefore = JSON.stringify(h.ctx.__engine.sniperState.rules);
+    const offer={id:985,tipo:'item',itemId:142,preco:100,moeda:'gold',qtd:1};
+    h.ctx.__idleioRmtManualBusy=Infinity;
+    h.offers([offer]);
+    assert.equal(h.sent.some(x=>x.t==='market.comprar'),false);
+    assert.equal(h.ctx.__engine.sniperState.enabled,true);
+    assert.equal(JSON.stringify(h.ctx.__engine.sniperState.rules),ruleBefore);
+    h.ctx.__idleioRmtManualBusy=0;
+    h.advance(1600); // Let the existing cancelled retry window settle.
+    h.offers([offer]);
+    assert.equal(h.sent.find(x=>x.t==='market.comprar')?.id,985);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(),true);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(985),true);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(123),false,'Another offer must remain available for manual purchase');
+    h.advance(60000);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(),true,'Time alone does not confirm an automatic purchase outcome');
+    h.receive({t:'marketComprado',id:985,qtd:1});
+    assert.equal(h.ctx.__rotomSniperHasInFlight(),false);
+    assert.equal(h.ctx.__engine.sniperState.enabled,true);
+  });
   test(preset + ': item-detail envelope currency cannot be interpreted as Coins', () => {
     const rule={...category,targetType:'item',targetId:142,targetName:'Water Stone',maxPriceGold:100,maxPriceGems:0};
     const packet={t:'market',aba:'item',itemId:142,moeda:'orb',linhas:[{id:950,preco:2,qtd:1,ficha:{nome:'Water Stone'}}]};

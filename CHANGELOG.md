@@ -1,3 +1,293 @@
+## 2.0.129
+
+- Modo infinito com boss fixo usa o automático nativo do jogo para lotes de duas ou mais entradas e rearma quando novos tokens chegam; uma entrada, distribuição entre bosses e reserva da raid continuam sob controle individual.
+- Auto Boss respeita o aviso de intervalo `boss.esperaProximo` e retoma após o prazo do servidor, sem bloquear a próxima batalha como resultado incerto. Mantém a proteção contra entradas sem confirmação.
+- Preserva a caça original ao repetir bosses e informa no painel quando aguarda o intervalo entre batalhas.
+- Refaz a preparação se a conta sair do Centro após a cura, inclusive durante a retomada do launcher; trata a recusa explícita de localização sem deixar uma entrada travada.
+
+## 2.0.128
+
+- Mantém as contas disponíveis para compra manual mesmo quando o Sniper aguarda outra oferta; reserva temporariamente os novos envios sem desativar regras. Impede apenas repetir o mesmo anúncio ainda sem confirmação.
+
+## 2.0.127
+
+- Filtros de AOE e faixa de refino na própria janela do RMT; atributos ausentes permanecem desconhecidos. Reconsulta o histórico de Pokémon para completar os novos campos sem duplicar vendas.
+- Ordenação do radar por preço unitário, nível, refino e demais atributos, exibindo o anúncio correspondente ao critério escolhido.
+- Compra manual na conta selecionada em modo visual ou Headless, com Sniper ativo; coordena as ordens sem alterar suas regras e mantém a consulta atualizada e a confirmação explícita.
+
+## 2.0.126
+
+- Confere preço por unidade, total do lote e moeda no RMT; descontos extremos, amostras pequenas e anúncios antigos recebem avisos em vez de indicação de oportunidade.
+- Compra manual pelo analisador com seleção entre as quatro contas em Headless, consulta atual do anúncio, cotação com prazo e confirmação explícita; resultado depende da resposta do servidor.
+- Alertas persistentes para Pokémon com filtros combinados e preço máximo vinculado à moeda, avaliados com o analisador aberto.
+- Anúncios retidos com contagem regressiva e bloqueio de compra durante a retenção; atualização das ofertas do ativo selecionado.
+
+## 2.0.125 — Histórico e comparáveis do RMT
+
+- Consulta o histórico anterior por ativo na Tabela de Preços do RMT, com retomada, progresso e indicação do limite de páginas imposto pelo servidor.
+- Restaura os filtros na própria janela e combina Shiny, Mega e Potência 5 com os demais campos de comparação.
+- Resolve sprites pela espécie e pela forma atual, incluindo Shiny Mega, e recupera os ícones dos favoritos entre moedas.
+- Separa negócios, unidades vendidas, anúncios ativos e unidades anunciadas; mostra comprador e vendedor quando informados pelo RMT.
+- Permite análise do preço em amostras intradiárias consistentes, mantendo explícitos os limites de cobertura e de tendência. Atualiza metadados de vendas sem duplicá-las.
+
+## 2.0.124 — 2026-11-10
+
+- Adiciona Auto Boss por demanda: fixa a meta pelo saldo de tokens ao iniciar, conta entradas mesmo em derrotas e retorna à hunt ao concluir.
+- Adiciona Auto Boss infinito: permanece ativo durante a hunt e volta ao boss quando houver tokens disponíveis.
+- Permite escolher boss fixo ou distribuir entradas por porcentagens, com sequência intercalada e contadores por boss em cada conta.
+- Preserva as confirmações de entrada, as proteções de reconexão e o retorno ao Pokémon principal.
+
+## 2.0.123 — Radar e fluxo diário do RMT
+
+- Reorganiza a janela com gráfico dominante, radar lateral e favoritos fixos, sem rolagem da página. Comparáveis e filtros abrem em painéis próprios.
+- Acrescenta gráfico de medianas, velas com volume, faixa central dos preços e gráfico diário de entradas, retiradas e vendas confirmadas.
+- Registra em SQLite o fluxo observado de ofertas de itens, com baseline inicial, cobertura diária, retomada e proteção contra lacunas e duplicações. Retiradas não são tratadas como vendas.
+- Explica descontos, evolução do preço e da demanda, estoque relativo às vendas e qualidade da amostra. Sinais dependem de histórico contínuo e negócios recentes; não representam previsão garantida nem lucro líquido de taxas.
+
+## 2.0.122 — 2026-11-10
+
+- Valida a página dedicada antes de abrir o Analisador do RMT, evitando carregar o launcher como fallback de um pacote incompleto.
+- Recompila os recursos nativos quando a interface muda e expõe diagnóstico limitado da conta coletora e dos lotes de histórico gravados.
+
+## 2.0.121 — Analisador do RMT
+
+- Abre em Ferramentas a bolsa de ofertas e vendas entre jogadores, com histórico local, filtros de ficha, comparáveis, favoritos e volumes em Gemas ou Coins.
+- Coleta pela sessão conectada e retoma a paginação após reconexão. Cada gráfico informa a cobertura observada e a origem dos preços.
+- Restabelece o processamento das mensagens de jogo em contas headless também na compilação de release.
+
+## 2.0.120 — Gráfico lateral ao vivo
+
+- Mostra a vida, ataques e tempo na lateral direita da Central de Auto Boss enquanto a batalha acontece.
+
+## 2.0.119 — Indicador e histórico de batalhas
+
+- Registra o tempo entre a entrada e o resultado de cada batalha de boss e apresenta os dados no histórico.
+- Corrige a leitura da vida do boss quando a arena informa somente a chave e o slot ou o campo envia HP fracionário.
+- Adiciona a aba Gráficos à Central de Auto Boss para explorar os resultados por conta, boss e recompensa.
+
+## 2.0.118 — Escalação por boss e retorno ao Pokémon principal
+
+- Permite escolher e salvar um Pokémon principal e um combatente para cada boss, inclusive quando são o mesmo Pokémon.
+- Aguarda a confirmação da troca para o combatente antes de entrar na arena e restaura o principal ao encerrar o Auto Boss, inclusive após derrota ou reinício.
+- Corrige a saída da arena ao encerrar o modo todos, antes de restaurar o Pokémon principal.
+- Verifica automaticamente se cada comando nativo chamado pela interface tem permissão na janela principal.
+
+## 2.0.117 — Permissão para ler histórico de bosses
+
+- Libera o comando nativo de leitura do histórico para a janela principal do launcher, eliminando o erro `blaster_boss_history not allowed`.
+- Amplia o teste de permissões para cobrir chamadas diretas do módulo de histórico.
+
+## 2.0.116 — Resumo da conta no tema do launcher
+
+- Faz o painel Resumo da conta, suas abas e configurações seguirem as cores claras ou escuras do tema ativo.
+- Inclui o resumo e suas configurações na auditoria visual dos menus em diferentes tamanhos de janela.
+
+## 2.0.115 — Inscrição automática no boss semanal
+
+- Mantém a opção de inscrição automática no serviço Headless entre reinícios, como no projeto de referência.
+- Mostra no console uma falha ao salvar essa opção, em vez de ignorá-la silenciosamente.
+- Confirma com a resposta do servidor a inscrição das quatro contas na edição semanal atual.
+
+## 2.0.114 — Histórico de bosses e Kick em telas menores
+
+- Faz o resumo de recompensas do histórico de bosses acompanhar superfícies, texto e destaque do tema ativo.
+- Evita o estreitamento do resumo de resgate da Kick em larguras reduzidas.
+
+## 2.0.113 — Histórico completo e média de recompensas de boss
+
+- Grava cada resultado confirmado do Auto Boss em arquivo nativo persistente, inclusive vitórias sem recompensa, sem limite de 400 combates.
+- Mantém os registros locais anteriores acessíveis e exibe, no histórico, um gráfico de itens médios por vitória e por boss; vitórias sem drop entram na média.
+- Corrige a identificação de derrotas informada no próprio evento e conserva resultados distintos recebidos no mesmo pacote.
+
+## 2.0.112 — Rótulo de disposição nas configurações
+
+- Faz o rótulo da disposição das janelas acompanhar o texto do tema ativo, inclusive nos temas claros.
+
+## 2.0.111 — Legibilidade dos menus em temas claros
+
+- Corrige títulos, rótulos de regras e opção de compra parcial do Auto Supply que permaneciam claros em superfícies claras.
+- Ajusta o contraste de avisos da Central de Auto Boss e de erros do Auto-Sniper nos temas claros.
+- Inspeciona os menus renderizados da interface Rust/Tauri em quatro paletas, sem abrir uma janela visível.
+
+## 2.0.110 — Tema completo nos modais de ferramentas
+
+- Corrige os controles internos dos modais antigos e aplica a paleta ativa ao despacho de contas, incluindo busca, cartões, filtros e botões.
+- Amplia a verificação automatizada de temas para os menus de ferramentas anteriores.
+
+## 2.0.109 — Pares de itens por família no Headless
+
+- Agrupa TMs, tickets e stones em pares na coluna de drops de boss, sem misturar famílias quando um grupo tem número ímpar de itens.
+- Centraliza o último cartão sem par e ajusta a altura da coluna ao número real de linhas.
+
+## 2.0.108 — Temas nos menus de ferramentas
+
+- Aplica a paleta ativa às janelas de Auto Boss (configuração e histórico), Auto-Sniper e Venda do Depot, incluindo controles, estados selecionados e foco.
+- Mantém as cores de estado para avisos, erros e resultados enquanto superfícies e textos seguem o tema do launcher.
+
+## 2.0.107 — Ícone de fechar do Auto Boss
+
+- Substitui o glifo de texto por duas linhas CSS centralizadas, eliminando o deslocamento óptico do `×` no botão de fechar.
+
+## 2.0.106 — Alinhamento do fechamento do Auto Boss
+
+- Centraliza visualmente o ícone `×` do botão de fechar da Central de Auto Boss, removendo o deslocamento causado pelo alinhamento padrão de texto do botão.
+
+## 2.0.105 — Itens de boss com estoque e selo de sessão
+
+- Os cartões de boss exibem a quantidade atual no inventário como `xN` e mostram `+N` em selo verde apenas quando houve drop confirmado na sessão.
+- Remove o título e o resumo de sessão da coluna direita; centraliza o botão de histórico sob os cartões.
+
+## 2.0.104 — Itens de boss no estilo dos itens rastreados
+
+- A lista de drops de boss à direita usa cartões roxos com ícone central e quantidade abaixo, no mesmo padrão dos itens rastreados no centro.
+- Distribui os cartões em duas colunas; nomes completos continuam acessíveis no tooltip e a rolagem fica somente dentro da lista.
+
+## 2.0.103 — Inscrição automática no boss semanal
+
+- Exige a janela de inscrição informada pela edição no servidor antes de enviar `raid.inscrever`; remove o horário estimado como substituto.
+- Grava a tentativa por personagem e edição antes do envio no Headless e no perfil do jogo visual, evitando novo gasto em resposta incerta ou após reinício.
+- Só marca a inscrição como confirmada após `eu.inscrito: true`, evitando confirmação baseada apenas no rótulo da ação.
+- No modo visual, consulta `raid.info` somente com Bronze Boss Token confirmado e suspende consultas durante a edição já confirmada.
+
+## 2.0.102 — Somente drops de boss no Headless
+
+- A coluna direita passa a listar somente itens presentes nas tabelas `bossesJogaveis` e `bossesCatalogo` recebidas do jogo, inclusive bosses ainda não jogáveis, sem preencher a lista com os 166 sprites genéricos.
+- Guarda a última tabela recebida para manter a lista visível após sair da arena ou reiniciar o launcher. Quantidades continuam limitadas aos drops confirmados nesta sessão.
+
+## 2.0.101 — Catálogo fixo completo no Headless
+
+- Carrega os 166 itens do catálogo local na coluna direita em todas as contas Headless, mesmo sem boss feito, catálogo online ou batalha ativa.
+- Os resultados do servidor só atualizam quantidades e origens; a lista permanece completa e a janela Headless continua fixa.
+
+## 2.0.100 — Lista completa de itens de boss no Headless
+
+- Remove o seletor de boss: a coluna direita reúne todos os itens do catálogo de bosses da própria conta e mostra os drops confirmados somados para cada item.
+- Mantém o Headless com tamanho fixo; quando a lista excede a coluna, somente a lista de itens rola. O histórico de batalhas continua separado.
+
+## 2.0.99 — Catálogo de itens de boss no Headless
+
+- Mantém o painel de itens de boss visível no Headless mesmo fora da arena, sem manter na tela a vida ou o resultado de uma batalha encerrada.
+- Permite consultar os bosses da conta e paginar seus itens na janela fixa; as quantidades confirmadas continuam separadas por boss e o histórico segue acessível.
+
+## 2.0.98 — Correção do histórico de drops no modo Simples
+
+- Evita registrar totais antigos de Key Fragment e outros itens como drops novos após troca de sessão, troca de personagem ou reconexão. Só registra aumentos observados entre leituras válidas da mesma conta e sessão.
+
+## 2.0.97 — Headless fixo e histórico de bosses
+
+- Remove a rolagem do Headless e centraliza o combate entre Twitch/Kick e um painel vertical de itens do boss atual.
+- Ao sair da arena, oculta o card e os itens do boss; a caça normal volta ao HUD sem resultado antigo sobreposto.
+- Separa os itens por boss e mostra os possíveis do catálogo e as quantidades recebidas durante a sessão.
+- Adiciona Histórico na Central de Auto Boss: últimas 400 batalhas confirmadas por conta e por boss, com resultado e recompensas informadas pelo servidor, preservadas no perfil local após reinício.
+
+## 2.0.96 — Vida e itens do Boss
+
+- Preserva os valores de HP recebidos na cena e reconcilia pacotes parciais com o slot confirmado da arena, mesmo quando a cena chega primeiro. Não usa a vida de outro mob.
+- Mantém HP e nome dos mobs na telemetria do jogo visual para o supervisor.
+- Centraliza os itens do boss em cartões maiores com nome, ícone e quantidade, inclusive TMs.
+- Coloca “Abrir jogo” junto aos controles para não cobrir os itens nas quatro contas.
+
+## 2.0.95 — Indicador de tier somente na Outland
+
+- Exibe a tier apenas quando a caça atual é de Outland; oculta o indicador no Centro, em outras caças e na arena de Boss.
+
+## 2.0.94 — HUD do Boss
+
+- Mostra a vida confirmada do boss com rótulo próprio e deixa explícito quando o servidor ainda não informou HP; remove a vida do Pokémon ativo desse resumo.
+- Organiza os itens do boss, incluindo TMs, em uma faixa de recompensas legível e permite rolagem do HUD quando a janela não comporta todo o conteúdo.
+
+## 2.0.93 — Retorno à hunt após o Boss
+
+- Registra a hunt anterior de cada conta e solicita seu retorno ao concluir o Auto Boss.
+
+## 2.0.92 — Mensagem de execução do Boss
+
+- Corrige a mensagem da entrada única para não continuar informando que aguarda confirmação após a conclusão.
+
+## 2.0.91 — Entrada após cura
+
+- Aguarda o bloqueio de combate após a cura no Centro antes de solicitar a entrada no Boss.
+
+## 2.0.90 — Espera para sair da hunt
+
+- Mantém a solicitação de ida ao Centro aguardando o intervalo permitido pelo servidor, sem encerrar após 30 segundos em combate.
+
+## 2.0.89 — Diagnóstico de Boss no Headless
+
+- Acrescenta rastreamento opcional dos comandos e eventos de Boss para investigar entradas sem confirmação.
+
+## 2.0.88 — Aviso de entrada pendente
+
+- Mantém o painel de Boss visível no Headless e informa quando a entrada não foi confirmada.
+
+## 2.0.87 — Recompensas do Boss
+
+- Exibe recompensas identificadas apenas pelo nome no resultado e no histórico do Headless.
+
+## 2.0.86 — Confirmação da arena do Boss
+
+- Reconhece a entrada pendente ao receber o estado da arena correspondente, sem contá-la novamente se o evento de entrada chegar depois.
+
+## 2.0.85 — Confirmação de entrada no Boss
+
+- Marca como incerta uma entrada sem confirmação após 30 segundos e preserva a proteção contra duplicação.
+
+## 2.0.84 — Preparação no Centro
+
+- Aguarda o horário de saída informado pelo servidor antes de tentar novamente ir ao Centro.
+
+## 2.0.83 — Equipe já curada no Auto Boss
+
+- Aceita a confirmação da Enfermeira Joy quando a equipe já está curada no Centro.
+
+## 2.0.82 — Avisos de combate no Auto Boss
+
+- Evita apresentar avisos de mercado como causa de falha na preparação do Boss.
+
+## 2.0.81 — Avisos na preparação de Boss
+
+- Preserva o aviso do jogo quando a ida ao Centro ou a cura não recebe confirmação.
+
+## 2.0.80 — Entrada e resultado de Boss
+
+- Prepara a conta no Centro antes da entrada no Boss, acompanhando confirmações do servidor.
+- Adiciona entrada única, resultado da batalha e recompensas confirmadas ao acompanhamento Headless.
+- A captura de diagnóstico passa a preservar identificadores e quantidades de recompensas de Boss, sem credenciais.
+
+## 2.0.79 — Diagnóstico temporário de Centro e Boss
+
+- Acrescenta captura manual, por conta, de campos selecionados dos eventos de Centro e Boss no jogo visual, com exportação JSON e limite de eventos.
+
+## 2.0.78 — Tokens e seleção da equipe no Auto Boss
+
+- Corrige a exibição dos tokens antes de salvar um boss: o painel consulta o inventário confirmado da conta e acompanha o item de entrada do boss selecionado. Estoque desconhecido continua distinto de saldo zero.
+- Exibe a equipe por conta e permite escolher o Pokémon em campo pelo protocolo do jogo, aguardando confirmação do servidor. A troca fica bloqueada durante Auto Boss ativo, arena ou entradas pendentes/incertas.
+- Acrescenta testes de saldo sem configuração, seleção por ID, isolamento de contas, rejeição de trocas inseguras e integração pela ponte Tauri.
+
+## 2.0.77 — Confiabilidade e validação integrada do Auto Boss
+
+- Corrige as permissões da janela principal Tauri para consultar, configurar e acompanhar o Auto Boss e o Auto Registro do World Boss semanal.
+- Endurece a execução Headless: alterações durante entradas pendentes, resultados incertos, arena e reconexões não podem apagar reservas de token ou gerar reentradas duplicadas. O desligamento preserva o estado necessário à conferência posterior.
+- Confere consumo contra inventário informado pelo servidor e protege a reserva semanal de Bronze Boss Token. Eventos de vitória repetidos deixam de duplicar XP e drops; o histórico de itens recebidos continua separado da tabela de chances.
+- Alinha a validação Rust dos custos de entrada ao painel: um custo explicitamente inválido não é convertido silenciosamente em 1 token; valores inteiros em texto e o campo legado `item_cost` são interpretados sem divergência de preço.
+- O Auto Registro semanal deixa de consultar `raid.info` sem token 70000 confirmado em `gameplay.items`, consulta ao adquirir o token, usa intervalos controlados para falhas e interrompe consultas após inscrição confirmada até a próxima edição. A reserva de token considera a edição semanal atual mesmo enquanto aguarda a nova confirmação.
+- A Central Auto Boss usa catálogos, chances, sprites e custos por conta, sem reutilizar dados de outra conta ou apresentar catálogos offline como atuais. Exibe pendências e falhas do supervisor, impede configurações inseguras e preserva contadores ao salvar sem alterações.
+- Amplia testes Rust, JavaScript e Electron da interface real, incluindo quatro contas, reconexões, proteção de estoque, integração do Headless com itens rastreados, deduplicação, consulta semanal e layouts de 1920×1032, 1600×950 e 820×720, sem executar batalhas reais. Estabiliza um teste de contagem regressiva do HUD sensível à passagem de milissegundos.
+
+## 2.0.76 — Auto Boss por conta e arena ao vivo no Headless
+
+- Nova Central de Auto Boss nas Ferramentas: configuração ON/OFF individual das quatro contas, escolha do boss da lista jogável fornecida pelo servidor e execução de todos os tokens disponíveis ou de uma quantidade definida de entradas.
+- Seleção exibe nível mínimo, requisito de token e tabela de drops e probabilidades confirmadas pelo catálogo do jogo, com 166 sprites originais de itens copiadas da referência e catálogo local de assets.
+- Supervisor Headless controla `boss.entrar`, `boss.auto` e `boss.sair`, persiste a configuração por conta, confirma entradas antes de contabilizá-las e interrompe repetição automática quando há resposta incerta ou saldo insuficiente. Protege o token necessário à inscrição semanal enquanto aplicável.
+- Os quatro cartões Headless passam a mostrar boss em arena, HP e ataques registrados, progresso de entradas, saldo confirmado e histórico de itens obtidos de eventos `bossMorto`, com sprites locais e interface compacta.
+- Acrescenta testes Rust de protocolo, inventário e limites, e testes JavaScript e Electron de catálogo, configuração, sprites e visibilidade dos controles do Headless.
+
+## 2.0.75 — Resultado diário do Sniper e rastreamento de Avisos/Raros
+
+- Central de Auto-Sniper: resumo com vitórias de sorteio no dia e data da última vitória, abas independentes de compras confirmadas, sorteios ganhos e sorteios perdidos, com data e hora por conta.
+- Preserva registros de sorteios ganhos e perdidos ao alternar do modo Visual para Headless; resultados terminais passam a carregar informação de confirmação do servidor e origem do evento, evitando classificar uma falha de conexão como derrota.
+- Amplia o acompanhamento de itens nas seções Avisos e Raros e apresenta o resultado dos sorteios do sniper nos Avisos.
+
 ## 2.0.74 — VIP e inscrição semanal no painel Headless
 
 - Mostra em cada cartão Headless o status VIP da conta e a quantidade de dias restantes até o vencimento; indica VIP inativo ou pendente de confirmação quando não há dados suficientes.

@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "allow-report-gameplay"
 description = "Allow game webviews to report whitelisted gameplay state for their own account."
-commands.allow = ["report_gameplay", "report_gameplay_batch", "webview_eval_result", "game_console_message"]
+commands.allow = ["report_gameplay", "report_gameplay_batch", "webview_eval_result", "game_console_message", "rmt_poll", "rmt_packet", "rmt_defer"]

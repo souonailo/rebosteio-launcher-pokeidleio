@@ -164,6 +164,7 @@ for (const preset of presets) {
 
     const refused = h.logs().filter(l => l.status === 'RECUSADO');
     assert.ok(refused.length >= 1, 'Refused log emitted for market.sorteioPerdeu');
+    assert.equal(refused[0].lotteryResult, 'loss', 'Resultado terminal deve ser preservado para histórico de sorteios perdidos');
   });
 
   test(`${preset}: non-refusal progress code market.sorteio and market.sorteioEspera emit PROGRESSO and keep pending`, () => {
@@ -226,7 +227,10 @@ for (const preset of presets) {
     h.receive({t: 'e', k: 'mktSorteio', id: 1009, fase: 'fim', perdeu: true, msg: 'Outro jogador venceu'});
     assert.equal(h.ctx.__engine.sniperState.boughtOffers[1009], undefined, 'Pending cleared on lottery loss');
     assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Quota restored on lottery loss');
-    assert.ok(h.logs().some(l => l.status === 'RECUSADO' && l.offerId === 1009));
+    const lost = h.logs().find(l => l.status === 'RECUSADO' && l.offerId === 1009);
+    assert.ok(lost);
+    assert.equal(lost.lotteryResult, 'loss');
+    assert.equal(typeof lost.lotteryConfirmedAt, 'number');
   });
 
   test(`${preset}: bounded diagnostic/progress logs, divergent error ID protection, single CONFIRMADO on lottery win, and fail-closed missing currency`, () => {
@@ -262,9 +266,11 @@ for (const preset of presets) {
     h.receive({t: 'batalha', ev: [{k: 'marketComprado', id: 1012, sorteio: true, descricao: '1x Fire Stone'}]});
     const confirmed = h.logs().filter(l => l.status === 'CONFIRMADO' && Number(l.offerId) === 1012);
     assert.equal(confirmed.length, 1, 'mktSorteio win + marketComprado must emit CONFIRMADO only once');
+    assert.equal(confirmed[0].lotteryResult, 'win', 'Vitória de sorteio deve ser identificável no histórico');
+    assert.equal(typeof confirmed[0].lotteryWonAt, 'number', 'Vitória deve registrar dia/hora');
   });
 
-  test(`${preset}: CONFIRMADO preserves canonical targetName & seller, pioRecusados suppresses 5s PERDIDO, and storage keeps only CONFIRMADO`, () => {
+  test(`${preset}: CONFIRMADO preserva alvo e armazenamento retém apenas compras e sorteios terminais`, () => {
     const rule = {...stoneCategoryRule, excludedItemIds: []};
     const h = harness(preset, {}, [rule]);
 
@@ -329,5 +335,13 @@ for (const preset of presets) {
     assert.equal(storedLogs.length, 2, 'Stale AGENDADO purged while both old_win and new winLog remain intact');
     assert.equal(storedLogs[0].offerId, 2002);
     assert.equal(storedLogs[1].id, 'old_win');
+    // Resultados terminais do sorteio devem sobreviver à coleta visual;
+    // recusa comum, timeout e mensagens de progresso permanecem de fora.
+    const lostLog = {id: 'sorteio_perdeu_3000_abc', status: 'RECUSADO', targetName: 'Fire Stone', offerId: 3000, lotteryResult: 'loss', lotteryConfirmedAt: 1000000};
+    msgHandler({source: csWindow, data: {source: 'ROTOM_SNIPER', type: 'SNIPER_LOG', log: lostLog}});
+    assert.equal(storedLogs.length, 3);
+    assert.equal(storedLogs[0].lotteryResult, 'loss');
+    assert.equal(storedLogs[1].id, winLog.id);
+    assert.equal(storedLogs[2].id, 'old_win');
   });
 }

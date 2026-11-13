@@ -161,7 +161,10 @@
     <button class="leaf-tool-item" data-old="statsBtn"><span class="ico">↗</span><span>Resumo da conta</span></button>
     <button class="leaf-tool-item" data-old="accounts"><span class="ico">○</span><span>Treinadores</span></button>
     <div class="leaf-tool-sep"></div>
+    <button class="leaf-tool-item" id="leafRmtBtn"><span class="ico">${ico('chart')}</span><span>Analisador do RMT</span></button>
     <button class="leaf-tool-item" data-old="sniperBtn" id="leafSniperBtn"><span class="ico">🎯</span><span>Auto-Sniper Central</span><span class="leaf-tool-badge" id="leafSniperBadge">OFF</span></button>
+    <button class="leaf-tool-item" id="leafBossDiagnosticBtn"><span class="ico">⏺</span><span>Iniciar diagnóstico Boss</span></button>
+    <button class="leaf-tool-item" id="leafAutoBossBtn"><span class="ico">⚔️</span><span>Auto Boss</span><span class="leaf-tool-badge" id="leafAutoBossBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSellBtn"><span class="ico">💰</span><span>Venda do Depot</span><span class="leaf-tool-badge" id="leafAutoSellBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoSupplyBtn"><span class="ico">📦</span><span>Auto Supply</span><span class="leaf-tool-badge" id="leafAutoSupplyBadge">OFF</span></button>
     <button class="leaf-tool-item" data-old="autoRaid" title="Inscrição automática na Raid Gigantamax durante o período de inscrição; custo de 1 Bronze Boss Token por conta"><span class="ico">👑</span><span>Auto registro Boss Semanal</span><span class="leaf-tool-badge" id="leafAutoRaidBadge">OFF</span></button>
@@ -414,6 +417,17 @@
     }
   }
   window.__syncSniperBadge = syncSniperBadge;
+  function syncAutoBossBadge() {
+    const badge = $('#leafAutoBossBadge');
+    if (!badge) return;
+    const accounts = window.PioAutoBossPanel?.getState()?.accounts || [];
+    const enabled = accounts.filter(account => account.enabled).length;
+    const needsReview = accounts.some(account => account.statusError || account.pending || account.uncertain);
+    badge.textContent = needsReview && enabled === 0 ? 'VERIF.' : enabled > 0 ? `ON (${enabled})` : 'OFF';
+    badge.title = needsReview ? 'Há contas com estado de boss pendente, incerto ou indisponível; consulte o painel.' : '';
+    badge.classList.toggle('is-on', enabled > 0);
+  }
+  window.__syncAutoBossBadge = syncAutoBossBadge;
 
   syncAutoSellBadge();
   syncAutoSupplyBadge();
@@ -421,12 +435,16 @@
   syncTwitchBonusBadge();
   syncKickBonusBadge();
   syncSniperBadge();
+  syncAutoBossBadge();
+  if (window.pokeAPI?.blasterBossStatus || window.__TAURI_INTERNALS__?.invoke) {
+    void window.PioAutoBossPanel?.refresh?.();
+  }
 
   $('#leafToolsBtn').onclick = (e) => {
     e.stopPropagation();
     const opening = !document.body.classList.contains('leaf-tools-open');
     closeSurfaces();
-    if (opening) { document.body.classList.add('leaf-tools-open'); tools.inert = false; $('#leafToolsBtn').setAttribute('aria-expanded', 'true'); syncAutoSellBadge(); syncAutoSupplyBadge(); syncAutoRaidBadge(); syncTwitchBonusBadge(); syncKickBonusBadge(); tools.querySelector('button')?.focus(); }
+    if (opening) { document.body.classList.add('leaf-tools-open'); tools.inert = false; $('#leafToolsBtn').setAttribute('aria-expanded', 'true'); syncAutoSellBadge(); syncAutoSupplyBadge(); syncAutoRaidBadge(); syncAutoBossBadge(); syncTwitchBonusBadge(); syncKickBonusBadge(); tools.querySelector('button')?.focus(); }
   };
   $('#leafSettingsBtn').onclick = () => {
     const opening = !document.body.classList.contains('leaf-settings-open');
@@ -436,6 +454,48 @@
   $('#leafMoreBtn').onclick = () => $('#leafSettingsBtn').click();
   $('#leafDrawerClose').onclick = () => closeSurfaces(true);
   $$('#leafToolsMenu [data-old],#leafSettingsDrawer [data-old]').forEach(b => b.onclick = () => { clickOld(b.dataset.old); closeSurfaces(); syncAutoSellBadge(); syncAutoSupplyBadge(); syncAutoRaidBadge(); syncTwitchBonusBadge(); });
+  let bossDiagnosticAccount = null;
+  $('#leafRmtBtn').onclick = async () => {
+    closeSurfaces();
+    try { await window.__TAURI__.core.invoke('rmt_open'); }
+    catch (error) { window.alert('Não foi possível abrir o Analisador do RMT. ' + String(error)); }
+  };
+  $('#leafBossDiagnosticBtn').onclick = async () => {
+    const button = $('#leafBossDiagnosticBtn');
+    if (!window.pokeAPI?.webviewEval) { window.alert('Diagnóstico disponível somente no launcher Tauri.'); return; }
+    try {
+      if (bossDiagnosticAccount === null) {
+        const answer = window.prompt('Número da conta para registrar (1 a 4). Use o jogo visual conectado:', '1');
+        if (answer === null) return;
+        if (!/^[1-4]$/.test(answer.trim())) throw Error('Escolha uma conta de 1 a 4.');
+        const index = Number(answer.trim()) - 1;
+        await window.pokeAPI.webviewEval(index, "window.__pioBossDiagnosticStart ? window.__pioBossDiagnosticStart() : (()=>{throw Error('Reabra o jogo para ativar o diagnóstico.')})()");
+        bossDiagnosticAccount = index;
+        button.querySelector('span:nth-child(2)').textContent = `Encerrar diagnóstico Boss · conta ${index + 1}`;
+        closeSurfaces();
+        window.alert('Captura iniciada. No jogo visual, vá ao Centro, cure e entre uma vez no boss. Depois encerre em Ferramentas.');
+      } else {
+        const index = bossDiagnosticAccount;
+        const result = await window.pokeAPI.webviewEval(index, "window.__pioBossDiagnosticStop ? window.__pioBossDiagnosticStop() : (()=>{throw Error('A janela do jogo foi reiniciada e a captura em memória foi perdida.')})()");
+        const content = JSON.stringify({ account: index + 1, ...result }, null, 2);
+        const name = 'diagnostico-boss-conta-' + (index + 1) + '-' + Date.now() + '.json';
+        const saved = await window.pokeAPI.saveBackup?.(name, content, '');
+        const a = document.createElement('a');
+        a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(content);
+        a.download = name;
+        a.click();
+        bossDiagnosticAccount = null;
+        button.querySelector('span:nth-child(2)').textContent = 'Iniciar diagnóstico Boss';
+        closeSurfaces();
+        window.alert(saved ? `Captura encerrada. Envie ${name}, salvo na pasta backups dos dados do launcher (%APPDATA%/pionailo/backups na instância principal).` : 'Captura encerrada. Envie o arquivo JSON baixado; não foi possível salvar uma cópia na pasta de backups.');
+      }
+    } catch (error) { window.alert('Diagnóstico: ' + String(error?.message || error)); }
+  };
+  $('#leafAutoBossBtn').onclick = () => {
+    closeSurfaces();
+    $('#leafToolsBtn').focus();
+    window.PioAutoBossPanel?.open();
+  };
   document.addEventListener('click', e => { if (!tools.contains(e.target) && e.target !== $('#leafToolsBtn') && document.body.classList.contains('leaf-tools-open')) closeSurfaces(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSurfaces(true); });
 
@@ -589,6 +649,7 @@
     const markup = filteredArr.map(r => {
         const dividerMarkup = '';
         const [sc,sl] = stateStatus(r); const a = r.a || {}; const lead=getLead(r); const spr=pokeSprite(lead); const hunt=prettyHunt(r.hunt)||'Aguardando dados da caça';
+        const outlandTier = window.PioBattleHud.outlandTierLabel(r);
         const selected = !!grid.children[r.i]?.classList.contains('expanded');
         return `${dividerMarkup}<article class="leaf-account state-${sc} ${r.ok?'is-live':''} ${attention(r)?'is-attention':''} ${selected?'is-selected':''}" data-i="${r.i}">
           <div class="leaf-account-top">
@@ -599,7 +660,7 @@
             <div class="leaf-account-state ${sc}">${sl}</div>
           </div>
           <div class="leaf-hunt-row"><span class="leaf-hunt-glyph">${ico('hunt')}</span><span class="leaf-hunt-name">Em caça <b>${escH(hunt)}</b></span><span class="leaf-hunt-time">${a.seconds?Math.floor(a.seconds/3600)+'h '+String(Math.floor(a.seconds%3600/60)).padStart(2,'0')+'m':'—'}</span></div>
-          <div class="leaf-outland-tier" title="Tier confirmada pelo servidor nesta conexão">${escH(window.PioBattleHud.outlandTierLabel(r))}</div>
+          ${outlandTier ? `<div class="leaf-outland-tier" title="Tier confirmada pelo servidor nesta conexão">${escH(outlandTier)}</div>` : ''}
           <div class="leaf-account-metrics">
             <div class="leaf-metric" title="${(r.equippedBall && r.equippedBall.name) ? `${escH(r.equippedBall.name)}: ${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}` : `Bolas: ${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}`}"><div class="mk">Bolas</div><div class="mv">${r.ballsKnown === false ? '—' : (((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls))}</div></div>
             <div class="leaf-metric" title="Shiny"><div class="mk">Shiny</div><div class="mv">${a.shinyFound!=null?fmtCompact(a.shinyFound):'—'}</div></div>

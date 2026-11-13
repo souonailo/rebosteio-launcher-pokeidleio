@@ -1169,6 +1169,7 @@
     drafts: {}, // { [accountIndex]: { configured, enabled, rules, config, isDirty } }
     activeTab: 'all', // 'all' ou 0..3
     historyFilter: 'all', // 'all' ou 0..3
+    historyView: 'purchases', // 'purchases', 'wins' ou 'losses'
     isOpen: false,
     openerEl: null,
     editingRuleId: null,
@@ -1617,7 +1618,7 @@
       throw new Error(`Falha no descarregamento da Conta ${i + 1}: ${(res && res.msg) || 'resposta nula'}`);
     }
 
-    const logs = (Array.isArray(res.logs) ? res.logs : []).filter(isConfirmedSuccessLog);
+    const logs = (Array.isArray(res.logs) ? res.logs : []).filter(l => isConfirmedSuccessLog(l) || isLotteryLossLog(l));
     const rules = Array.isArray(res.rules) ? res.rules : [];
     const progress = rules.map(r => ({ id: r.id, totalBought: Number(r.totalBought) || 0 }));
 
@@ -1646,6 +1647,39 @@
     }
     const stUpper = rawStatus.toUpperCase();
     return stUpper === 'CONFIRMADO' || stUpper === 'OK' || log.success === true;
+  }
+
+  // Só classificamos um sorteio quando a resposta registrada realmente indica
+  // seu desfecho. Compras comuns e falhas temporárias não são derrotas.
+  function isLotteryWinLog(log) {
+    if (!isConfirmedSuccessLog(log)) return false;
+    const outcome = String(log.lotteryResult || log.sorteioResultado || '').toLowerCase();
+    if (outcome) return outcome === 'won' || outcome === 'win' || outcome === 'ganho';
+    return /^sorteio_ok_/.test(String(log.id || '')) ||
+      /venceu o sorteio de libera[cç][aã]o|venceu o sorteio/i.test(String(log.details || ''));
+  }
+
+  function isLotteryLossLog(log) {
+    if (!log || typeof log !== 'object') return false;
+    const status = String(log.status || '').toUpperCase();
+    if (!['RECUSADO', 'PERDIDO'].includes(status)) return false;
+    const outcome = String(log.lotteryResult || log.sorteioResultado || '').toLowerCase();
+    if (outcome) return outcome === 'lost' || outcome === 'loss' || outcome === 'perdido';
+    return /^sorteio_perdeu_/.test(String(log.id || '')) ||
+      /market\.sorteioPerdeu|outro jogador levou no sorteio|perdeu o sorteio/i.test(String(log.details || ''));
+  }
+
+  function getSniperLogDate(log) {
+    const raw = Number(log?.lotteryWonAt ?? log?.lotteryConfirmedAt ?? log?.timestamp ?? log?.time);
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+    const timestamp = raw < 1e12 ? raw * 1000 : raw;
+    const date = new Date(timestamp);
+    return Number.isFinite(date.getTime()) && date.getFullYear() >= 2000 ? date : null;
+  }
+
+  function formatSniperLogDate(log) {
+    const date = getSniperLogDate(log);
+    return date ? date.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Data indisponível';
   }
 
   function resolveCatalogItemName(rawName) {
@@ -1791,7 +1825,7 @@
       const logs = await wv.executeJavaScript(script);
       if (Array.isArray(logs) && logs.length && root.pokeAPI?.sniperIngest) {
         const freshLogs = logs.filter(l => {
-          if (!isConfirmedSuccessLog(l)) return false;
+          if (!isConfirmedSuccessLog(l) && !isLotteryLossLog(l)) return false;
           const key = i + '_' + (l.id || l.timestamp || l.hora || JSON.stringify(l));
           return !ingestedLogKeys.has(key);
         });
@@ -2547,44 +2581,65 @@
     }
 
     const historyAcc = sniperState.historyFilter;
-    let historyEntries = [];
+    const historyView = sniperState.historyView;
+    let allHistoryEntries = [];
     if (historyAcc === 'all') {
       sniperState.accounts.forEach((acc, aI) => {
         (acc.logs || []).forEach(l => {
-          if (isConfirmedSuccessLog(l)) {
-            historyEntries.push({ ...l, accountIndex: aI });
-          }
+          allHistoryEntries.push({ ...l, accountIndex: aI });
         });
       });
     } else {
       const aI = Number(historyAcc);
       (sniperState.accounts[aI]?.logs || []).forEach(l => {
-        if (isConfirmedSuccessLog(l)) {
-          historyEntries.push({ ...l, accountIndex: aI });
-        }
+        allHistoryEntries.push({ ...l, accountIndex: aI });
       });
     }
 
+    const confirmedEntries = allHistoryEntries.filter(isConfirmedSuccessLog);
+    const wonEntries = allHistoryEntries.filter(isLotteryWinLog);
+    const lostEntries = allHistoryEntries.filter(isLotteryLossLog);
+    const historyEntries = historyView === 'wins' ? wonEntries : historyView === 'losses' ? lostEntries : confirmedEntries;
     historyEntries.sort((a, b) => (b.timestamp || b.time || 0) - (a.timestamp || a.time || 0));
+    wonEntries.sort((a, b) => (b.timestamp || b.time || 0) - (a.timestamp || a.time || 0));
+    const lastWin = wonEntries[0];
+    const todayKey = new Date().toDateString();
+    const winsToday = wonEntries.filter(l => getSniperLogDate(l)?.toDateString() === todayKey).length;
 
     let historyListHtml = '';
     if (!historyEntries.length) {
+      const emptyLabel = historyView === 'wins'
+        ? 'Nenhuma vitória de sorteio confirmada para este filtro.'
+        : historyView === 'losses'
+        ? 'Nenhum sorteio perdido confirmado para este filtro.'
+        : 'Nenhuma compra confirmada registrada para este filtro.';
       historyListHtml = `
         <div class="sniper-empty" style="padding:20px">
           <span style="font-size:20px;opacity:0.5">📜</span>
-          <div style="font-size:12px">Nenhuma compra confirmada registrada para este filtro.</div>
+          <div style="font-size:12px">${emptyLabel}</div>
         </div>
       `;
     } else {
       historyEntries.slice(0, 50).forEach(log => {
-        const timeStr = log.hora || (log.timestamp ? new Date(log.timestamp).toLocaleTimeString('pt-BR') : '—');
+        const date = getSniperLogDate(log);
+        const timeStr = log.hora || (date ? date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—');
+        const dayStr = formatSniperLogDate(log);
         const desc = formatConfirmedPurchaseSummary(log);
+        const wasWon = isLotteryWinLog(log);
+        const wasLost = isLotteryLossLog(log);
+        const resultLabel = wasWon ? '🏆 Vitória no sorteio' : wasLost ? '❌ Sorteio perdido' : '';
 
         historyListHtml += `
-          <div class="sniper-history-entry success">
-            <span class="sniper-history-time">[${escapeHtml(timeStr)}]</span>
+          <div class="sniper-history-entry ${wasLost ? 'failed' : 'success'}">
+            <span class="sniper-history-datetime">
+              <span class="sniper-history-day">${escapeHtml(dayStr)}</span>
+              <span class="sniper-history-time">${escapeHtml(timeStr)}</span>
+            </span>
             <span class="sniper-badge">Conta ${log.accountIndex + 1}</span>
-            <span class="sniper-history-desc">${escapeHtml(desc)}</span>
+            <span class="sniper-history-desc" title="${escapeHtml(log.details || desc)}">
+              ${resultLabel ? `<span class="sniper-history-result ${wasLost ? 'lost' : 'won'}">${resultLabel}</span>` : ''}
+              ${escapeHtml(desc)}
+            </span>
           </div>
         `;
       });
@@ -2593,7 +2648,7 @@
     const historySectionHtml = `
       <div class="sniper-section">
         <div class="sniper-section-header">
-          <h3 class="sniper-section-title">Histórico de Compras Confirmadas</h3>
+          <h3 class="sniper-section-title">Histórico do Sniper</h3>
           <div style="display:flex;align-items:center;gap:10px">
             <label style="font-size:11px;color:var(--color-text-secondary)">Filtrar:</label>
             <select id="sniperHistoryFilter" class="sniper-select" style="padding:4px 8px;font-size:11px">
@@ -2608,7 +2663,16 @@
             </button>
           </div>
         </div>
-        <div class="sniper-history-list">
+        <div class="sniper-lottery-summary" aria-label="Resumo dos sorteios ganhos">
+          <span>🏆 <strong>${winsToday}</strong> ${winsToday === 1 ? 'vitória' : 'vitórias'} hoje</span>
+          <span>Última vitória: <strong>${lastWin ? escapeHtml(formatSniperLogDate(lastWin)) : 'nenhuma registrada'}</strong></span>
+        </div>
+        <div class="sniper-history-views" role="tablist" aria-label="Tipo de histórico do sniper">
+          <button type="button" class="sniper-history-view ${historyView === 'purchases' ? 'active' : ''}" data-history-view="purchases" role="tab" aria-selected="${historyView === 'purchases'}">Compras confirmadas <span>${confirmedEntries.length}</span></button>
+          <button type="button" class="sniper-history-view ${historyView === 'wins' ? 'active' : ''}" data-history-view="wins" role="tab" aria-selected="${historyView === 'wins'}">Sorteios ganhos <span>${wonEntries.length}</span></button>
+          <button type="button" class="sniper-history-view ${historyView === 'losses' ? 'active' : ''}" data-history-view="losses" role="tab" aria-selected="${historyView === 'losses'}">Sorteios perdidos <span>${lostEntries.length}</span></button>
+        </div>
+        <div class="sniper-history-list" role="tabpanel">
           ${historyListHtml}
         </div>
       </div>
@@ -2733,6 +2797,13 @@
         renderModal();
       };
     }
+
+    overlay.querySelectorAll('[data-history-view]').forEach(btn => {
+      btn.onclick = () => {
+        sniperState.historyView = btn.dataset.historyView;
+        renderModal();
+      };
+    });
 
     const clearHistBtn = overlay.querySelector('[data-action="clear-history"]');
     if (clearHistBtn) {
@@ -3607,6 +3678,9 @@
     loadCatalog,
     escapeHtml,
     isConfirmedSuccessLog,
+    isLotteryWinLog,
+    isLotteryLossLog,
+    formatSniperLogDate,
     formatConfirmedPurchaseSummary,
     syncVisualWebview,
     restoreConfiguredVisualAccount,

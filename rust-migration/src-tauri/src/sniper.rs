@@ -21,16 +21,36 @@ pub const DEFAULT_MAX_SLOTS: u32 = 5;
 pub const VIP_MAX_SLOTS: u32 = 15;
 pub const BUY_TIMEOUT_SECS: u64 = 12;
 
-fn default_scan_interval_ms() -> u64 { DEFAULT_SLOW_SCAN_MS }
-fn default_fast_scan_interval_ms() -> u64 { DEFAULT_FAST_SCAN_MS }
-fn default_max_active_slots() -> u32 { DEFAULT_MAX_SLOTS }
-fn default_auto_max_affordable() -> bool { true }
-fn default_shiny_gold() -> u64 { 50000 }
-fn default_p5_gold() -> u64 { 100000 }
-fn default_min_note() -> f64 { 7.0 }
-fn default_note_gold() -> u64 { 50000 }
-fn default_true() -> bool { true }
-fn default_scan_mode() -> String { "original".to_string() }
+fn default_scan_interval_ms() -> u64 {
+    DEFAULT_SLOW_SCAN_MS
+}
+fn default_fast_scan_interval_ms() -> u64 {
+    DEFAULT_FAST_SCAN_MS
+}
+fn default_max_active_slots() -> u32 {
+    DEFAULT_MAX_SLOTS
+}
+fn default_auto_max_affordable() -> bool {
+    true
+}
+fn default_shiny_gold() -> u64 {
+    50000
+}
+fn default_p5_gold() -> u64 {
+    100000
+}
+fn default_min_note() -> f64 {
+    7.0
+}
+fn default_note_gold() -> u64 {
+    50000
+}
+fn default_true() -> bool {
+    true
+}
+fn default_scan_mode() -> String {
+    "original".to_string()
+}
 
 // =========================================================================
 // 1.1 CANONICAL CATALOG & CATEGORIES (EXACT 75-ITEM METADATA)
@@ -96,7 +116,10 @@ impl SniperCatalog {
                         items_by_name.insert(alias_norm, item.id);
                     }
                 }
-                ids_by_category.entry(item.category.clone()).or_default().push(item.id);
+                ids_by_category
+                    .entry(item.category.clone())
+                    .or_default()
+                    .push(item.id);
                 items_by_id.insert(item.id, item);
             }
             SniperCatalog {
@@ -289,7 +312,11 @@ impl Rule {
                 20u64.saturating_sub(self.total_bought)
             }
         } else if self.max_qty > 0 {
-            let effective_max = if is_vip { self.max_qty } else { self.max_qty.min(20) };
+            let effective_max = if is_vip {
+                self.max_qty
+            } else {
+                self.max_qty.min(20)
+            };
             effective_max.saturating_sub(self.total_bought)
         } else {
             0
@@ -464,19 +491,45 @@ pub fn resolve_canonical_item_id(name: &str) -> Option<u64> {
 pub fn resolve_pokemon_dex_id(name: &str) -> Option<u64> {
     let q = name.trim().to_lowercase();
     match q.as_str() {
-        "bulbasaur" => Some(1), "ivysaur" => Some(2), "venusaur" => Some(3),
-        "charmander" => Some(4), "charmeleon" => Some(5), "charizard" => Some(6),
-        "squirtle" => Some(7), "wartortle" => Some(8), "blastoise" => Some(9),
-        "caterpie" => Some(10), "metapod" => Some(11), "butterfree" => Some(12),
-        "weedle" => Some(13), "kakuna" => Some(14), "beedrill" => Some(15),
-        "pidgey" => Some(16), "pidgeotto" => Some(17), "pidgeot" => Some(18),
-        "rattata" => Some(19), "raticate" => Some(20), "spearow" => Some(21),
-        "pikachu" => Some(25), "raichu" => Some(26), "mewtwo" => Some(150),
-        "mew" => Some(151), "ditto" => Some(132), "eevee" => Some(133),
-        "snorlax" => Some(143), "articuno" => Some(144), "zapdos" => Some(145),
-        "moltres" => Some(146), "dratini" => Some(147), "dragonite" => Some(149),
-        "lugia" => Some(249), "ho-oh" | "ho oh" => Some(250), "celebi" => Some(251),
-        "rayquaza" => Some(384), "kyogre" => Some(382), "groudon" => Some(383),
+        "bulbasaur" => Some(1),
+        "ivysaur" => Some(2),
+        "venusaur" => Some(3),
+        "charmander" => Some(4),
+        "charmeleon" => Some(5),
+        "charizard" => Some(6),
+        "squirtle" => Some(7),
+        "wartortle" => Some(8),
+        "blastoise" => Some(9),
+        "caterpie" => Some(10),
+        "metapod" => Some(11),
+        "butterfree" => Some(12),
+        "weedle" => Some(13),
+        "kakuna" => Some(14),
+        "beedrill" => Some(15),
+        "pidgey" => Some(16),
+        "pidgeotto" => Some(17),
+        "pidgeot" => Some(18),
+        "rattata" => Some(19),
+        "raticate" => Some(20),
+        "spearow" => Some(21),
+        "pikachu" => Some(25),
+        "raichu" => Some(26),
+        "mewtwo" => Some(150),
+        "mew" => Some(151),
+        "ditto" => Some(132),
+        "eevee" => Some(133),
+        "snorlax" => Some(143),
+        "articuno" => Some(144),
+        "zapdos" => Some(145),
+        "moltres" => Some(146),
+        "dratini" => Some(147),
+        "dragonite" => Some(149),
+        "lugia" => Some(249),
+        "ho-oh" | "ho oh" => Some(250),
+        "celebi" => Some(251),
+        "rayquaza" => Some(384),
+        "kyogre" => Some(382),
+        "groudon" => Some(383),
         _ => None,
     }
 }
@@ -550,6 +603,8 @@ pub struct OutstandingBuy {
     pub retry_count: u32,
     pub reserved_amount: u64,
     pub state: BuyState,
+    // Confirmed by a lottery progress event, not by a local purchase attempt.
+    pub lottery_observed: bool,
     pub aux_log_keys: HashSet<String>,
 }
 
@@ -601,6 +656,9 @@ pub struct AccountRuntime {
     pub scheduled_offers: HashMap<u64, ScheduledOffer>,
     pub scheduled_queries: Vec<ScheduledQuery>,
     pub outstanding_buy: Option<OutstandingBuy>,
+    pub manual_reserved_until: Option<Instant>,
+    pub manual_offer_id: Option<u64>,
+    pub manual_locked_until_ack: bool,
 }
 
 impl Default for AccountRuntime {
@@ -621,11 +679,24 @@ impl Default for AccountRuntime {
             scheduled_offers: HashMap::new(),
             scheduled_queries: Vec::new(),
             outstanding_buy: None,
+            manual_reserved_until: None,
+            manual_offer_id: None,
+            manual_locked_until_ack: false,
         }
     }
 }
 
 impl AccountRuntime {
+    pub fn is_manual_reserved(&self) -> bool {
+        if self.manual_locked_until_ack {
+            return true;
+        }
+        if let Some(until) = self.manual_reserved_until {
+            Instant::now() < until
+        } else {
+            false
+        }
+    }
     pub fn server_now_ms(&self) -> u64 {
         let local = now_ms() as i64;
         (local - self.server_offset_ms).max(0) as u64
@@ -646,10 +717,18 @@ impl AccountRuntime {
     pub fn available_balance(&self, currency: &str) -> Option<u64> {
         match normalize_currency(currency) {
             "gold" => {
-                if self.gold < 0 { None } else { Some((self.gold as u64).saturating_sub(self.reserved_gold)) }
+                if self.gold < 0 {
+                    None
+                } else {
+                    Some((self.gold as u64).saturating_sub(self.reserved_gold))
+                }
             }
             "orb" => {
-                if self.orbs < 0 { None } else { Some((self.orbs as u64).saturating_sub(self.reserved_orbs)) }
+                if self.orbs < 0 {
+                    None
+                } else {
+                    Some((self.orbs as u64).saturating_sub(self.reserved_orbs))
+                }
             }
             _ => None,
         }
@@ -673,7 +752,8 @@ impl AccountRuntime {
 
     pub fn prune_old_records(&mut self) {
         let now = Instant::now();
-        self.bought_offers.retain(|_, ts| now.duration_since(*ts) < Duration::from_secs(60));
+        self.bought_offers
+            .retain(|_, ts| now.duration_since(*ts) < Duration::from_secs(60));
         if self.confirmed_offers.len() > 3000 {
             self.confirmed_offers.clear();
         }
@@ -711,21 +791,41 @@ impl SniperEngine {
                             s.accounts[i].index = i;
                             validate_config(&s.accounts[i].config)?;
                             if s.accounts[i].rules.len() > MAX_RULES_PER_ACCOUNT {
-                                return Err(format!("Account {} has {} rules, exceeding maximum {}", i, s.accounts[i].rules.len(), MAX_RULES_PER_ACCOUNT));
+                                return Err(format!(
+                                    "Account {} has {} rules, exceeding maximum {}",
+                                    i,
+                                    s.accounts[i].rules.len(),
+                                    MAX_RULES_PER_ACCOUNT
+                                ));
                             }
                             let mut seen_ids = HashSet::new();
                             for rule in &s.accounts[i].rules {
                                 if rule.id.trim().is_empty() || rule.id.len() > MAX_RULE_ID_LEN {
-                                    return Err(format!("Invalid rule ID in loaded store: '{}'", rule.id));
+                                    return Err(format!(
+                                        "Invalid rule ID in loaded store: '{}'",
+                                        rule.id
+                                    ));
                                 }
                                 if !seen_ids.insert(rule.id.clone()) {
-                                    return Err(format!("Duplicate rule ID '{}' in loaded store account {}", rule.id, i));
+                                    return Err(format!(
+                                        "Duplicate rule ID '{}' in loaded store account {}",
+                                        rule.id, i
+                                    ));
                                 }
                                 if rule.target_name.len() > MAX_RULE_NAME_LEN {
-                                    return Err(format!("Target name too long in loaded store: '{}'", rule.target_name));
+                                    return Err(format!(
+                                        "Target name too long in loaded store: '{}'",
+                                        rule.target_name
+                                    ));
                                 }
-                                if rule.target_type != "item" && rule.target_type != "pokemon" && rule.target_type != "category" {
-                                    return Err(format!("Unsupported targetType '{}' in loaded store", rule.target_type));
+                                if rule.target_type != "item"
+                                    && rule.target_type != "pokemon"
+                                    && rule.target_type != "category"
+                                {
+                                    return Err(format!(
+                                        "Unsupported targetType '{}' in loaded store",
+                                        rule.target_type
+                                    ));
                                 }
                                 if rule.target_type == "category" {
                                     let cat = match &rule.target_category {
@@ -766,17 +866,26 @@ impl SniperEngine {
                                         ));
                                     }
                                     if let Some(ref cat) = rule.target_category {
-                                        if !cat.trim().is_empty() && !ALLOWED_CATEGORIES.contains(&cat.trim().to_lowercase().as_str()) {
+                                        if !cat.trim().is_empty()
+                                            && !ALLOWED_CATEGORIES
+                                                .contains(&cat.trim().to_lowercase().as_str())
+                                        {
                                             return Err(format!("Unsupported targetCategory '{}' in loaded store rule '{}'", cat, rule.target_name));
                                         }
                                     }
                                 }
-                                validate_rule_extra(&rule.extra, rule.max_price_gems, &rule.target_name)?;
+                                validate_rule_extra(
+                                    &rule.extra,
+                                    rule.max_price_gems,
+                                    &rule.target_name,
+                                )?;
                                 if rule.target_type != "category" {
                                     if let Some(ref tid_val) = rule.target_id {
                                         let parsed_opt = match tid_val {
                                             Value::Number(n) => n.as_u64(),
-                                            Value::String(str_val) => str_val.trim().parse::<u64>().ok(),
+                                            Value::String(str_val) => {
+                                                str_val.trim().parse::<u64>().ok()
+                                            }
                                             _ => None,
                                         };
                                         if parsed_opt.unwrap_or(0) == 0 {
@@ -785,7 +894,10 @@ impl SniperEngine {
                                     }
                                 }
                                 if rule.max_price_gold == 0 && rule.max_price_gems == 0 {
-                                    return Err(format!("Rule '{}' has zero price limits in loaded store", rule.target_name));
+                                    return Err(format!(
+                                        "Rule '{}' has zero price limits in loaded store",
+                                        rule.target_name
+                                    ));
                                 }
                             }
                             if s.accounts[i].logs.len() > MAX_HISTORY_PER_ACCOUNT {
@@ -825,6 +937,7 @@ impl SniperEngine {
                     retry_count: 1,
                     reserved_amount: intent.qty.saturating_mul(intent.price),
                     state: BuyState::UncertainBlocked,
+                    lottery_observed: false,
                     aux_log_keys: HashSet::new(),
                 });
             }
@@ -871,29 +984,52 @@ impl SniperEngine {
         validate_config(&settings.config)?;
 
         if settings.rules.len() > MAX_RULES_PER_ACCOUNT {
-            return Err(format!("Número de regras excede limite máximo de {}", MAX_RULES_PER_ACCOUNT));
+            return Err(format!(
+                "Número de regras excede limite máximo de {}",
+                MAX_RULES_PER_ACCOUNT
+            ));
         }
 
         let mut seen_ids = HashSet::new();
         let mut validated_rules = settings.rules.clone();
         for rule in &mut validated_rules {
             if rule.id.trim().is_empty() || rule.id.len() > MAX_RULE_ID_LEN {
-                return Err(format!("ID de regra inválido ou longo demais (máx {} chars)", MAX_RULE_ID_LEN));
+                return Err(format!(
+                    "ID de regra inválido ou longo demais (máx {} chars)",
+                    MAX_RULE_ID_LEN
+                ));
             }
             if !seen_ids.insert(rule.id.clone()) {
-                return Err(format!("ID de regra duplicado no mesmo payload: '{}'", rule.id));
+                return Err(format!(
+                    "ID de regra duplicado no mesmo payload: '{}'",
+                    rule.id
+                ));
             }
             if rule.target_name.len() > MAX_RULE_NAME_LEN {
-                return Err(format!("Nome de alvo longo demais (máx {} chars)", MAX_RULE_NAME_LEN));
+                return Err(format!(
+                    "Nome de alvo longo demais (máx {} chars)",
+                    MAX_RULE_NAME_LEN
+                ));
             }
-            if rule.target_type != "item" && rule.target_type != "pokemon" && rule.target_type != "category" {
-                return Err(format!("targetType '{}' não suportado (apenas 'item', 'pokemon' ou 'category')", rule.target_type));
+            if rule.target_type != "item"
+                && rule.target_type != "pokemon"
+                && rule.target_type != "category"
+            {
+                return Err(format!(
+                    "targetType '{}' não suportado (apenas 'item', 'pokemon' ou 'category')",
+                    rule.target_type
+                ));
             }
 
             if rule.target_type == "category" {
                 let cat = match &rule.target_category {
                     Some(c) if !c.trim().is_empty() => c.trim().to_lowercase(),
-                    _ => return Err(format!("Regra de categoria '{}' requer targetCategory válido", rule.target_name)),
+                    _ => {
+                        return Err(format!(
+                            "Regra de categoria '{}' requer targetCategory válido",
+                            rule.target_name
+                        ))
+                    }
                 };
                 if !ALLOWED_CATEGORIES.contains(&cat.as_str()) {
                     return Err(format!("targetCategory '{}' desconhecido ou não suportado na regra '{}'. Categorias suportadas: {:?}", cat, rule.target_name, ALLOWED_CATEGORIES));
@@ -907,7 +1043,10 @@ impl SniperEngine {
                 let mut valid_excluded: Vec<u64> = Vec::new();
                 for &eid in &rule.excluded_item_ids {
                     if eid == 0 || eid > JS_MAX_SAFE_INTEGER {
-                        return Err(format!("Regra '{}': item excluído possui ID inválido ou fora dos limites ({})", rule.target_name, eid));
+                        return Err(format!(
+                            "Regra '{}': item excluído possui ID inválido ou fora dos limites ({})",
+                            rule.target_name, eid
+                        ));
                     }
                     match catalog.items_by_id.get(&eid) {
                         Some(cat_item) => {
@@ -938,8 +1077,13 @@ impl SniperEngine {
                     ));
                 }
                 if let Some(ref cat) = rule.target_category {
-                    if !cat.trim().is_empty() && !ALLOWED_CATEGORIES.contains(&cat.trim().to_lowercase().as_str()) {
-                        return Err(format!("targetCategory '{}' desconhecido na regra '{}'", cat, rule.target_name));
+                    if !cat.trim().is_empty()
+                        && !ALLOWED_CATEGORIES.contains(&cat.trim().to_lowercase().as_str())
+                    {
+                        return Err(format!(
+                            "targetCategory '{}' desconhecido na regra '{}'",
+                            cat, rule.target_name
+                        ));
                     }
                 }
             }
@@ -960,7 +1104,10 @@ impl SniperEngine {
                             rule.target_id = Some(json!(n));
                         }
                         _ => {
-                            return Err(format!("Regra '{}' possui targetId inválido ou não-positivo: {:?}", rule.target_name, tid_val));
+                            return Err(format!(
+                                "Regra '{}' possui targetId inválido ou não-positivo: {:?}",
+                                rule.target_name, tid_val
+                            ));
                         }
                     }
                 }
@@ -989,7 +1136,10 @@ impl SniperEngine {
             }
 
             if rule.max_price_gold == 0 && rule.max_price_gems == 0 {
-                return Err(format!("Regra '{}' sem teto de preço válido; rejeitada por segurança", rule.target_name));
+                return Err(format!(
+                    "Regra '{}' sem teto de preço válido; rejeitada por segurança",
+                    rule.target_name
+                ));
             }
         }
 
@@ -1110,11 +1260,14 @@ impl SniperEngine {
     }
 
     pub fn feed_welcome(&mut self, index: usize, msg: &Value) {
-        if index > 3 { return; }
+        if index > 3 {
+            return;
+        }
         let rt = &mut self.runtimes[index];
 
         let data = msg.get("data").unwrap_or(msg);
-        let est = data.get("estado")
+        let est = data
+            .get("estado")
             .or_else(|| msg.get("estado"))
             .or_else(|| data.get("payload").and_then(|p| p.get("estado")))
             .or_else(|| msg.get("payload").and_then(|p| p.get("estado")))
@@ -1124,14 +1277,16 @@ impl SniperEngine {
             .or_else(|| msg.get("jogador"));
 
         let player = est.unwrap_or(data);
-        let trainer = player.get("eu")
+        let trainer = player
+            .get("eu")
             .or_else(|| player.get("jogador"))
             .or_else(|| data.get("eu"))
             .or_else(|| msg.get("eu"))
             .unwrap_or(player);
 
         // 1. Server time offset
-        let srv_agora = trainer.get("servidorAgora")
+        let srv_agora = trainer
+            .get("servidorAgora")
             .or_else(|| player.get("servidorAgora"))
             .or_else(|| data.get("servidorAgora"))
             .or_else(|| msg.get("servidorAgora"))
@@ -1145,7 +1300,8 @@ impl SniperEngine {
         }
 
         // 2. Gold
-        let gold = trainer.get("gold")
+        let gold = trainer
+            .get("gold")
             .or_else(|| trainer.get("ouro"))
             .or_else(|| player.get("gold"))
             .or_else(|| player.get("ouro"))
@@ -1154,10 +1310,13 @@ impl SniperEngine {
             .or_else(|| msg.get("gold"))
             .or_else(|| msg.get("ouro"))
             .and_then(|v| v.as_i64());
-        if let Some(g) = gold { rt.gold = g; }
+        if let Some(g) = gold {
+            rt.gold = g;
+        }
 
         // 3. Diamonds
-        let diamonds = trainer.get("diamonds")
+        let diamonds = trainer
+            .get("diamonds")
             .or_else(|| trainer.get("diamantes"))
             .or_else(|| player.get("diamonds"))
             .or_else(|| player.get("diamantes"))
@@ -1166,10 +1325,13 @@ impl SniperEngine {
             .or_else(|| msg.get("diamonds"))
             .or_else(|| msg.get("diamantes"))
             .and_then(|v| v.as_i64());
-        if let Some(d) = diamonds { rt.diamonds = d; }
+        if let Some(d) = diamonds {
+            rt.diamonds = d;
+        }
 
         // 4. Orbs / Gemas
-        let orbs = trainer.get("orbs")
+        let orbs = trainer
+            .get("orbs")
             .or_else(|| trainer.get("gemas"))
             .or_else(|| trainer.get("gems"))
             .or_else(|| player.get("orbs"))
@@ -1182,10 +1344,13 @@ impl SniperEngine {
             .or_else(|| msg.get("gemas"))
             .or_else(|| msg.get("gems"))
             .and_then(|v| v.as_i64());
-        if let Some(o) = orbs { rt.orbs = o; }
+        if let Some(o) = orbs {
+            rt.orbs = o;
+        }
 
         // 5. VIP status
-        let vip_ate = trainer.get("vipAte")
+        let vip_ate = trainer
+            .get("vipAte")
             .or_else(|| player.get("vipAte"))
             .or_else(|| data.get("vipAte"))
             .or_else(|| msg.get("vipAte"))
@@ -1204,7 +1369,9 @@ impl SniperEngine {
     }
 
     pub fn on_connect_at(&mut self, index: usize, now_ms_val: u64) -> Vec<Value> {
-        if index > 3 { return Vec::new(); }
+        if index > 3 {
+            return Vec::new();
+        }
         let rt = &mut self.runtimes[index];
         rt.scheduled_offers.clear();
         rt.clear_scheduled_queries();
@@ -1236,7 +1403,9 @@ impl SniperEngine {
     }
 
     pub fn on_disconnect(&mut self, index: usize, app: Option<&AppHandle>) {
-        if index > 3 { return; }
+        if index > 3 {
+            return;
+        }
         let rt = &mut self.runtimes[index];
         rt.scheduled_offers.clear();
         rt.clear_scheduled_queries();
@@ -1273,7 +1442,9 @@ impl SniperEngine {
     }
 
     pub fn on_send_failure(&mut self, index: usize, cmd: &Value) {
-        if index > 3 { return; }
+        if index > 3 {
+            return;
+        }
         let cmd_t = cmd.get("t").and_then(|v| v.as_str()).unwrap_or("");
         let offer_id = cmd.get("id").and_then(|v| v.as_u64()).unwrap_or(0);
         if cmd_t != "market.comprar" || offer_id == 0 {
@@ -1320,6 +1491,67 @@ impl SniperEngine {
         }
     }
 
+    pub fn reserve_manual(&mut self, index: usize, offer_id: u64, ttl: Duration) -> Result<(), &'static str> {
+        if index >= 4 {
+            return Err("Índice de conta inválido");
+        }
+        if self.has_in_flight_offer(index, offer_id) {
+            return Err("O Sniper já enviou uma compra deste anúncio; aguarde a confirmação");
+        }
+        let rt = &mut self.runtimes[index];
+        rt.manual_reserved_until = Some(Instant::now() + ttl);
+        rt.manual_offer_id = Some(offer_id);
+        rt.manual_locked_until_ack = false;
+        Ok(())
+    }
+
+    pub fn lock_manual_until_ack(&mut self, index: usize, offer_id: u64) {
+        if index < 4 {
+            let rt = &mut self.runtimes[index];
+            if rt.manual_offer_id == Some(offer_id) {
+                rt.manual_offer_id = Some(offer_id);
+                rt.manual_locked_until_ack = true;
+            }
+        }
+    }
+
+    pub fn release_manual(&mut self, index: usize, offer_id: Option<u64>) {
+        if index < 4 {
+            let rt = &mut self.runtimes[index];
+            if let Some(expected) = offer_id {
+                if rt.manual_offer_id.is_some() && rt.manual_offer_id != Some(expected) {
+                    return;
+                }
+            }
+            rt.manual_reserved_until = None;
+            rt.manual_offer_id = None;
+            rt.manual_locked_until_ack = false;
+        }
+    }
+
+    pub fn has_in_flight_offer(&self, index: usize, offer_id: u64) -> bool {
+        if index >= 4 || offer_id == 0 {
+            return false;
+        }
+        self.store.accounts.get(index)
+            .and_then(|acc| acc.pending_intent.as_ref())
+            .map_or(false, |pending| pending.offer_id == offer_id)
+            || self.runtimes[index].outstanding_buy.as_ref()
+                .map_or(false, |pending| pending.offer_id == offer_id)
+    }
+
+    pub fn has_in_flight_buy(&self, index: usize) -> bool {
+        if index >= 4 {
+            return false;
+        }
+        if let Some(acc) = self.store.accounts.get(index) {
+            if acc.pending_intent.is_some() {
+                return true;
+            }
+        }
+        self.runtimes[index].outstanding_buy.is_some()
+    }
+
     pub fn try_emit_buy(
         &mut self,
         index: usize,
@@ -1356,6 +1588,9 @@ impl SniperEngine {
         seller: String,
         now_ms_val: u64,
     ) -> Option<Value> {
+        if self.runtimes[index].is_manual_reserved() {
+            return None;
+        }
         let total_cost = buy_qty.checked_mul(price)?;
         let avail = self.runtimes[index].available_balance(&currency)?;
         if avail < total_cost {
@@ -1428,6 +1663,7 @@ impl SniperEngine {
             retry_count: 1,
             reserved_amount: total_cost,
             state: BuyState::PendingConfirmation,
+            lottery_observed: false,
             aux_log_keys: HashSet::new(),
         });
         rt.bought_offers.insert(offer_id, Instant::now());
@@ -1441,8 +1677,15 @@ impl SniperEngine {
         }))
     }
 
-    pub fn on_tick(&mut self, index: usize, now_ms_val: u64, app: Option<&AppHandle>) -> Vec<Value> {
-        if index > 3 { return Vec::new(); }
+    pub fn on_tick(
+        &mut self,
+        index: usize,
+        now_ms_val: u64,
+        app: Option<&AppHandle>,
+    ) -> Vec<Value> {
+        if index > 3 {
+            return Vec::new();
+        }
         let mut out_commands = Vec::new();
 
         let acc_snapshot = self.store.accounts[index].clone();
@@ -1471,7 +1714,9 @@ impl SniperEngine {
             let rt = &mut self.runtimes[index];
             rt.prune_old_records();
             if let Some(buy) = &mut rt.outstanding_buy {
-                if buy.state == BuyState::PendingConfirmation && buy.sent_at.elapsed() > Duration::from_secs(BUY_TIMEOUT_SECS) {
+                if buy.state == BuyState::PendingConfirmation
+                    && buy.sent_at.elapsed() > Duration::from_secs(BUY_TIMEOUT_SECS)
+                {
                     buy.state = BuyState::UncertainBlocked;
                     timed_out_buy = Some(buy.clone());
                 }
@@ -1516,25 +1761,31 @@ impl SniperEngine {
         for oid in ready_ids {
             let sched_opt = self.runtimes[index].scheduled_offers.remove(&oid);
             if let Some(sched) = sched_opt {
-                if !acc_snapshot.enabled { continue; }
+                if !acc_snapshot.enabled {
+                    continue;
+                }
 
                 // Revalidate against rule budget and exclusions
                 let mut buy_qty = sched.buy_qty;
                 if let Some(rid) = &sched.rule_id {
                     if let Some(r) = acc_snapshot.rules.iter().find(|r| &r.id == rid) {
-                        if !r.active { continue; }
+                        if !r.active {
+                            continue;
+                        }
                         if r.target_type == "category" && !r.matches_category(sched.item_id) {
                             continue;
                         }
                         let rem = r.remaining_qty(self.runtimes[index].is_vip);
-                        if rem == 0 { continue; }
+                        if rem == 0 {
+                            continue;
+                        }
                         buy_qty = buy_qty.min(rem);
                     } else {
                         continue;
                     }
                 }
 
-                if self.runtimes[index].outstanding_buy.is_some() {
+                if self.runtimes[index].outstanding_buy.is_some() || self.runtimes[index].is_manual_reserved() {
                     continue;
                 }
 
@@ -1565,7 +1816,11 @@ impl SniperEngine {
                 Duration::from_millis(3000)
             } else {
                 let is_hot = rt.is_hot();
-                Duration::from_millis(if is_hot { acc_snapshot.config.fast_scan_interval_ms } else { acc_snapshot.config.scan_interval_ms })
+                Duration::from_millis(if is_hot {
+                    acc_snapshot.config.fast_scan_interval_ms
+                } else {
+                    acc_snapshot.config.scan_interval_ms
+                })
             };
 
             let should_scan = match rt.last_scan_instant {
@@ -1578,11 +1833,19 @@ impl SniperEngine {
                 rt.scan_cycle = rt.scan_cycle.wrapping_add(1);
                 let cycle = rt.scan_cycle;
 
-                let has_items = acc_snapshot.rules.iter().any(|r| r.active && (r.target_type == "item" || r.target_type == "category" || r.target_type.is_empty()));
+                let has_items = acc_snapshot.rules.iter().any(|r| {
+                    r.active
+                        && (r.target_type == "item"
+                            || r.target_type == "category"
+                            || r.target_type.is_empty())
+                });
                 let has_poke = acc_snapshot.config.snipe_any_shiny
                     || acc_snapshot.config.snipe_any_p5
                     || (acc_snapshot.config.snipe_by_note && acc_snapshot.config.min_note >= 1.0)
-                    || acc_snapshot.rules.iter().any(|r| r.active && r.target_type == "pokemon");
+                    || acc_snapshot
+                        .rules
+                        .iter()
+                        .any(|r| r.active && r.target_type == "pokemon");
 
                 if has_items {
                     out_commands.push(json!({ "t": "market.itens" }));
@@ -1591,9 +1854,15 @@ impl SniperEngine {
                 if has_poke {
                     let make_poke_cmd = |k: usize| -> Value {
                         match k % 3 {
-                            1 => json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "menor_preco", "moeda": "gold", "busca": "", "criterios": [], "elemento": "" }),
-                            2 => json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "menor_preco", "moeda": "orb", "busca": "", "criterios": [], "elemento": "" }),
-                            _ => json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "recentes", "moeda": "", "busca": "", "criterios": [], "elemento": "" }),
+                            1 => {
+                                json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "menor_preco", "moeda": "gold", "busca": "", "criterios": [], "elemento": "" })
+                            }
+                            2 => {
+                                json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "menor_preco", "moeda": "orb", "busca": "", "criterios": [], "elemento": "" })
+                            }
+                            _ => {
+                                json!({ "t": "market.listar", "tipo": "pokemon", "ordem": "recentes", "moeda": "", "busca": "", "criterios": [], "elemento": "" })
+                            }
                         }
                     };
 
@@ -1632,7 +1901,9 @@ impl SniperEngine {
     }
 
     pub fn on_message(&mut self, index: usize, msg: &Value, app: Option<&AppHandle>) -> Vec<Value> {
-        if index > 3 { return Vec::new(); }
+        if index > 3 {
+            return Vec::new();
+        }
         let t = msg.get("t").and_then(|v| v.as_str()).unwrap_or("");
         let mut out_commands = Vec::new();
 
@@ -1642,15 +1913,22 @@ impl SniperEngine {
         // 2. Battle confirmation & lottery events (batalha.ev marketComprado, mktSorteio)
         if t == "batalha" || t == "marketComprado" || t == "mktSorteio" {
             let events_vec: Vec<Value> = if t == "batalha" {
-                msg.get("ev").and_then(|v| v.as_array()).cloned().unwrap_or_default()
+                msg.get("ev")
+                    .and_then(|v| v.as_array())
+                    .cloned()
+                    .unwrap_or_default()
             } else {
                 vec![msg.clone()]
             };
 
             for ev in events_vec {
-                let k = ev.get("k").or_else(|| ev.get("t")).and_then(|v| v.as_str()).unwrap_or("");
+                let k = ev
+                    .get("k")
+                    .or_else(|| ev.get("t"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 if k == "marketComprado" {
-                    let ev_id_opt = ev.get("id").and_then(|v| v.as_u64());
+                    let ev_id_opt = extract_explicit_offer_id(&ev);
                     let rt = &mut self.runtimes[index];
 
                     // Check explicit ID if present: divergent ID must NOT confirm; keep pending and log bounded diagnostic!
@@ -1685,19 +1963,24 @@ impl SniperEngine {
                         }
                     }
 
-                    let desc = ev.get("descricao").and_then(|v| v.as_str()).unwrap_or("Item entregue no depot/mochila!");
+                    let desc = ev
+                        .get("descricao")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("Item entregue no depot/mochila!");
                     if let Some(buy) = rt.outstanding_buy.take() {
                         rt.release_reservation(&buy.currency, buy.reserved_amount);
                         // Debit cached balance unless authoritative newer wallet already applied to avoid overspending
                         match normalize_currency(&buy.currency) {
                             "gold" => {
                                 if rt.gold >= 0 {
-                                    rt.gold = (rt.gold as u64).saturating_sub(buy.reserved_amount) as i64;
+                                    rt.gold =
+                                        (rt.gold as u64).saturating_sub(buy.reserved_amount) as i64;
                                 }
                             }
                             "orb" => {
                                 if rt.orbs >= 0 {
-                                    rt.orbs = (rt.orbs as u64).saturating_sub(buy.reserved_amount) as i64;
+                                    rt.orbs =
+                                        (rt.orbs as u64).saturating_sub(buy.reserved_amount) as i64;
                                 }
                             }
                             _ => {}
@@ -1708,14 +1991,33 @@ impl SniperEngine {
                         let acc = &mut candidate.accounts[index];
                         acc.pending_intent = None;
 
+                        let confirmed_at = now_ms();
                         let mut ok_extra = HashMap::new();
                         if !buy.seller.is_empty() {
                             ok_extra.insert("seller".into(), json!(buy.seller));
                         }
+                        // A server purchase confirms a lottery win only when its own
+                        // flag or an earlier server lottery event ties it to this offer.
+                        let explicit_lottery = ev.get("sorteio").and_then(|v| v.as_bool());
+                        if explicit_lottery == Some(true)
+                            || (explicit_lottery.is_none() && buy.lottery_observed)
+                        {
+                            let evidence = if explicit_lottery == Some(true) {
+                                "marketComprado.sorteio"
+                            } else {
+                                "marketComprado.afterSorteio"
+                            };
+                            add_verified_lottery_metadata(
+                                &mut ok_extra,
+                                "win",
+                                evidence,
+                                confirmed_at,
+                            );
+                        }
                         let resolved_target = resolve_confirmed_target_name(&buy.target_name, desc);
                         let entry = SniperLogEntry {
-                            id: format!("ok_{}_{}", now_ms(), buy.offer_id),
-                            timestamp: now_ms(),
+                            id: format!("ok_{}_{}", confirmed_at, buy.offer_id),
+                            timestamp: confirmed_at,
                             status: "CONFIRMADO".into(),
                             target_name: resolved_target,
                             price: Some(buy.price),
@@ -1736,62 +2038,103 @@ impl SniperEngine {
                     }
                 } else if k == "mktSorteio" {
                     let ev_id_opt = extract_explicit_offer_id(&ev);
-                    let fase = sanitize_text(ev.get("fase").and_then(|v| v.as_str()).unwrap_or(""), 24);
+                    let fase =
+                        sanitize_text(ev.get("fase").and_then(|v| v.as_str()).unwrap_or(""), 24);
                     let rt = &mut self.runtimes[index];
-                    if let Some(pending_offer_id) = rt.outstanding_buy.as_ref().map(|b| b.offer_id) {
+                    if let Some(pending_offer_id) = rt.outstanding_buy.as_ref().map(|b| b.offer_id)
+                    {
                         if let Some(ev_id) = ev_id_opt {
                             if ev_id == pending_offer_id {
                                 if fase == "fim" {
-                                    let perdeu = ev.get("perdeu").and_then(|v| v.as_bool()).unwrap_or(false);
-                                    let ok = ev.get("ok").and_then(|v| v.as_bool()).unwrap_or(false);
-                                    if perdeu || (!ok && ev.get("msg").is_some()) {
+                                    let perdeu = ev.get("perdeu").and_then(|v| v.as_bool());
+                                    let ok = ev.get("ok").and_then(|v| v.as_bool());
+                                    // 'fim' with a free-form message is not proof of
+                                    // defeat. Require an explicit terminal server flag.
+                                    if (perdeu == Some(true) || ok == Some(false))
+                                        && ok != Some(true)
+                                    {
                                         // Lost lottery: terminal rejection!
                                         let buy_taken = rt.outstanding_buy.take().unwrap();
-                                        rt.release_reservation(&buy_taken.currency, buy_taken.reserved_amount);
+                                        rt.release_reservation(
+                                            &buy_taken.currency,
+                                            buy_taken.reserved_amount,
+                                        );
                                         let mut candidate = self.store.clone();
                                         let acc = &mut candidate.accounts[index];
                                         if let Some(ref rid) = buy_taken.rule_id {
-                                            if let Some(r) = acc.rules.iter_mut().find(|r| &r.id == rid) {
-                                                r.total_bought = r.total_bought.saturating_sub(buy_taken.qty);
+                                            if let Some(r) =
+                                                acc.rules.iter_mut().find(|r| &r.id == rid)
+                                            {
+                                                r.total_bought =
+                                                    r.total_bought.saturating_sub(buy_taken.qty);
                                             }
                                         }
                                         acc.pending_intent = None;
                                         let motivo = sanitize_text(
-                                            ev.get("msg").and_then(|v| v.as_str()).unwrap_or("Outro jogador levou no sorteio de liberação"),
+                                            ev.get("msg").and_then(|v| v.as_str()).unwrap_or(
+                                                "Outro jogador levou no sorteio de liberação",
+                                            ),
                                             120,
                                         );
+                                        let confirmed_at = now_ms();
+                                        let mut loss_extra = HashMap::new();
+                                        let evidence = if perdeu == Some(true) {
+                                            "mktSorteio.fim.perdeu"
+                                        } else {
+                                            "mktSorteio.fim.okFalse"
+                                        };
+                                        add_verified_lottery_metadata(
+                                            &mut loss_extra,
+                                            "loss",
+                                            evidence,
+                                            confirmed_at,
+                                        );
                                         let entry = SniperLogEntry {
-                                            id: format!("sorteio_perdeu_{}_{}", now_ms(), buy_taken.offer_id),
-                                            timestamp: now_ms(),
+                                            id: format!(
+                                                "sorteio_perdeu_{}_{}",
+                                                confirmed_at, buy_taken.offer_id
+                                            ),
+                                            timestamp: confirmed_at,
                                             status: "RECUSADO".into(),
                                             target_name: buy_taken.target_name,
                                             price: Some(buy_taken.price),
                                             currency: Some(buy_taken.currency),
                                             qty: Some(buy_taken.qty),
                                             offer_id: Some(buy_taken.offer_id),
-                                            details: format!("❌ Recusado pelo servidor: {}", motivo),
+                                            details: format!(
+                                                "❌ Recusado pelo servidor: {}",
+                                                motivo
+                                            ),
                                             account_index: Some(index),
-                                            extra: HashMap::new(),
+                                            extra: loss_extra,
                                         };
                                         add_log_to_account(acc, entry);
                                         let _ = self.persist_store_candidate(&candidate);
                                         self.store = candidate;
                                         if let Some(a) = app {
-                                            let _ = a.emit("sniper:updated", &self.store.to_snapshot());
+                                            let _ =
+                                                a.emit("sniper:updated", &self.store.to_snapshot());
                                         }
-                                    } else if ok {
+                                    } else if ok == Some(true) && perdeu != Some(true) {
                                         // Won lottery: confirm once (subsequent marketComprado for same offer_id sees outstanding_buy=None)
                                         let buy_taken = rt.outstanding_buy.take().unwrap();
-                                        rt.release_reservation(&buy_taken.currency, buy_taken.reserved_amount);
+                                        rt.release_reservation(
+                                            &buy_taken.currency,
+                                            buy_taken.reserved_amount,
+                                        );
                                         match normalize_currency(&buy_taken.currency) {
                                             "gold" => {
                                                 if rt.gold >= 0 {
-                                                    rt.gold = (rt.gold as u64).saturating_sub(buy_taken.reserved_amount) as i64;
+                                                    rt.gold = (rt.gold as u64)
+                                                        .saturating_sub(buy_taken.reserved_amount)
+                                                        as i64;
                                                 }
                                             }
                                             "orb" => {
                                                 if rt.orbs >= 0 {
-                                                    rt.orbs = (rt.orbs as u64).saturating_sub(buy_taken.reserved_amount) as i64;
+                                                    rt.orbs = (rt.orbs as u64)
+                                                        .saturating_sub(buy_taken.reserved_amount)
+                                                        as i64;
                                                 }
                                             }
                                             _ => {}
@@ -1800,22 +2143,42 @@ impl SniperEngine {
                                         let mut candidate = self.store.clone();
                                         let acc = &mut candidate.accounts[index];
                                         acc.pending_intent = None;
-                                        let desc = ev.get("descricao").and_then(|v| v.as_str()).unwrap_or("Venceu o sorteio de liberação!");
+                                        let desc = ev
+                                            .get("descricao")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("Venceu o sorteio de liberação!");
                                         let mut ok_extra = HashMap::new();
                                         if !buy_taken.seller.is_empty() {
-                                            ok_extra.insert("seller".into(), json!(buy_taken.seller));
+                                            ok_extra
+                                                .insert("seller".into(), json!(buy_taken.seller));
                                         }
-                                        let resolved_target = resolve_confirmed_target_name(&buy_taken.target_name, desc);
+                                        let confirmed_at = now_ms();
+                                        add_verified_lottery_metadata(
+                                            &mut ok_extra,
+                                            "win",
+                                            "mktSorteio.fim.ok",
+                                            confirmed_at,
+                                        );
+                                        let resolved_target = resolve_confirmed_target_name(
+                                            &buy_taken.target_name,
+                                            desc,
+                                        );
                                         let entry = SniperLogEntry {
-                                            id: format!("ok_{}_{}", now_ms(), buy_taken.offer_id),
-                                            timestamp: now_ms(),
+                                            id: format!(
+                                                "ok_{}_{}",
+                                                confirmed_at, buy_taken.offer_id
+                                            ),
+                                            timestamp: confirmed_at,
                                             status: "CONFIRMADO".into(),
                                             target_name: resolved_target,
                                             price: Some(buy_taken.price),
                                             currency: Some(buy_taken.currency),
                                             qty: Some(buy_taken.qty),
                                             offer_id: Some(buy_taken.offer_id),
-                                            details: format!("✅ Confirmado pelo servidor: {}", desc),
+                                            details: format!(
+                                                "✅ Confirmado pelo servidor: {}",
+                                                desc
+                                            ),
                                             account_index: Some(index),
                                             extra: ok_extra,
                                         };
@@ -1823,14 +2186,22 @@ impl SniperEngine {
                                         let _ = self.persist_store_candidate(&candidate);
                                         self.store = candidate;
                                         if let Some(a) = app {
-                                            let _ = a.emit("sniper:updated", &self.store.to_snapshot());
+                                            let _ =
+                                                a.emit("sniper:updated", &self.store.to_snapshot());
                                         }
                                     }
                                 } else if let Some(buy) = rt.outstanding_buy.as_mut() {
                                     // Progress ("entrou" or "lista"): keep pending, deduplicate & cap disk logs
+                                    if fase == "entrou" || fase == "lista" {
+                                        buy.lottery_observed = true;
+                                    }
                                     if buy.allow_aux_log(format!("prog:sorteio:{}", fase)) {
                                         let entry = SniperLogEntry {
-                                            id: format!("sorteio_prog_{}_{}", now_ms(), buy.offer_id),
+                                            id: format!(
+                                                "sorteio_prog_{}_{}",
+                                                now_ms(),
+                                                buy.offer_id
+                                            ),
                                             timestamp: now_ms(),
                                             status: "PROGRESSO".into(),
                                             target_name: buy.target_name.clone(),
@@ -1838,7 +2209,10 @@ impl SniperEngine {
                                             currency: Some(buy.currency.clone()),
                                             qty: Some(buy.qty),
                                             offer_id: Some(buy.offer_id),
-                                            details: format!("⏳ Sorteio de liberação: fase '{}'", fase),
+                                            details: format!(
+                                                "⏳ Sorteio de liberação: fase '{}'",
+                                                fase
+                                            ),
                                             account_index: Some(index),
                                             extra: HashMap::new(),
                                         };
@@ -1848,7 +2222,8 @@ impl SniperEngine {
                                         let _ = self.persist_store_candidate(&candidate);
                                         self.store = candidate;
                                         if let Some(a) = app {
-                                            let _ = a.emit("sniper:updated", &self.store.to_snapshot());
+                                            let _ =
+                                                a.emit("sniper:updated", &self.store.to_snapshot());
                                         }
                                     }
                                 }
@@ -1906,7 +2281,9 @@ impl SniperEngine {
             if aba == "itens" {
                 if let Some(resumo) = msg.get("resumo").and_then(|v| v.as_object()) {
                     let acc_snapshot = self.store.accounts[index].clone();
-                    if !acc_snapshot.enabled { return out_commands; }
+                    if !acc_snapshot.enabled {
+                        return out_commands;
+                    }
 
                     let catalog = SniperCatalog::get();
                     let mut sent_queries: HashSet<(u64, &'static str)> = HashSet::new();
@@ -1931,7 +2308,10 @@ impl SniperEngine {
                             if let Some(cat) = &rule.target_category {
                                 if let Some(cat_ids) = catalog.ids_by_category.get(cat.as_str()) {
                                     items_to_check.extend(
-                                        cat_ids.iter().copied().filter(|id| !rule.excluded_item_ids.contains(id))
+                                        cat_ids
+                                            .iter()
+                                            .copied()
+                                            .filter(|id| !rule.excluded_item_ids.contains(id)),
                                     );
                                 }
                             }
@@ -1940,15 +2320,22 @@ impl SniperEngine {
                         for item_id in items_to_check {
                             let key = item_id.to_string();
                             if let Some(r_item) = resumo.get(&key) {
-                                let min_gold = r_item.get("minGold").and_then(|v| v.as_u64()).unwrap_or(0);
-                                let min_orb = r_item.get("minOrb").and_then(|v| v.as_u64()).unwrap_or(0);
+                                let min_gold =
+                                    r_item.get("minGold").and_then(|v| v.as_u64()).unwrap_or(0);
+                                let min_orb =
+                                    r_item.get("minOrb").and_then(|v| v.as_u64()).unwrap_or(0);
 
-                                let match_gold = rule.max_price_gold > 0 && min_gold > 0 && min_gold <= rule.max_price_gold;
-                                let match_orb = rule.max_price_gems > 0 && min_orb > 0 && min_orb <= rule.max_price_gems;
+                                let match_gold = rule.max_price_gold > 0
+                                    && min_gold > 0
+                                    && min_gold <= rule.max_price_gold;
+                                let match_orb = rule.max_price_gems > 0
+                                    && min_orb > 0
+                                    && min_orb <= rule.max_price_gems;
 
                                 if match_gold && !sent_queries.contains(&(item_id, "gold")) {
                                     sent_queries.insert((item_id, "gold"));
-                                    self.runtimes[index].hot_until = Some(Instant::now() + Duration::from_secs(150));
+                                    self.runtimes[index].hot_until =
+                                        Some(Instant::now() + Duration::from_secs(150));
                                     out_commands.push(json!({
                                         "t": "market.item",
                                         "itemId": item_id,
@@ -1958,7 +2345,8 @@ impl SniperEngine {
 
                                 if match_orb && !sent_queries.contains(&(item_id, "orb")) {
                                     sent_queries.insert((item_id, "orb"));
-                                    self.runtimes[index].hot_until = Some(Instant::now() + Duration::from_secs(150));
+                                    self.runtimes[index].hot_until =
+                                        Some(Instant::now() + Duration::from_secs(150));
                                     out_commands.push(json!({
                                         "t": "market.item",
                                         "itemId": item_id,
@@ -1973,15 +2361,21 @@ impl SniperEngine {
             }
 
             // Parse offers with strict envelope inheritance for itemId and moeda
-            let env_item_id = msg.get("itemId").and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()));
-            let env_moeda = msg.get("moeda").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase());
+            let env_item_id = msg
+                .get("itemId")
+                .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()));
+            let env_moeda = msg
+                .get("moeda")
+                .and_then(|v| v.as_str())
+                .map(|s| s.trim().to_lowercase());
 
             let mut raw_rows = Vec::new();
             let mut extract_rows = |arr: &[Value]| {
                 for r in arr {
                     let mut enriched = r.clone();
                     if let Some(env_id) = env_item_id {
-                        let line_id = enriched.get("itemId")
+                        let line_id = enriched
+                            .get("itemId")
                             .or_else(|| enriched.get("ficha").and_then(|f| f.get("itemId")))
                             .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()));
                         if let Some(lid) = line_id {
@@ -1993,7 +2387,10 @@ impl SniperEngine {
                         }
                     }
                     if let Some(ref env_m) = env_moeda {
-                        let line_m = enriched.get("moeda").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase());
+                        let line_m = enriched
+                            .get("moeda")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.trim().to_lowercase());
                         if let Some(lm) = line_m {
                             let lm_norm = match lm.as_str() {
                                 "gold" | "coins" | "coin" => "gold",
@@ -2017,22 +2414,36 @@ impl SniperEngine {
                     raw_rows.push(enriched);
                 }
             };
-            if let Some(linhas) = msg.get("linhas").and_then(|v| v.as_array()) { extract_rows(linhas); }
-            if let Some(anuncios) = msg.get("anuncios").and_then(|v| v.as_array()) { extract_rows(anuncios); }
-            if let Some(itens) = msg.get("itens").and_then(|v| v.as_array()) { extract_rows(itens); }
-            if let Some(anuncio) = msg.get("anuncio").filter(|v| v.is_object()) { extract_rows(&[anuncio.clone()]); }
+            if let Some(linhas) = msg.get("linhas").and_then(|v| v.as_array()) {
+                extract_rows(linhas);
+            }
+            if let Some(anuncios) = msg.get("anuncios").and_then(|v| v.as_array()) {
+                extract_rows(anuncios);
+            }
+            if let Some(itens) = msg.get("itens").and_then(|v| v.as_array()) {
+                extract_rows(itens);
+            }
+            if let Some(anuncio) = msg.get("anuncio").filter(|v| v.is_object()) {
+                extract_rows(&[anuncio.clone()]);
+            }
 
-            if raw_rows.is_empty() { return out_commands; }
+            if raw_rows.is_empty() {
+                return out_commands;
+            }
 
             // Clone account snapshot to avoid borrow conflicts when try_emit_buy is called
             let acc_snapshot = self.store.accounts[index].clone();
-            if !acc_snapshot.enabled { return out_commands; }
+            if !acc_snapshot.enabled {
+                return out_commands;
+            }
 
             for row in raw_rows {
                 if let Some(offer) = parse_offer(&row) {
                     let (decision, is_cooldown, delay_ms) = {
                         let rt = &self.runtimes[index];
-                        if rt.confirmed_offers.contains(&offer.id) || rt.scheduled_offers.contains_key(&offer.id) {
+                        if rt.confirmed_offers.contains(&offer.id)
+                            || rt.scheduled_offers.contains_key(&offer.id)
+                        {
                             continue;
                         }
                         if let Some(attempt_ts) = rt.bought_offers.get(&offer.id) {
@@ -2047,7 +2458,11 @@ impl SniperEngine {
                         }
 
                         let active_slots = acc_snapshot.rules.iter().filter(|r| r.active).count();
-                        let max_slots = if rt.is_vip { VIP_MAX_SLOTS } else { acc_snapshot.config.max_active_slots };
+                        let max_slots = if rt.is_vip {
+                            VIP_MAX_SLOTS
+                        } else {
+                            acc_snapshot.config.max_active_slots
+                        };
                         if active_slots > (max_slots as usize) && dec.rule_id.is_some() {
                             continue;
                         }
@@ -2055,25 +2470,32 @@ impl SniperEngine {
                         let server_now = rt.server_now_ms();
                         let compravel_em = offer.compravel_em.unwrap_or(0);
                         let cooldown = compravel_em > (server_now + 50);
-                        let delay = if cooldown { (compravel_em - server_now) + 100 } else { 0 };
+                        let delay = if cooldown {
+                            (compravel_em - server_now) + 100
+                        } else {
+                            0
+                        };
                         (dec, cooldown, delay)
                     };
 
                     if is_cooldown {
-                        self.runtimes[index].scheduled_offers.insert(offer.id, ScheduledOffer {
-                            offer_id: offer.id,
-                            rule_id: decision.rule_id.clone(),
-                            target_name: decision.target_display_name.clone(),
-                            buy_qty: decision.buy_qty,
-                            price: offer.price,
-                            currency: offer.currency.clone(),
-                            scheduled_at: Instant::now(),
-                            release_at: Instant::now() + Duration::from_millis(delay_ms),
-                            attempts: 0,
-                            seller: offer.seller.clone(),
-                            item_id: offer.item_id,
-                        });
-                    } else if self.runtimes[index].outstanding_buy.is_none() {
+                        self.runtimes[index].scheduled_offers.insert(
+                            offer.id,
+                            ScheduledOffer {
+                                offer_id: offer.id,
+                                rule_id: decision.rule_id.clone(),
+                                target_name: decision.target_display_name.clone(),
+                                buy_qty: decision.buy_qty,
+                                price: offer.price,
+                                currency: offer.currency.clone(),
+                                scheduled_at: Instant::now(),
+                                release_at: Instant::now() + Duration::from_millis(delay_ms),
+                                attempts: 0,
+                                seller: offer.seller.clone(),
+                                item_id: offer.item_id,
+                            },
+                        );
+                    } else if self.runtimes[index].outstanding_buy.is_none() && !self.runtimes[index].is_manual_reserved() {
                         // Immediate buy with persistent pre-consumption
                         if let Some(cmd) = self.try_emit_buy_with_seller(
                             index,
@@ -2102,10 +2524,18 @@ impl SniperEngine {
 }
 
 impl SniperEngine {
-    fn handle_pending_buy_reply(&mut self, index: usize, pkt: &Value, default_op: &str, app: Option<&AppHandle>) {
+    fn handle_pending_buy_reply(
+        &mut self,
+        index: usize,
+        pkt: &Value,
+        default_op: &str,
+        app: Option<&AppHandle>,
+    ) {
         let explicit_id = extract_explicit_offer_id(pkt);
-        let is_terminal = is_terminal_market_rejection(pkt);
         let is_prog = is_lottery_progress(pkt);
+        // The server may include op=market.comprar on a lottery progress
+        // notice. It must not be mistaken for a terminal rejection.
+        let is_terminal = !is_prog && is_terminal_market_rejection(pkt);
         let rt = &mut self.runtimes[index];
 
         let Some(pending_offer_id) = rt.outstanding_buy.as_ref().map(|b| b.offer_id) else {
@@ -2117,7 +2547,10 @@ impl SniperEngine {
             if ev_id != pending_offer_id {
                 if let Some(buy) = rt.outstanding_buy.as_mut() {
                     if buy.allow_aux_log(format!("diag:reply_id:{}:{}", default_op, ev_id)) {
-                        let chave = sanitize_text(get_str_field(pkt, &["chave", "key", "erro", "error"]), 60);
+                        let chave = sanitize_text(
+                            get_str_field(pkt, &["chave", "key", "erro", "error"]),
+                            60,
+                        );
                         let entry = SniperLogEntry {
                             id: format!("diag_id_{}_{}", now_ms(), buy.offer_id),
                             timestamp: now_ms(),
@@ -2162,17 +2595,33 @@ impl SniperEngine {
                 }
                 acc.pending_intent = None;
 
-                let raw_reason = get_str_field(pkt, &["msg", "mensagem", "message", "m", "chave", "key", "erro", "error"]);
+                let raw_reason = get_str_field(
+                    pkt,
+                    &[
+                        "msg", "mensagem", "message", "m", "chave", "key", "erro", "error",
+                    ],
+                );
                 let clean_reason = sanitize_text(raw_reason, 120);
                 let details_str = if !clean_reason.is_empty() {
                     format!("❌ Recusado pelo servidor: {}", clean_reason)
                 } else {
-                    "❌ Recusado pelo servidor: Operação de mercado recusada pelo servidor".to_string()
+                    "❌ Recusado pelo servidor: Operação de mercado recusada pelo servidor"
+                        .to_string()
                 };
 
+                let confirmed_at = now_ms();
+                let mut extra = HashMap::new();
+                if is_lottery_loss_reply(pkt) {
+                    add_verified_lottery_metadata(
+                        &mut extra,
+                        "loss",
+                        &format!("{}.market.sorteioPerdeu", default_op),
+                        confirmed_at,
+                    );
+                }
                 let entry = SniperLogEntry {
-                    id: format!("err_{}_{}", now_ms(), buy.offer_id),
-                    timestamp: now_ms(),
+                    id: format!("err_{}_{}", confirmed_at, buy.offer_id),
+                    timestamp: confirmed_at,
                     status: "RECUSADO".into(),
                     target_name: buy.target_name,
                     price: Some(buy.price),
@@ -2181,7 +2630,7 @@ impl SniperEngine {
                     offer_id: Some(buy.offer_id),
                     details: details_str,
                     account_index: Some(index),
-                    extra: HashMap::new(),
+                    extra,
                 };
                 add_log_to_account(acc, entry);
                 let _ = self.persist_store_candidate(&candidate);
@@ -2193,7 +2642,11 @@ impl SniperEngine {
             }
         } else if is_prog {
             if let Some(buy) = rt.outstanding_buy.as_mut() {
-                let chave = sanitize_text(get_str_field(pkt, &["chave", "key", "erro", "error", "msg", "mensagem"]), 60);
+                buy.lottery_observed = true;
+                let chave = sanitize_text(
+                    get_str_field(pkt, &["chave", "key", "erro", "error", "msg", "mensagem"]),
+                    60,
+                );
                 if buy.allow_aux_log(format!("prog:reply:{}", chave.to_lowercase())) {
                     let entry = SniperLogEntry {
                         id: format!("prog_{}_{}", now_ms(), buy.offer_id),
@@ -2204,7 +2657,10 @@ impl SniperEngine {
                         currency: Some(buy.currency.clone()),
                         qty: Some(buy.qty),
                         offer_id: Some(buy.offer_id),
-                        details: format!("⏳ Pedido entrou no sorteio de liberação (aguardando desfecho - {})", chave),
+                        details: format!(
+                            "⏳ Pedido entrou no sorteio de liberação (aguardando desfecho - {})",
+                            chave
+                        ),
                         account_index: Some(index),
                         extra: HashMap::new(),
                     };
@@ -2222,10 +2678,18 @@ impl SniperEngine {
         } else if default_op == "erro" {
             // Unrecognized error while pending: MUST NOT release budget or unblock pending intents!
             if let Some(buy) = rt.outstanding_buy.as_mut() {
-                let chave = sanitize_text(get_str_field(pkt, &["chave", "key", "erro", "error"]), 60);
-                let raw_err = sanitize_text(get_str_field(pkt, &["msg", "mensagem", "message", "m"]), 120);
+                let chave =
+                    sanitize_text(get_str_field(pkt, &["chave", "key", "erro", "error"]), 60);
+                let raw_err = sanitize_text(
+                    get_str_field(pkt, &["msg", "mensagem", "message", "m"]),
+                    120,
+                );
                 let op = sanitize_text(get_str_field(pkt, &["op", "acao", "t", "tipo"]), 40);
-                let op_display = if op.is_empty() { default_op } else { op.as_str() };
+                let op_display = if op.is_empty() {
+                    default_op
+                } else {
+                    op.as_str()
+                };
                 let dedup = format!("diag:err:{}:{}:{}", chave, raw_err, op_display);
                 if buy.allow_aux_log(dedup) {
                     let details = if !chave.is_empty() && !raw_err.is_empty() {
@@ -2235,7 +2699,10 @@ impl SniperEngine {
                     } else if !raw_err.is_empty() {
                         format!("🔍 Resposta de erro não reconhecida (msg='{}', op='{}') para compra pendente #{}", raw_err, op_display, buy.offer_id)
                     } else {
-                        format!("🔍 Resposta de erro sem detalhes para compra pendente #{}", buy.offer_id)
+                        format!(
+                            "🔍 Resposta de erro sem detalhes para compra pendente #{}",
+                            buy.offer_id
+                        )
                     };
 
                     let entry = SniperLogEntry {
@@ -2268,7 +2735,10 @@ impl SniperEngine {
 
 fn extract_explicit_offer_id(val: &Value) -> Option<u64> {
     for k in &["id", "anuncioId", "offerId"] {
-        if let Some(id) = val.get(*k).and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok())) {
+        if let Some(id) = val
+            .get(*k)
+            .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))
+        {
             if id > 0 {
                 return Some(id);
             }
@@ -2278,10 +2748,7 @@ fn extract_explicit_offer_id(val: &Value) -> Option<u64> {
 }
 
 pub fn sanitize_text(s: &str, max_len: usize) -> String {
-    let cleaned: String = s
-        .chars()
-        .filter(|c| !c.is_control() || *c == ' ')
-        .collect();
+    let cleaned: String = s.chars().filter(|c| !c.is_control() || *c == ' ').collect();
     let trimmed = cleaned.trim();
     if trimmed.chars().count() > max_len {
         let mut truncated: String = trimmed.chars().take(max_len).collect();
@@ -2305,6 +2772,28 @@ pub fn is_lottery_progress(msg: &Value) -> bool {
     let key = get_str_field(msg, &["chave", "key", "erro", "error", "msg", "mensagem"]);
     let key_lower = key.to_lowercase();
     key_lower == "market.sorteio" || key_lower == "market.sorteioespera"
+}
+
+fn is_lottery_loss_reply(msg: &Value) -> bool {
+    get_str_field(msg, &["chave", "key", "erro", "error", "msg", "mensagem"])
+        .eq_ignore_ascii_case("market.sorteioPerdeu")
+}
+
+// Keep the log schema backward-compatible: optional fields are flattened beside
+// status, timestamp and offerId. Historical entries have no lottery metadata.
+// The timestamp is when this client received the server's conclusive event.
+fn add_verified_lottery_metadata(
+    extra: &mut HashMap<String, Value>,
+    result: &str,
+    evidence: &str,
+    confirmed_at: u64,
+) {
+    extra.insert("lotteryResult".into(), json!(result));
+    extra.insert("lotteryEvidence".into(), json!(evidence));
+    extra.insert("lotteryConfirmedAt".into(), json!(confirmed_at));
+    if result == "win" {
+        extra.insert("lotteryWonAt".into(), json!(confirmed_at));
+    }
 }
 
 pub fn is_terminal_market_rejection(msg: &Value) -> bool {
@@ -2344,8 +2833,16 @@ pub fn is_terminal_market_rejection(msg: &Value) -> bool {
     }
 
     // 3. Known market-specific message text
-    (msg_lower.contains("anúncio") || msg_lower.contains("anuncio") || msg_lower.contains("oferta do mercado"))
-        && (msg_lower.contains("expir") || msg_lower.contains("cancel") || msg_lower.contains("comprad") || msg_lower.contains("inválid") || msg_lower.contains("invalido") || msg_lower.contains("próprio") || msg_lower.contains("proprio"))
+    (msg_lower.contains("anúncio")
+        || msg_lower.contains("anuncio")
+        || msg_lower.contains("oferta do mercado"))
+        && (msg_lower.contains("expir")
+            || msg_lower.contains("cancel")
+            || msg_lower.contains("comprad")
+            || msg_lower.contains("inválid")
+            || msg_lower.contains("invalido")
+            || msg_lower.contains("próprio")
+            || msg_lower.contains("proprio"))
 }
 
 pub fn is_market_correlated_error(msg: &Value) -> bool {
@@ -2359,19 +2856,39 @@ fn is_confirmed_log(entry: &SniperLogEntry) -> bool {
     st.eq_ignore_ascii_case("CONFIRMADO") || st.eq_ignore_ascii_case("OK")
 }
 
-fn enforce_account_log_limits(logs: &mut Vec<SniperLogEntry>) {
-    let total_confirmed = logs.iter().filter(|e| is_confirmed_log(e)).count();
-    let max_confirmed = MAX_HISTORY_PER_ACCOUNT;
-    let kept_confirmed_budget = total_confirmed.min(max_confirmed);
-    let max_non_confirmed = MAX_NON_CONFIRMED_LOGS_PER_ACCOUNT
-        .min(MAX_HISTORY_PER_ACCOUNT.saturating_sub(kept_confirmed_budget));
+// A confirmed lottery defeat is a terminal result, just like a confirmed
+// purchase. Do not discard it along with transient diagnostics/rejections.
+fn is_terminal_sniper_result(entry: &SniperLogEntry) -> bool {
+    if is_confirmed_log(entry) {
+        return true;
+    }
+    if !entry.status.eq_ignore_ascii_case("RECUSADO")
+        && !entry.status.eq_ignore_ascii_case("PERDIDO")
+    {
+        return false;
+    }
+    entry
+        .extra
+        .get("lotteryResult")
+        .and_then(Value::as_str)
+        .map(|result| result.eq_ignore_ascii_case("loss") || result.eq_ignore_ascii_case("lost"))
+        .unwrap_or(false)
+        || entry.id.starts_with("sorteio_perdeu_")
+}
 
-    let mut seen_confirmed = 0usize;
+fn enforce_account_log_limits(logs: &mut Vec<SniperLogEntry>) {
+    let total_results = logs.iter().filter(|e| is_terminal_sniper_result(e)).count();
+    let max_results = MAX_HISTORY_PER_ACCOUNT;
+    let kept_results_budget = total_results.min(max_results);
+    let max_non_confirmed = MAX_NON_CONFIRMED_LOGS_PER_ACCOUNT
+        .min(MAX_HISTORY_PER_ACCOUNT.saturating_sub(kept_results_budget));
+
+    let mut seen_results = 0usize;
     let mut seen_non_confirmed = 0usize;
     logs.retain(|entry| {
-        if is_confirmed_log(entry) {
-            if seen_confirmed < max_confirmed {
-                seen_confirmed += 1;
+        if is_terminal_sniper_result(entry) {
+            if seen_results < max_results {
+                seen_results += 1;
                 true
             } else {
                 false
@@ -2396,7 +2913,10 @@ fn add_log_to_account(account: &mut AccountState, entry: SniperLogEntry) {
 
 pub fn validate_config(config: &SniperConfig) -> Result<(), String> {
     if config.scan_mode != "original" && config.scan_mode != "adaptive" {
-        return Err(format!("scanMode inválido: '{}'. Use 'original' ou 'adaptive'", config.scan_mode));
+        return Err(format!(
+            "scanMode inválido: '{}'. Use 'original' ou 'adaptive'",
+            config.scan_mode
+        ));
     }
     if config.scan_interval_ms < 1000 || config.scan_interval_ms > 600000 {
         return Err("scanIntervalMs deve estar entre 1000 e 600000 ms".into());
@@ -2413,7 +2933,10 @@ pub fn validate_config(config: &SniperConfig) -> Result<(), String> {
     if config.snipe_by_note && config.min_note < 1.0 {
         return Err("minNote deve ser no mínimo 1.0 quando snipeByNote estiver ativo".into());
     }
-    if config.snipe_any_shiny && config.max_price_shiny_gold == 0 && config.max_price_shiny_gems == 0 {
+    if config.snipe_any_shiny
+        && config.max_price_shiny_gold == 0
+        && config.max_price_shiny_gems == 0
+    {
         return Err("snipeAnyShiny ativo requer teto em gold ou gems maior que zero".into());
     }
     if config.snipe_any_p5 && config.max_price_p5_gold == 0 && config.max_price_p5_gems == 0 {
@@ -2428,16 +2951,36 @@ pub fn validate_config(config: &SniperConfig) -> Result<(), String> {
 
 pub fn validate_config_extra(config: &SniperConfig) -> Result<(), String> {
     let allowed: HashSet<&str> = [
-        "icon", "icone", "category", "categoria", "categoryLabel", "created",
-        "updated", "createdAt", "updatedAt", "targetLabel", "name", "nome",
-        "npcPrice", "type", "autoMaxAffordable", "scanIntervalSec",
-        "maxPriceShinyDiamonds", "maxPriceP5Diamonds", "maxPriceNoteDiamonds",
+        "icon",
+        "icone",
+        "category",
+        "categoria",
+        "categoryLabel",
+        "created",
+        "updated",
+        "createdAt",
+        "updatedAt",
+        "targetLabel",
+        "name",
+        "nome",
+        "npcPrice",
+        "type",
+        "autoMaxAffordable",
+        "scanIntervalSec",
+        "maxPriceShinyDiamonds",
+        "maxPriceP5Diamonds",
+        "maxPriceNoteDiamonds",
         "scanMode",
-    ].into_iter().collect();
+    ]
+    .into_iter()
+    .collect();
 
     for (key, val) in &config.extra {
         if !allowed.contains(key.as_str()) {
-            return Err(format!("Campo desconhecido ou não suportado '{}' em config", key));
+            return Err(format!(
+                "Campo desconhecido ou não suportado '{}' em config",
+                key
+            ));
         }
         let num_opt = match val {
             Value::Number(n) => n.as_u64(),
@@ -2448,19 +2991,28 @@ pub fn validate_config_extra(config: &SniperConfig) -> Result<(), String> {
             "maxPriceShinyDiamonds" => {
                 let n = num_opt.unwrap_or(0);
                 if n != config.max_price_shiny_gems && (config.snipe_any_shiny || n != 0) {
-                    return Err(format!("maxPriceShinyDiamonds ({}) difere de maxPriceShinyGems ({})", n, config.max_price_shiny_gems));
+                    return Err(format!(
+                        "maxPriceShinyDiamonds ({}) difere de maxPriceShinyGems ({})",
+                        n, config.max_price_shiny_gems
+                    ));
                 }
             }
             "maxPriceP5Diamonds" => {
                 let n = num_opt.unwrap_or(0);
                 if n != config.max_price_p5_gems && (config.snipe_any_p5 || n != 0) {
-                    return Err(format!("maxPriceP5Diamonds ({}) difere de maxPriceP5Gems ({})", n, config.max_price_p5_gems));
+                    return Err(format!(
+                        "maxPriceP5Diamonds ({}) difere de maxPriceP5Gems ({})",
+                        n, config.max_price_p5_gems
+                    ));
                 }
             }
             "maxPriceNoteDiamonds" => {
                 let n = num_opt.unwrap_or(0);
                 if n != config.max_price_note_gems && (config.snipe_by_note || n != 0) {
-                    return Err(format!("maxPriceNoteDiamonds ({}) difere de maxPriceNoteGems ({})", n, config.max_price_note_gems));
+                    return Err(format!(
+                        "maxPriceNoteDiamonds ({}) difere de maxPriceNoteGems ({})",
+                        n, config.max_price_note_gems
+                    ));
                 }
             }
             _ => {}
@@ -2469,17 +3021,39 @@ pub fn validate_config_extra(config: &SniperConfig) -> Result<(), String> {
     Ok(())
 }
 
-pub fn validate_rule_extra(extra: &HashMap<String, Value>, max_price_gems: u64, target_name: &str) -> Result<(), String> {
+pub fn validate_rule_extra(
+    extra: &HashMap<String, Value>,
+    max_price_gems: u64,
+    target_name: &str,
+) -> Result<(), String> {
     let allowed: HashSet<&str> = [
-        "icon", "icone", "category", "categoria", "categoryLabel", "created",
-        "updated", "createdAt", "updatedAt", "targetLabel", "name", "nome",
-        "npcPrice", "type", "autoMaxAffordable", "scanIntervalSec",
+        "icon",
+        "icone",
+        "category",
+        "categoria",
+        "categoryLabel",
+        "created",
+        "updated",
+        "createdAt",
+        "updatedAt",
+        "targetLabel",
+        "name",
+        "nome",
+        "npcPrice",
+        "type",
+        "autoMaxAffordable",
+        "scanIntervalSec",
         "maxPriceDiamonds",
-    ].into_iter().collect();
+    ]
+    .into_iter()
+    .collect();
 
     for (key, val) in extra {
         if !allowed.contains(key.as_str()) {
-            return Err(format!("Filtro restritivo desconhecido ou não suportado '{}' na regra '{}'", key, target_name));
+            return Err(format!(
+                "Filtro restritivo desconhecido ou não suportado '{}' na regra '{}'",
+                key, target_name
+            ));
         }
         if key == "maxPriceDiamonds" {
             let num_opt = match val {
@@ -2492,7 +3066,10 @@ pub fn validate_rule_extra(extra: &HashMap<String, Value>, max_price_gems: u64, 
                     return Err(format!("Regra '{}': maxPriceDiamonds ({}) difere de maxPriceGems ({}); diamantes não são suportados como moeda separada", target_name, n, max_price_gems));
                 }
             } else {
-                return Err(format!("Regra '{}': maxPriceDiamonds com formato numérico inválido", target_name));
+                return Err(format!(
+                    "Regra '{}': maxPriceDiamonds com formato numérico inválido",
+                    target_name
+                ));
             }
         }
     }
@@ -2522,57 +3099,96 @@ pub struct ParsedMarketOffer {
 }
 
 pub fn parse_offer(val: &Value) -> Option<ParsedMarketOffer> {
-    let id = val.get("id").and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))?;
-    if id == 0 { return None; }
+    let id = val
+        .get("id")
+        .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()))?;
+    if id == 0 {
+        return None;
+    }
 
     if val.get("comprador").is_some() && !val["comprador"].is_null() {
         return None;
     }
     if let Some(estado) = val.get("estado").and_then(|v| v.as_str()) {
-        if estado != "aberto" { return None; }
+        if estado != "aberto" {
+            return None;
+        }
     }
 
-    let price = val.get("preco").or_else(|| val.get("unitPrice"))
+    let price = val
+        .get("preco")
+        .or_else(|| val.get("unitPrice"))
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
         .unwrap_or(0);
-    if price == 0 { return None; }
+    if price == 0 {
+        return None;
+    }
 
-    let qty = val.get("qtd").or_else(|| val.get("quantidade"))
+    let qty = val
+        .get("qtd")
+        .or_else(|| val.get("quantidade"))
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)))
-        .unwrap_or(1).max(1);
+        .unwrap_or(1)
+        .max(1);
 
-    let currency_raw = val.get("moeda").and_then(|v| v.as_str()).map(|s| s.trim().to_lowercase())?;
+    let currency_raw = val
+        .get("moeda")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim().to_lowercase())?;
     let currency = match currency_raw.as_str() {
         "gold" | "coins" | "coin" => "gold".to_string(),
         "orb" | "orbs" | "gems" | "gem" => "orb".to_string(),
         "diamond" | "diamonds" | "diamante" | "diamantes" => "diamond".to_string(),
         _ => return None,
     };
-    let seller = val.get("vendedor").or_else(|| val.get("seller")).or_else(|| val.get("dono"))
-        .and_then(|v| v.as_str()).unwrap_or("").to_string();
-    let compravel_em = val.get("compravelEm").or_else(|| val.get("compravelEmMs"))
+    let seller = val
+        .get("vendedor")
+        .or_else(|| val.get("seller"))
+        .or_else(|| val.get("dono"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let compravel_em = val
+        .get("compravelEm")
+        .or_else(|| val.get("compravelEmMs"))
         .and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64)));
 
     let ficha = val.get("ficha");
-    let item_id = val.get("itemId")
+    let item_id = val
+        .get("itemId")
         .or_else(|| ficha.and_then(|f| f.get("itemId")))
         .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()));
 
-    let raw_item_name = val.get("itemNome").or_else(|| val.get("nome"))
+    let raw_item_name = val
+        .get("itemNome")
+        .or_else(|| val.get("nome"))
         .or_else(|| ficha.and_then(|f| f.get("nome")))
-        .and_then(|v| v.as_str()).unwrap_or("").to_string();
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
-    let raw_poke_name = val.get("pokemonNome")
+    let raw_poke_name = val
+        .get("pokemonNome")
         .or_else(|| ficha.and_then(|f| f.get("nome")))
         .or_else(|| val.get("nome"))
-        .and_then(|v| v.as_str()).unwrap_or("").to_string();
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
 
-    let species_id = ficha.and_then(|f| f.get("speciesId"))
+    let species_id = ficha
+        .and_then(|f| f.get("speciesId"))
         .and_then(|v| v.as_u64().or_else(|| v.as_str()?.parse().ok()));
 
-    let tipo = val.get("tipo").or_else(|| val.get("tipoItem")).and_then(|v| v.as_str()).unwrap_or("");
-    let is_item = item_id.is_some() || tipo == "item" || (!raw_item_name.is_empty() && species_id.is_none() && tipo != "pokemon");
-    let is_pokemon = !is_item && (tipo == "pokemon" || species_id.is_some() || !raw_poke_name.is_empty());
+    let tipo = val
+        .get("tipo")
+        .or_else(|| val.get("tipoItem"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let is_item = item_id.is_some()
+        || tipo == "item"
+        || (!raw_item_name.is_empty() && species_id.is_none() && tipo != "pokemon");
+    let is_pokemon =
+        !is_item && (tipo == "pokemon" || species_id.is_some() || !raw_poke_name.is_empty());
 
     let check_shiny_val = |v: &Value| -> bool {
         if let Some(b) = v.as_bool() {
@@ -2594,13 +3210,17 @@ pub fn parse_offer(val: &Value) -> Option<ParsedMarketOffer> {
 
     if !is_shiny {
         if raw_poke_name.to_lowercase().contains("shiny")
-            || ficha.and_then(|f| f.get("nome").or_else(|| f.get("name"))).and_then(|v| v.as_str()).map_or(false, |s| s.to_lowercase().contains("shiny"))
+            || ficha
+                .and_then(|f| f.get("nome").or_else(|| f.get("name")))
+                .and_then(|v| v.as_str())
+                .map_or(false, |s| s.to_lowercase().contains("shiny"))
         {
             is_shiny = true;
         }
     }
 
-    let potencia = ficha.and_then(|f| f.get("potencia"))
+    let potencia = ficha
+        .and_then(|f| f.get("potencia"))
         .or_else(|| val.get("potencia"))
         .and_then(|v| {
             if let Some(u) = v.as_u64() {
@@ -2628,7 +3248,9 @@ pub fn parse_offer(val: &Value) -> Option<ParsedMarketOffer> {
         }
     };
 
-    let nota = ficha.and_then(|f| f.get("nota")).and_then(parse_nota)
+    let nota = ficha
+        .and_then(|f| f.get("nota"))
+        .and_then(parse_nota)
         .or_else(|| val.get("nota").and_then(parse_nota));
 
     Some(ParsedMarketOffer {
@@ -2661,16 +3283,42 @@ fn is_generic_category_label(label: &str) -> bool {
     let norm = label.trim().to_lowercase();
     matches!(
         norm.as_str(),
-        "pedras" | "pedra" | "pedras de evolução" | "pedras de evolucao" | "pedras evolutivas" | "stone" | "stones"
-        | "tms" | "tm"
-        | "loots raros" | "loots raros (4 itens)" | "loot raro" | "itens raros" | "rare_loot" | "rare loot"
-        | "beast balls" | "beast ball" | "beast"
-        | "casas" | "casa"
-        | "boxes" | "box" | "caixas" | "caixa"
-        | "bicicletas" | "bicicleta" | "bikes" | "bike"
-        | "fragmentos" | "fragmentos de mega e ovo shiny" | "fragmento" | "fragment"
-        | "tickets" | "ticket"
-    ) || norm.starts_with("loots raros (") || norm.starts_with("fragmentos de mega")
+        "pedras"
+            | "pedra"
+            | "pedras de evolução"
+            | "pedras de evolucao"
+            | "pedras evolutivas"
+            | "stone"
+            | "stones"
+            | "tms"
+            | "tm"
+            | "loots raros"
+            | "loots raros (4 itens)"
+            | "loot raro"
+            | "itens raros"
+            | "rare_loot"
+            | "rare loot"
+            | "beast balls"
+            | "beast ball"
+            | "beast"
+            | "casas"
+            | "casa"
+            | "boxes"
+            | "box"
+            | "caixas"
+            | "caixa"
+            | "bicicletas"
+            | "bicicleta"
+            | "bikes"
+            | "bike"
+            | "fragmentos"
+            | "fragmentos de mega e ovo shiny"
+            | "fragmento"
+            | "fragment"
+            | "tickets"
+            | "ticket"
+    ) || norm.starts_with("loots raros (")
+        || norm.starts_with("fragmentos de mega")
 }
 
 fn strip_leading_qty_prefix(raw: &str) -> &str {
@@ -2685,7 +3333,11 @@ fn strip_leading_qty_prefix(raw: &str) -> &str {
         return trimmed;
     }
     let after_digits = trimmed[digits_end..].trim_start();
-    if let Some(rest) = after_digits.strip_prefix('x').or_else(|| after_digits.strip_prefix('X')).or_else(|| after_digits.strip_prefix('×')) {
+    if let Some(rest) = after_digits
+        .strip_prefix('x')
+        .or_else(|| after_digits.strip_prefix('X'))
+        .or_else(|| after_digits.strip_prefix('×'))
+    {
         // Ensure 'x' is a multiplier separator (followed by whitespace), not part of a word
         if rest.starts_with(char::is_whitespace) {
             return rest.trim();
@@ -2821,7 +3473,9 @@ pub fn evaluate_offer(
 
             if price_ok {
                 let remaining = rule.remaining_qty(runtime.is_vip);
-                if remaining == 0 { continue; }
+                if remaining == 0 {
+                    continue;
+                }
                 let mut buy_qty = offer.qty.min(remaining);
                 let target_name = resolve_matched_offer_display_name(offer, rule);
                 let rule_label = if !rule.target_name.trim().is_empty() {
@@ -2872,7 +3526,14 @@ pub fn evaluate_offer(
             if price_ok {
                 matched = true;
                 target_name = format!("✨ Shiny {}", offer.poke_name);
-                matched_desc = format!("Global Shiny (Teto: {})", if norm_curr == "gold" { gcfg.max_price_shiny_gold } else { gcfg.max_price_shiny_gems });
+                matched_desc = format!(
+                    "Global Shiny (Teto: {})",
+                    if norm_curr == "gold" {
+                        gcfg.max_price_shiny_gold
+                    } else {
+                        gcfg.max_price_shiny_gems
+                    }
+                );
             }
         }
 
@@ -2885,7 +3546,14 @@ pub fn evaluate_offer(
             if price_ok {
                 matched = true;
                 target_name = format!("⚡ P5 {}", offer.poke_name);
-                matched_desc = format!("Global P5 (Teto: {})", if norm_curr == "gold" { gcfg.max_price_p5_gold } else { gcfg.max_price_p5_gems });
+                matched_desc = format!(
+                    "Global P5 (Teto: {})",
+                    if norm_curr == "gold" {
+                        gcfg.max_price_p5_gold
+                    } else {
+                        gcfg.max_price_p5_gems
+                    }
+                );
             }
         }
 
@@ -2893,14 +3561,26 @@ pub fn evaluate_offer(
             if let Some(nota_val) = offer.nota {
                 if nota_val >= gcfg.min_note {
                     let price_ok = match norm_curr {
-                        "gold" => gcfg.max_price_note_gold > 0 && offer.price <= gcfg.max_price_note_gold,
-                        "orb" => gcfg.max_price_note_gems > 0 && offer.price <= gcfg.max_price_note_gems,
+                        "gold" => {
+                            gcfg.max_price_note_gold > 0 && offer.price <= gcfg.max_price_note_gold
+                        }
+                        "orb" => {
+                            gcfg.max_price_note_gems > 0 && offer.price <= gcfg.max_price_note_gems
+                        }
                         _ => false,
                     };
                     if price_ok {
                         matched = true;
                         target_name = format!("★ Nota {:.1} {}", nota_val, offer.poke_name);
-                        matched_desc = format!("Nota Oficial >= {:.1} (Teto: {})", gcfg.min_note, if norm_curr == "gold" { gcfg.max_price_note_gold } else { gcfg.max_price_note_gems });
+                        matched_desc = format!(
+                            "Nota Oficial >= {:.1} (Teto: {})",
+                            gcfg.min_note,
+                            if norm_curr == "gold" {
+                                gcfg.max_price_note_gold
+                            } else {
+                                gcfg.max_price_note_gems
+                            }
+                        );
                     }
                 }
             }
@@ -2945,7 +3625,10 @@ pub fn global_get_state() -> Result<SniperSnapshot, String> {
     Ok(engine.get_snapshot())
 }
 
-pub fn global_save_settings(indices: Vec<usize>, settings: SniperSettingsInput) -> Result<SniperSnapshot, String> {
+pub fn global_save_settings(
+    indices: Vec<usize>,
+    settings: SniperSettingsInput,
+) -> Result<SniperSnapshot, String> {
     let mut guard = global_engine().lock().map_err(|e| e.to_string())?;
     let engine = guard.as_mut().map_err(|e| e.clone())?;
     engine.save_settings(indices, settings)
@@ -2957,7 +3640,11 @@ pub fn global_clear_history(index: usize) -> Result<SniperSnapshot, String> {
     engine.clear_history(index)
 }
 
-pub fn global_ingest(index: usize, logs: Vec<SniperLogEntry>, progress: Option<Vec<RuleProgress>>) -> Result<SniperSnapshot, String> {
+pub fn global_ingest(
+    index: usize,
+    logs: Vec<SniperLogEntry>,
+    progress: Option<Vec<RuleProgress>>,
+) -> Result<SniperSnapshot, String> {
     let mut guard = global_engine().lock().map_err(|e| e.to_string())?;
     let engine = guard.as_mut().map_err(|e| e.clone())?;
     engine.ingest_logs(index, logs, progress)
@@ -3017,7 +3704,9 @@ pub fn on_send_failure(index: usize, cmd: &Value) {
 pub fn update_vip(index: usize, is_vip: bool) {
     if let Ok(mut guard) = global_engine().lock() {
         if let Ok(engine) = guard.as_mut() {
-            if index < 4 { engine.runtimes[index].is_vip = is_vip; }
+            if index < 4 {
+                engine.runtimes[index].is_vip = is_vip;
+            }
         }
     }
 }
@@ -3027,12 +3716,49 @@ pub fn update_balance(index: usize, gold: Option<i64>, diamonds: Option<i64>, or
         if let Ok(engine) = guard.as_mut() {
             if index < 4 {
                 let rt = &mut engine.runtimes[index];
-                if let Some(g) = gold { rt.gold = g; }
-                if let Some(d) = diamonds { rt.diamonds = d; }
-                if let Some(o) = orbs { rt.orbs = o; }
+                if let Some(g) = gold {
+                    rt.gold = g;
+                }
+                if let Some(d) = diamonds {
+                    rt.diamonds = d;
+                }
+                if let Some(o) = orbs {
+                    rt.orbs = o;
+                }
             }
         }
     }
+}
+
+pub fn global_reserve_manual(index: usize, offer_id: u64, ttl: Duration) -> Result<(), String> {
+    let mut guard = global_engine().lock().map_err(|e| e.to_string())?;
+    let engine = guard.as_mut().map_err(|e| e.clone())?;
+    engine.reserve_manual(index, offer_id, ttl).map_err(|s| s.to_string())
+}
+
+pub fn global_lock_manual_until_ack(index: usize, offer_id: u64) {
+    if let Ok(mut guard) = global_engine().lock() {
+        if let Ok(engine) = guard.as_mut() {
+            engine.lock_manual_until_ack(index, offer_id);
+        }
+    }
+}
+
+pub fn global_release_manual(index: usize, offer_id: Option<u64>) {
+    if let Ok(mut guard) = global_engine().lock() {
+        if let Ok(engine) = guard.as_mut() {
+            engine.release_manual(index, offer_id);
+        }
+    }
+}
+
+pub fn global_has_in_flight_offer(index: usize, offer_id: u64) -> bool {
+    if let Ok(guard) = global_engine().lock() {
+        if let Ok(engine) = guard.as_ref() {
+            return engine.has_in_flight_offer(index, offer_id);
+        }
+    }
+    false
 }
 
 // Tauri IPC Command wrappers
@@ -3053,10 +3779,7 @@ pub fn sniper_save(
 }
 
 #[tauri::command]
-pub fn sniper_clear_history(
-    app: AppHandle,
-    index: usize,
-) -> Result<SniperSnapshot, String> {
+pub fn sniper_clear_history(app: AppHandle, index: usize) -> Result<SniperSnapshot, String> {
     let snapshot = global_clear_history(index)?;
     let _ = app.emit("sniper:updated", &snapshot);
     Ok(snapshot)
@@ -3090,7 +3813,13 @@ mod tests {
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
         let tid = format!("{:?}", std::thread::current().id());
         let clean_tid = tid.replace(|ch: char| !ch.is_alphanumeric(), "_");
-        let unique_name = format!("sniper_test_{}_{}_{}_{}.json", now_ms(), std::process::id(), clean_tid, c);
+        let unique_name = format!(
+            "sniper_test_{}_{}_{}_{}.json",
+            now_ms(),
+            std::process::id(),
+            clean_tid,
+            c
+        );
         let temp_dir = std::env::temp_dir();
         let path = temp_dir.join(unique_name);
         let engine = SniperEngine::new(Some(path.clone())).expect("failed to init temp engine");
@@ -3126,26 +3855,33 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // 1. Save settings for account 0
-        let save_res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_stone".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(save_res.is_ok(), "save_settings failed: {:?}", save_res.err());
+        let save_res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_stone".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            save_res.is_ok(),
+            "save_settings failed: {:?}",
+            save_res.err()
+        );
 
         // 2. Set balance
         engine.runtimes[0].gold = 100000;
@@ -3182,31 +3918,38 @@ mod tests {
     #[test]
     fn test_end_to_end_battle_confirmation_increments_once() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 100000;
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 1001, "itemId": 2, "preco": 20000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 1001, "itemId": 2, "preco": 20000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
 
         assert!(engine.runtimes[0].outstanding_buy.is_some());
 
@@ -3233,33 +3976,41 @@ mod tests {
     }
 
     #[test]
-    fn test_battle_confirmation_with_absent_wallet_followed_by_unrelated_hunt_cannot_restore_old_balance() {
+    fn test_battle_confirmation_with_absent_wallet_followed_by_unrelated_hunt_cannot_restore_old_balance(
+    ) {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 100000;
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 1001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 1001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
 
         assert!(engine.runtimes[0].outstanding_buy.is_some());
 
@@ -3290,31 +4041,38 @@ mod tests {
     #[test]
     fn test_unrelated_error_leaves_pending_buy_intact_and_market_error_releases() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(53)),
-                target_name: "Fire Stone".into(),
-                max_price_gold: 25000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(53)),
+                    target_name: "Fire Stone".into(),
+                    max_price_gold: 25000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 50000;
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 2002, "itemId": 53, "preco": 20000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 2002, "itemId": 53, "preco": 20000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
 
         assert_eq!(engine.runtimes[0].reserved_gold, 20000);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
@@ -3322,10 +4080,20 @@ mod tests {
 
         // 1. Unrelated shop / auto-supply errors: MUST NOT release pending market buy!
         let _ = engine.on_message(0, &json!({ "t": "erro", "chave": "saldo_insuficiente", "msg": "Saldo insuficiente para comprar pokebolas" }), None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Generic saldo_insuficiente mistakenly released buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Generic saldo_insuficiente mistakenly released buy!"
+        );
 
-        let _ = engine.on_message(0, &json!({ "t": "erro", "chave": "estoque_esgotado", "msg": "Estoque esgotado no shop" }), None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Shop estoque error mistakenly released buy!");
+        let _ = engine.on_message(
+            0,
+            &json!({ "t": "erro", "chave": "estoque_esgotado", "msg": "Estoque esgotado no shop" }),
+            None,
+        );
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Shop estoque error mistakenly released buy!"
+        );
 
         assert_eq!(engine.runtimes[0].reserved_gold, 20000);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
@@ -3344,31 +4112,38 @@ mod tests {
     #[test]
     fn test_end_to_end_timeout_and_late_confirmation() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_time".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(28)),
-                target_name: "Crystal Stone".into(),
-                max_price_gold: 15000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_time".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(28)),
+                    target_name: "Crystal Stone".into(),
+                    max_price_gold: 15000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 50000;
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 3003, "itemId": 28, "preco": 10000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 3003, "itemId": 28, "preco": 10000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
 
         // Force timeout in runtime
         if let Some(buy) = &mut engine.runtimes[0].outstanding_buy {
@@ -3376,22 +4151,33 @@ mod tests {
         }
 
         let _ = engine.on_tick(0, now_ms(), None);
-        assert_eq!(engine.runtimes[0].outstanding_buy.as_ref().unwrap().state, BuyState::UncertainBlocked);
+        assert_eq!(
+            engine.runtimes[0].outstanding_buy.as_ref().unwrap().state,
+            BuyState::UncertainBlocked
+        );
         // Budget consumed conservatively on emission, retained on timeout
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
         // Subsequent offer is blocked
-        let blocked_cmds = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 3004, "itemId": 28, "preco": 5000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let blocked_cmds = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 3004, "itemId": 28, "preco": 5000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(blocked_cmds.is_empty());
 
         // Late confirmation arrives and reconciles without double-counting
-        let _ = engine.on_message(0, &json!({
-            "t": "batalha",
-            "ev": [{"k": "marketComprado", "descricao": "Crystal Stone entregue!"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "batalha",
+                "ev": [{"k": "marketComprado", "descricao": "Crystal Stone entregue!"}]
+            }),
+            None,
+        );
 
         assert!(engine.runtimes[0].outstanding_buy.is_none());
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1); // Not 2!
@@ -3403,36 +4189,49 @@ mod tests {
     #[test]
     fn test_reopen_same_file_after_emitted_buy_preserves_consumption() {
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let unique_name = format!("sniper_reopen_{}_{}_{}.json", now_ms(), std::process::id(), c);
+        let unique_name = format!(
+            "sniper_reopen_{}_{}_{}.json",
+            now_ms(),
+            std::process::id(),
+            c
+        );
         let path = std::env::temp_dir().join(unique_name);
 
         {
-            let mut engine = SniperEngine::new(Some(path.clone())).expect("init temp engine failed");
-            let _ = engine.save_settings(vec![0], SniperSettingsInput {
-                enabled: true,
-                rules: vec![Rule {
-                    id: "r_single".into(),
-                    target_type: "item".into(),
-                    target_category: None,
-                    target_id: Some(json!(2)),
-                    target_name: "Ancient Stone".into(),
-                    max_price_gold: 50000,
-                    max_price_gems: 0,
-                    max_qty: 1,
-                    infinite: false,
-                    active: true,
-                    total_bought: 0,
-                    excluded_item_ids: Vec::new(),
-                    extra: HashMap::new(),
-                }],
-                config: SniperConfig::default(),
-            });
+            let mut engine =
+                SniperEngine::new(Some(path.clone())).expect("init temp engine failed");
+            let _ = engine.save_settings(
+                vec![0],
+                SniperSettingsInput {
+                    enabled: true,
+                    rules: vec![Rule {
+                        id: "r_single".into(),
+                        target_type: "item".into(),
+                        target_category: None,
+                        target_id: Some(json!(2)),
+                        target_name: "Ancient Stone".into(),
+                        max_price_gold: 50000,
+                        max_price_gems: 0,
+                        max_qty: 1,
+                        infinite: false,
+                        active: true,
+                        total_bought: 0,
+                        excluded_item_ids: Vec::new(),
+                        extra: HashMap::new(),
+                    }],
+                    config: SniperConfig::default(),
+                },
+            );
 
             engine.runtimes[0].gold = 100000;
-            let cmds = engine.on_message(0, &json!({
-                "t": "market",
-                "linhas": [{"id": 7001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
-            }), None);
+            let cmds = engine.on_message(
+                0,
+                &json!({
+                    "t": "market",
+                    "linhas": [{"id": 7001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
+                }),
+                None,
+            );
             assert_eq!(cmds.len(), 1);
             // Intent persisted, preconsumed
             assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
@@ -3445,11 +4244,18 @@ mod tests {
         engine2.runtimes[0].gold = 100000;
 
         // Try another buy offer -> maxQty 1 is already exhausted!
-        let second_cmds = engine2.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 7002, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
-        }), None);
-        assert!(second_cmds.is_empty(), "Repeat buy was allowed beyond maxQty!");
+        let second_cmds = engine2.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 7002, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
+        assert!(
+            second_cmds.is_empty(),
+            "Repeat buy was allowed beyond maxQty!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -3458,41 +4264,53 @@ mod tests {
     fn test_disk_failure_on_immediate_and_scheduled_buy_returns_no_buy() {
         let temp_dir = std::env::temp_dir();
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let blocking_file = temp_dir.join(format!("blocking_disk_fail_{}_{}_{}.tmp", now_ms(), std::process::id(), c));
+        let blocking_file = temp_dir.join(format!(
+            "blocking_disk_fail_{}_{}_{}.tmp",
+            now_ms(),
+            std::process::id(),
+            c
+        ));
         std::fs::write(&blocking_file, b"parent_file_cannot_be_directory").unwrap();
         let invalid_path = blocking_file.join("sub_invalid").join("sniper.json");
 
         let mut engine = SniperEngine::new(None).unwrap();
 
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_fail".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_fail".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 100000;
         // Point storage to invalid path where parent directory creation fails
         engine.storage_path = Some(invalid_path);
 
         // Immediate buy with disk failure must return empty and mutate nothing
-        let cmds = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 8001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let cmds = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 8001, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(cmds.is_empty(), "Buy was emitted despite disk failure!");
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
@@ -3503,33 +4321,40 @@ mod tests {
     #[test]
     fn test_timeout_disconnect_reconnect_consumes_exactly_once() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_once".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_once".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 100000;
 
         // 1. Emit buy
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 9999, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 9999, "itemId": 2, "preco": 30000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
         // 2. Timeout
@@ -3555,42 +4380,53 @@ mod tests {
     #[test]
     fn test_end_to_end_currency_enforcement_rejects_diamonds_for_rules() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_gems".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(5)),
-                target_name: "Beast Ball".into(),
-                max_price_gold: 0,
-                max_price_gems: 50,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_gems".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(5)),
+                    target_name: "Beast Ball".into(),
+                    max_price_gold: 0,
+                    max_price_gems: 50,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 50000;
         engine.runtimes[0].orbs = 100;
         engine.runtimes[0].diamonds = 100;
 
         // Diamantes currency must be REJECTED for maxPriceGems ceiling
-        let dia_cmds = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 4001, "itemId": 5, "preco": 10, "qtd": 1, "moeda": "diamantes"}]
-        }), None);
+        let dia_cmds = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 4001, "itemId": 5, "preco": 10, "qtd": 1, "moeda": "diamantes"}]
+            }),
+            None,
+        );
         assert!(dia_cmds.is_empty());
 
         // Orb currency must be ACCEPTED
-        let orb_cmds = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 4002, "itemId": 5, "preco": 10, "qtd": 1, "moeda": "orb"}]
-        }), None);
+        let orb_cmds = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 4002, "itemId": 5, "preco": 10, "qtd": 1, "moeda": "orb"}]
+            }),
+            None,
+        );
         assert_eq!(orb_cmds.len(), 1);
 
         let _ = std::fs::remove_file(path);
@@ -3599,31 +4435,38 @@ mod tests {
     #[test]
     fn test_end_to_end_disabled_account_no_buys() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: false, // Disabled!
-            rules: vec![Rule {
-                id: "r_dis".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: false, // Disabled!
+                rules: vec![Rule {
+                    id: "r_dis".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         engine.runtimes[0].gold = 100000;
-        let cmds = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 5001, "itemId": 2, "preco": 1000, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let cmds = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 5001, "itemId": 2, "preco": 1000, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(cmds.is_empty());
 
         let _ = std::fs::remove_file(path);
@@ -3634,48 +4477,54 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // Account 0 initially has rule "r_common" with total_bought = 7
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_common".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 7,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_common".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 7,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 7);
 
         // Universal save across accounts [0, 1] with total_bought: 99 in payload
-        let _ = engine.save_settings(vec![0, 1], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_common".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 60000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 99,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0, 1],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_common".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 60000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 99,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         // Account 0 must preserve its existing 7
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 7);
@@ -3689,7 +4538,12 @@ mod tests {
     fn test_end_to_end_failed_persist_leaves_memory_unchanged() {
         let temp_dir = std::env::temp_dir();
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let blocking_file = temp_dir.join(format!("blocking_persist_{}_{}_{}.tmp", now_ms(), std::process::id(), c));
+        let blocking_file = temp_dir.join(format!(
+            "blocking_persist_{}_{}_{}.tmp",
+            now_ms(),
+            std::process::id(),
+            c
+        ));
         std::fs::write(&blocking_file, b"existing_file_cannot_be_directory").unwrap();
         // Use blocking_file as parent directory -> creating a file inside a regular file MUST fail on all OSes
         let invalid_path = blocking_file.join("sub_invalid").join("test.json");
@@ -3698,25 +4552,28 @@ mod tests {
         engine.storage_path = Some(invalid_path);
 
         let initial_snapshot = engine.get_snapshot();
-        let res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_fail".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 10000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_fail".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 10000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         assert!(res.is_err());
         assert_eq!(engine.get_snapshot(), initial_snapshot);
@@ -3727,28 +4584,32 @@ mod tests {
     #[test]
     fn test_end_to_end_ingest_progress_and_logs() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_prog".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 10000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 2,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_prog".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 10000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 2,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
-        let ingest_res = engine.ingest_logs(0, vec![
-            SniperLogEntry {
+        let ingest_res = engine.ingest_logs(
+            0,
+            vec![SniperLogEntry {
                 id: "log_v1".into(),
                 timestamp: 1000,
                 status: "CONFIRMADO".into(),
@@ -3760,8 +4621,12 @@ mod tests {
                 details: "Visual engine log".into(),
                 account_index: Some(0),
                 extra: HashMap::new(),
-            }
-        ], Some(vec![RuleProgress { id: "r_prog".into(), total_bought: 5 }]));
+            }],
+            Some(vec![RuleProgress {
+                id: "r_prog".into(),
+                total_bought: 5,
+            }]),
+        );
 
         assert!(ingest_res.is_ok());
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 5);
@@ -3773,25 +4638,35 @@ mod tests {
     #[test]
     fn test_clear_history_persists_cutoff_and_ignores_reingested_old_logs() {
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let unique_name = format!("sniper_clear_reingest_{}_{}_{}.json", now_ms(), std::process::id(), c);
+        let unique_name = format!(
+            "sniper_clear_reingest_{}_{}_{}.json",
+            now_ms(),
+            std::process::id(),
+            c
+        );
         let path = std::env::temp_dir().join(unique_name);
 
         {
-            let mut engine = SniperEngine::new(Some(path.clone())).expect("init temp engine failed");
+            let mut engine =
+                SniperEngine::new(Some(path.clone())).expect("init temp engine failed");
             // Ingest log at ts 1000
-            let _ = engine.ingest_logs(0, vec![SniperLogEntry {
-                id: "log_old".into(),
-                timestamp: 1000,
-                status: "CONFIRMADO".into(),
-                target_name: "Ancient Stone".into(),
-                price: Some(1000),
-                currency: Some("gold".into()),
-                qty: Some(1),
-                offer_id: Some(1),
-                details: "Old visual log".into(),
-                account_index: Some(0),
-                extra: HashMap::new(),
-            }], None);
+            let _ = engine.ingest_logs(
+                0,
+                vec![SniperLogEntry {
+                    id: "log_old".into(),
+                    timestamp: 1000,
+                    status: "CONFIRMADO".into(),
+                    target_name: "Ancient Stone".into(),
+                    price: Some(1000),
+                    currency: Some("gold".into()),
+                    qty: Some(1),
+                    offer_id: Some(1),
+                    details: "Old visual log".into(),
+                    account_index: Some(0),
+                    extra: HashMap::new(),
+                }],
+                None,
+            );
 
             assert_eq!(engine.store.accounts[0].logs.len(), 1);
 
@@ -3809,34 +4684,38 @@ mod tests {
         assert!(cutoff >= 1000);
 
         // Reingest old log (ts 1000 <= cutoff) AND new log (ts > cutoff)
-        let _ = engine2.ingest_logs(0, vec![
-            SniperLogEntry {
-                id: "log_old".into(),
-                timestamp: 1000,
-                status: "CONFIRMADO".into(),
-                target_name: "Ancient Stone".into(),
-                price: Some(1000),
-                currency: Some("gold".into()),
-                qty: Some(1),
-                offer_id: Some(1),
-                details: "Old visual log repeated".into(),
-                account_index: Some(0),
-                extra: HashMap::new(),
-            },
-            SniperLogEntry {
-                id: "log_new".into(),
-                timestamp: cutoff + 500,
-                status: "CONFIRMADO".into(),
-                target_name: "Ancient Stone".into(),
-                price: Some(2000),
-                currency: Some("gold".into()),
-                qty: Some(1),
-                offer_id: Some(2),
-                details: "New log after clear".into(),
-                account_index: Some(0),
-                extra: HashMap::new(),
-            }
-        ], None);
+        let _ = engine2.ingest_logs(
+            0,
+            vec![
+                SniperLogEntry {
+                    id: "log_old".into(),
+                    timestamp: 1000,
+                    status: "CONFIRMADO".into(),
+                    target_name: "Ancient Stone".into(),
+                    price: Some(1000),
+                    currency: Some("gold".into()),
+                    qty: Some(1),
+                    offer_id: Some(1),
+                    details: "Old visual log repeated".into(),
+                    account_index: Some(0),
+                    extra: HashMap::new(),
+                },
+                SniperLogEntry {
+                    id: "log_new".into(),
+                    timestamp: cutoff + 500,
+                    status: "CONFIRMADO".into(),
+                    target_name: "Ancient Stone".into(),
+                    price: Some(2000),
+                    currency: Some("gold".into()),
+                    qty: Some(1),
+                    offer_id: Some(2),
+                    details: "New log after clear".into(),
+                    account_index: Some(0),
+                    extra: HashMap::new(),
+                },
+            ],
+            None,
+        );
 
         // Old log is ignored, only the new log is preserved!
         assert_eq!(engine2.store.accounts[0].logs.len(), 1);
@@ -3898,7 +4777,8 @@ mod tests {
             "createdAt": 1730272000000u64
         });
 
-        let rule: Rule = serde_json::from_value(preset_rule_json).expect("Deserializing preset newRule failed");
+        let rule: Rule =
+            serde_json::from_value(preset_rule_json).expect("Deserializing preset newRule failed");
         assert_eq!(rule.max_price_gems, 50);
 
         // Actual globalConfig shape from ui/presets/auto-sniper.js lines 1055-1070
@@ -3920,15 +4800,23 @@ mod tests {
             "autoMaxAffordable": true
         });
 
-        let config: SniperConfig = serde_json::from_value(preset_config_json).expect("Deserializing preset config failed");
+        let config: SniperConfig =
+            serde_json::from_value(preset_config_json).expect("Deserializing preset config failed");
 
         // Saving this exact shipped preset must SUCCEED
-        let res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![rule],
-            config,
-        });
-        assert!(res.is_ok(), "Actual preset shape save failed: {:?}", res.err());
+        let res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![rule],
+                config,
+            },
+        );
+        assert!(
+            res.is_ok(),
+            "Actual preset shape save failed: {:?}",
+            res.err()
+        );
 
         // Mismatched maxPriceDiamonds must be REJECTED
         let mismatched_rule_json = json!({
@@ -3942,12 +4830,18 @@ mod tests {
             "active": true
         });
         let bad_rule: Rule = serde_json::from_value(mismatched_rule_json).unwrap();
-        let bad_save = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![bad_rule],
-            config: SniperConfig::default(),
-        });
-        assert!(bad_save.is_err(), "Mismatched maxPriceDiamonds was accepted!");
+        let bad_save = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![bad_rule],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            bad_save.is_err(),
+            "Mismatched maxPriceDiamonds was accepted!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -3959,71 +4853,93 @@ mod tests {
         // 1. Unsupported seller/vendedor in extra must be REJECTED
         let mut bad_extra = HashMap::new();
         bad_extra.insert("seller".into(), json!("Gary"));
-        let res_seller = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: bad_extra,
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(res_seller.is_err(), "Unsupported seller filter was allowed!");
+        let res_seller = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: bad_extra,
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            res_seller.is_err(),
+            "Unsupported seller filter was allowed!"
+        );
 
         // 2. Unsupported moeda in extra must be REJECTED
         let mut bad_extra_m = HashMap::new();
         bad_extra_m.insert("moeda".into(), json!("gold"));
-        let res_moeda = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r2".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: bad_extra_m,
-            }],
-            config: SniperConfig::default(),
-        });
+        let res_moeda = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r2".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: bad_extra_m,
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(res_moeda.is_err(), "Unsupported moeda filter was allowed!");
 
         // 3. snipeByNote: minNote < 1.0 must be REJECTED, but minNote >= 1.0 must SUCCEED
         let mut cfg_bad = SniperConfig::default();
         cfg_bad.snipe_by_note = true;
         cfg_bad.min_note = 0.5; // Under 1.0
-        let res_note_bad = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_bad,
-        });
-        assert!(res_note_bad.is_err(), "snipeByNote with minNote < 1.0 was allowed!");
+        let res_note_bad = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_bad,
+            },
+        );
+        assert!(
+            res_note_bad.is_err(),
+            "snipeByNote with minNote < 1.0 was allowed!"
+        );
 
         let mut cfg_good = SniperConfig::default();
         cfg_good.snipe_by_note = true;
         cfg_good.min_note = 7.0;
-        let res_note_good = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_good,
-        });
-        assert!(res_note_good.is_ok(), "Valid snipeByNote failed: {:?}", res_note_good.err());
+        let res_note_good = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_good,
+            },
+        );
+        assert!(
+            res_note_good.is_ok(),
+            "Valid snipeByNote failed: {:?}",
+            res_note_good.err()
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4033,25 +4949,28 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // 1. target_id: 0 must be REJECTED
-        let res_zero = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_zero".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(0)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let res_zero = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_zero".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(0)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(res_zero.is_err(), "targetId 0 was allowed!");
 
         // 2. Exact species name: "Mew" must NOT match "Mewtwo"
@@ -4072,7 +4991,10 @@ mod tests {
         };
         // Species ID None, comparing name
         assert!(rule_mew.matches_pokemon(None, "Mew"));
-        assert!(!rule_mew.matches_pokemon(None, "Mewtwo"), "Substring matching erroneously matched Mewtwo for Mew!");
+        assert!(
+            !rule_mew.matches_pokemon(None, "Mewtwo"),
+            "Substring matching erroneously matched Mewtwo for Mew!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4081,7 +5003,12 @@ mod tests {
     fn test_loaded_file_rejects_future_version() {
         let temp_dir = std::env::temp_dir();
         let c = TEST_ENGINE_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path = temp_dir.join(format!("sniper_future_{}_{}_{}.json", now_ms(), std::process::id(), c));
+        let path = temp_dir.join(format!(
+            "sniper_future_{}_{}_{}.json",
+            now_ms(),
+            std::process::id(),
+            c
+        ));
 
         let future_json = json!({
             "accounts": [
@@ -4095,7 +5022,10 @@ mod tests {
         std::fs::write(&path, serde_json::to_vec_pretty(&future_json).unwrap()).unwrap();
 
         let engine = SniperEngine::new(Some(path.clone()));
-        assert!(engine.is_err(), "Future version 999 was erroneously loaded!");
+        assert!(
+            engine.is_err(),
+            "Future version 999 was erroneously loaded!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4224,7 +5154,10 @@ mod tests {
             nota: None,
         };
         let dec_beast = evaluate_offer(&offer_beast, &account, &runtime);
-        assert!(!dec_beast.matched, "Beast Ball erroneously matched stone category!");
+        assert!(
+            !dec_beast.matched,
+            "Beast Ball erroneously matched stone category!"
+        );
 
         // Pokemon offer even if item_id happens to be 2
         let offer_poke = ParsedMarketOffer {
@@ -4244,32 +5177,38 @@ mod tests {
             nota: None,
         };
         let dec_poke = evaluate_offer(&offer_poke, &account, &runtime);
-        assert!(!dec_poke.matched, "Pokemon offer erroneously matched category rule!");
+        assert!(
+            !dec_poke.matched,
+            "Pokemon offer erroneously matched category rule!"
+        );
     }
 
     #[test]
     fn test_category_aggregate_limit() {
         let (mut engine, path) = temp_test_engine();
 
-        let save_res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_stones".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 50000,
-                max_price_gems: 0,
-                max_qty: 2, // TOTAL across all items in category
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let save_res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_stones".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 0,
+                    max_qty: 2, // TOTAL across all items in category
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(save_res.is_ok());
 
         engine.runtimes[0].gold = 500000;
@@ -4333,25 +5272,28 @@ mod tests {
     fn test_category_market_itens_expansion_both_currencies() {
         let (mut engine, path) = temp_test_engine();
 
-        let save_res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_stones".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 50000,
-                max_price_gems: 10,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let save_res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_stones".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 50000,
+                    max_price_gems: 10,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(save_res.is_ok());
 
         // Resumo packet with Ancient Stone (ID 2) eligible for BOTH gold and orb
@@ -4369,18 +5311,30 @@ mod tests {
         let cmds = engine.on_message(0, &resumo_pkt, None);
 
         // Ancient Stone must emit BOTH gold and orb queries!
-        let has_ancient_gold = cmds.iter().any(|c| c["t"] == "market.item" && c["itemId"] == 2 && c["moeda"] == "gold");
-        let has_ancient_orb = cmds.iter().any(|c| c["t"] == "market.item" && c["itemId"] == 2 && c["moeda"] == "orb");
+        let has_ancient_gold = cmds
+            .iter()
+            .any(|c| c["t"] == "market.item" && c["itemId"] == 2 && c["moeda"] == "gold");
+        let has_ancient_orb = cmds
+            .iter()
+            .any(|c| c["t"] == "market.item" && c["itemId"] == 2 && c["moeda"] == "orb");
         assert!(has_ancient_gold, "Ancient Stone gold query missing!");
         assert!(has_ancient_orb, "Ancient Stone orb query missing!");
 
         // Bug Shiny Stone must emit orb query
-        let has_shiny_orb = cmds.iter().any(|c| c["t"] == "market.item" && c["itemId"] == 70031 && c["moeda"] == "orb");
-        assert!(has_shiny_orb, "Bug Shiny Stone query missing from category stones expansion!");
+        let has_shiny_orb = cmds
+            .iter()
+            .any(|c| c["t"] == "market.item" && c["itemId"] == 70031 && c["moeda"] == "orb");
+        assert!(
+            has_shiny_orb,
+            "Bug Shiny Stone query missing from category stones expansion!"
+        );
 
         // Beast Ball must NOT be queried
         let has_beast = cmds.iter().any(|c| c["itemId"] == 5);
-        assert!(!has_beast, "Beast Ball was erroneously queried for stone category rule!");
+        assert!(
+            !has_beast,
+            "Beast Ball was erroneously queried for stone category rule!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4578,25 +5532,28 @@ mod tests {
         cfg.scan_mode = "original".into();
         cfg.snipe_any_shiny = true;
 
-        let save_res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: cfg,
-        });
+        let save_res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: cfg,
+            },
+        );
         assert!(save_res.is_ok());
 
         // First tick: fires market.itens at t=0, and queues pokemon query for +700ms
@@ -4614,10 +5571,14 @@ mod tests {
 
         // Immediately ticking before 700ms has elapsed does NOT emit the query
         let cmds2 = engine.on_tick(0, now_ms(), None);
-        assert!(cmds2.is_empty(), "Delayed query was emitted before 700ms elapsed!");
+        assert!(
+            cmds2.is_empty(),
+            "Delayed query was emitted before 700ms elapsed!"
+        );
 
         // Simulate 700ms elapsed by backdating execute_at
-        engine.runtimes[0].scheduled_queries[0].execute_at = Instant::now() - Duration::from_millis(10);
+        engine.runtimes[0].scheduled_queries[0].execute_at =
+            Instant::now() - Duration::from_millis(10);
         let cmds3 = engine.on_tick(0, now_ms(), None);
         assert_eq!(cmds3.len(), 1);
         assert_eq!(cmds3[0]["ordem"], "menor_preco");
@@ -4635,25 +5596,34 @@ mod tests {
         cfg.scan_mode = "original".into();
         cfg.snipe_any_shiny = true;
 
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg,
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg,
+            },
+        );
 
         // Tick queues pokemon query
         let _ = engine.on_tick(0, now_ms(), None);
         assert_eq!(engine.runtimes[0].scheduled_queries.len(), 1);
 
         // Pause/disable account
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: false,
-            rules: vec![],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: false,
+                rules: vec![],
+                config: SniperConfig::default(),
+            },
+        );
 
         // Scheduled queries must be cleared!
-        assert!(engine.runtimes[0].scheduled_queries.is_empty(), "Scheduled queries were not cancelled on pause!");
+        assert!(
+            engine.runtimes[0].scheduled_queries.is_empty(),
+            "Scheduled queries were not cancelled on pause!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4662,25 +5632,28 @@ mod tests {
     fn test_validation_rejects_unknown_category() {
         let (mut engine, path) = temp_test_engine();
 
-        let res = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_bad_cat".into(),
-                target_type: "category".into(),
-                target_category: Some("unknown_category_xyz".into()),
-                target_id: None,
-                target_name: "Bad Cat".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let res = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_bad_cat".into(),
+                    target_type: "category".into(),
+                    target_category: Some("unknown_category_xyz".into()),
+                    target_id: None,
+                    target_name: "Bad Cat".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(res.is_err(), "Unknown category was erroneously allowed!");
 
         let _ = std::fs::remove_file(path);
@@ -4689,32 +5662,78 @@ mod tests {
     #[test]
     fn test_catalog_canonical_80_items_and_36_stones() {
         let catalog = SniperCatalog::get();
-        assert!(catalog.items_by_id.len() >= 80, "Catalog must contain at least 80 canonical items (found {})", catalog.items_by_id.len());
-        let stones = catalog.ids_by_category.get("stone").expect("stone category must exist");
+        assert!(
+            catalog.items_by_id.len() >= 80,
+            "Catalog must contain at least 80 canonical items (found {})",
+            catalog.items_by_id.len()
+        );
+        let stones = catalog
+            .ids_by_category
+            .get("stone")
+            .expect("stone category must exist");
         assert_eq!(stones.len(), 36, "Catalog must contain exactly 36 stones");
         let shiny_stones = stones.iter().filter(|&&id| id >= 70000).count();
         assert_eq!(shiny_stones, 18, "Catalog must contain 18 shiny stones");
         let normal_stones = stones.iter().filter(|&&id| id < 70000).count();
         assert_eq!(normal_stones, 18, "Catalog must contain 18 regular stones");
         // Verify houses/bicicletas loaded properly without falling back to empty catalog
-        let casas = catalog.ids_by_category.get("casa").expect("casa category must exist");
+        let casas = catalog
+            .ids_by_category
+            .get("casa")
+            .expect("casa category must exist");
         assert!(!casas.is_empty(), "Casa category must not be empty");
 
         // 80 items: fragment (3) and ticket (2), rare_loot stays 4
-        let fragments = catalog.ids_by_category.get("fragment").expect("fragment category must exist");
-        assert_eq!(fragments.len(), 3, "Catalog must contain exactly 3 fragment items");
-        let tickets = catalog.ids_by_category.get("ticket").expect("ticket category must exist");
-        assert_eq!(tickets.len(), 2, "Catalog must contain exactly 2 ticket items");
-        let rare_loot = catalog.ids_by_category.get("rare_loot").expect("rare_loot category must exist");
-        assert_eq!(rare_loot.len(), 4, "Catalog rare_loot must remain exactly 4 items");
+        let fragments = catalog
+            .ids_by_category
+            .get("fragment")
+            .expect("fragment category must exist");
+        assert_eq!(
+            fragments.len(),
+            3,
+            "Catalog must contain exactly 3 fragment items"
+        );
+        let tickets = catalog
+            .ids_by_category
+            .get("ticket")
+            .expect("ticket category must exist");
+        assert_eq!(
+            tickets.len(),
+            2,
+            "Catalog must contain exactly 2 ticket items"
+        );
+        let rare_loot = catalog
+            .ids_by_category
+            .get("rare_loot")
+            .expect("rare_loot category must exist");
+        assert_eq!(
+            rare_loot.len(),
+            4,
+            "Catalog rare_loot must remain exactly 4 items"
+        );
 
         // Check alias resolution for all 7 items
-        assert_eq!(resolve_canonical_item_id("Fragmento de Z-Move"), Some(59194));
+        assert_eq!(
+            resolve_canonical_item_id("Fragmento de Z-Move"),
+            Some(59194)
+        );
         assert_eq!(resolve_canonical_item_id("Fragmento de Chave"), Some(70011));
-        assert_eq!(resolve_canonical_item_id("Fragmento de Shiny Stone"), Some(70012));
-        assert_eq!(resolve_canonical_item_id("Fragmento de Bicicleta"), Some(70013));
-        assert_eq!(resolve_canonical_item_id("Mega Stone Fragment"), Some(70014));
-        assert_eq!(resolve_canonical_item_id("Mega Shiny Stone Fragment"), Some(70015));
+        assert_eq!(
+            resolve_canonical_item_id("Fragmento de Shiny Stone"),
+            Some(70012)
+        );
+        assert_eq!(
+            resolve_canonical_item_id("Fragmento de Bicicleta"),
+            Some(70013)
+        );
+        assert_eq!(
+            resolve_canonical_item_id("Mega Stone Fragment"),
+            Some(70014)
+        );
+        assert_eq!(
+            resolve_canonical_item_id("Mega Shiny Stone Fragment"),
+            Some(70015)
+        );
         assert_eq!(resolve_canonical_item_id("Shiny Egg Fragment"), Some(70017));
     }
 
@@ -4725,21 +5744,27 @@ mod tests {
         // 1. NaN min_note
         let mut cfg_nan = SniperConfig::default();
         cfg_nan.min_note = f64::NAN;
-        let res_nan = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_nan,
-        });
+        let res_nan = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_nan,
+            },
+        );
         assert!(res_nan.is_err(), "NaN min_note was allowed!");
 
         // 2. Infinite min_note
         let mut cfg_inf = SniperConfig::default();
         cfg_inf.min_note = f64::INFINITY;
-        let res_inf = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_inf,
-        });
+        let res_inf = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_inf,
+            },
+        );
         assert!(res_inf.is_err(), "Infinite min_note was allowed!");
 
         // 3. Active snipe_any_shiny with both ceilings zero
@@ -4747,24 +5772,36 @@ mod tests {
         cfg_shiny_zero.snipe_any_shiny = true;
         cfg_shiny_zero.max_price_shiny_gold = 0;
         cfg_shiny_zero.max_price_shiny_gems = 0;
-        let res_shiny = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_shiny_zero,
-        });
-        assert!(res_shiny.is_err(), "Active snipe_any_shiny with 0 ceilings was allowed!");
+        let res_shiny = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_shiny_zero,
+            },
+        );
+        assert!(
+            res_shiny.is_err(),
+            "Active snipe_any_shiny with 0 ceilings was allowed!"
+        );
 
         // 4. Active snipe_any_p5 with both ceilings zero
         let mut cfg_p5_zero = SniperConfig::default();
         cfg_p5_zero.snipe_any_p5 = true;
         cfg_p5_zero.max_price_p5_gold = 0;
         cfg_p5_zero.max_price_p5_gems = 0;
-        let res_p5 = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_p5_zero,
-        });
-        assert!(res_p5.is_err(), "Active snipe_any_p5 with 0 ceilings was allowed!");
+        let res_p5 = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_p5_zero,
+            },
+        );
+        assert!(
+            res_p5.is_err(),
+            "Active snipe_any_p5 with 0 ceilings was allowed!"
+        );
 
         // 5. Active snipe_by_note with both ceilings zero
         let mut cfg_note_zero = SniperConfig::default();
@@ -4772,12 +5809,18 @@ mod tests {
         cfg_note_zero.min_note = 7.0;
         cfg_note_zero.max_price_note_gold = 0;
         cfg_note_zero.max_price_note_gems = 0;
-        let res_note = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg_note_zero,
-        });
-        assert!(res_note.is_err(), "Active snipe_by_note with 0 ceilings was allowed!");
+        let res_note = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg_note_zero,
+            },
+        );
+        assert!(
+            res_note.is_err(),
+            "Active snipe_by_note with 0 ceilings was allowed!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4802,7 +5845,10 @@ mod tests {
             }
         });
         let parsed = parse_offer(&payload).expect("Must parse offer");
-        assert!(parsed.is_shiny, "shiny: false with lookShiny: true must evaluate to is_shiny == true");
+        assert!(
+            parsed.is_shiny,
+            "shiny: false with lookShiny: true must evaluate to is_shiny == true"
+        );
 
         // lookShiny on ficha even if top-level shiny is false
         let payload2 = json!({
@@ -4821,7 +5867,10 @@ mod tests {
             }
         });
         let parsed2 = parse_offer(&payload2).expect("Must parse offer");
-        assert!(parsed2.is_shiny, "ficha with lookShiny: true must evaluate to is_shiny == true");
+        assert!(
+            parsed2.is_shiny,
+            "ficha with lookShiny: true must evaluate to is_shiny == true"
+        );
     }
 
     #[test]
@@ -4833,43 +5882,60 @@ mod tests {
         cfg.snipe_any_shiny = true;
         cfg.max_price_shiny_gold = 50000;
 
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r1".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(2)),
-                target_name: "Ancient Stone".into(),
-                max_price_gold: 10000,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: cfg,
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r1".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 10000,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: cfg,
+            },
+        );
 
         // 1. on_connect: must emit market.itens at t=0 and schedule gold query at +700ms (NOT emit Pokemon immediately)
         let connect_cmds = engine.on_connect(0);
-        assert_eq!(connect_cmds.len(), 1, "on_connect must emit exactly 1 command (market.itens)");
+        assert_eq!(
+            connect_cmds.len(),
+            1,
+            "on_connect must emit exactly 1 command (market.itens)"
+        );
         assert_eq!(connect_cmds[0]["t"], "market.itens");
 
         // 1 query scheduled for +700ms (cycle 1 = gold)
         assert_eq!(engine.runtimes[0].scheduled_queries.len(), 1);
-        assert_eq!(engine.runtimes[0].scheduled_queries[0].payload["ordem"], "menor_preco");
-        assert_eq!(engine.runtimes[0].scheduled_queries[0].payload["moeda"], "gold");
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[0].payload["ordem"],
+            "menor_preco"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[0].payload["moeda"],
+            "gold"
+        );
 
         // 2. Immediate on_tick (50ms later): must NOT duplicate market.itens or emit scheduled query early
         let immediate_cmds = engine.on_tick(0, 50, None);
-        assert!(immediate_cmds.is_empty(), "Immediate on_tick must not duplicate market.itens or leak queries early");
+        assert!(
+            immediate_cmds.is_empty(),
+            "Immediate on_tick must not duplicate market.itens or leak queries early"
+        );
         assert_eq!(engine.runtimes[0].scheduled_queries.len(), 1);
 
         // 3. When +700ms arrives, the scheduled gold query must be drained
-        engine.runtimes[0].scheduled_queries[0].execute_at = Instant::now() - Duration::from_millis(1);
+        engine.runtimes[0].scheduled_queries[0].execute_at =
+            Instant::now() - Duration::from_millis(1);
         let due_cmds = engine.on_tick(0, 750, None);
         assert_eq!(due_cmds.len(), 1);
         assert_eq!(due_cmds[0]["t"], "market.listar");
@@ -4891,22 +5957,44 @@ mod tests {
         cfg.snipe_any_shiny = true;
         cfg.max_price_shiny_gold = 50000;
 
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![],
-            config: cfg,
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![],
+                config: cfg,
+            },
+        );
 
         // 1. Slow round (cold): initial scan triggers and schedules 3 queries:
         // +700ms (gold), +1400ms (orb), +2100ms (recentes)
         let cmds_cold = engine.on_tick(0, 0, None);
         assert!(cmds_cold.is_empty()); // no item rules, so t=0 commands is empty
-        assert_eq!(engine.runtimes[0].scheduled_queries.len(), 3, "Slow adaptive round must schedule 3 queries");
-        assert_eq!(engine.runtimes[0].scheduled_queries[0].payload["ordem"], "menor_preco");
-        assert_eq!(engine.runtimes[0].scheduled_queries[0].payload["moeda"], "gold");
-        assert_eq!(engine.runtimes[0].scheduled_queries[1].payload["ordem"], "menor_preco");
-        assert_eq!(engine.runtimes[0].scheduled_queries[1].payload["moeda"], "orb");
-        assert_eq!(engine.runtimes[0].scheduled_queries[2].payload["ordem"], "recentes");
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries.len(),
+            3,
+            "Slow adaptive round must schedule 3 queries"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[0].payload["ordem"],
+            "menor_preco"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[0].payload["moeda"],
+            "gold"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[1].payload["ordem"],
+            "menor_preco"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[1].payload["moeda"],
+            "orb"
+        );
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries[2].payload["ordem"],
+            "recentes"
+        );
 
         // Clear scheduled queries
         engine.runtimes[0].clear_scheduled_queries();
@@ -4918,11 +6006,18 @@ mod tests {
         // Fast scan triggers after fast_scan_interval_ms
         engine.runtimes[0].last_scan_instant = Some(Instant::now() - Duration::from_millis(3500));
         let _ = engine.on_tick(0, 3500, None);
-        assert_eq!(engine.runtimes[0].scheduled_queries.len(), 1, "Hot round must schedule exactly 1 rotating query");
+        assert_eq!(
+            engine.runtimes[0].scheduled_queries.len(),
+            1,
+            "Hot round must schedule exactly 1 rotating query"
+        );
 
         // 3. Verify cancellation on disconnect
         engine.on_disconnect(0, None);
-        assert!(engine.runtimes[0].scheduled_queries.is_empty(), "on_disconnect must clear scheduled queries");
+        assert!(
+            engine.runtimes[0].scheduled_queries.is_empty(),
+            "on_disconnect must clear scheduled queries"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -4932,97 +6027,125 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // 1. Valid exclusion: Water Stone (ID 142) excluded from category "stone"
-        let save_ok = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_stones".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![142], // Water Stone
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(save_ok.is_ok(), "Valid stone exclusion was rejected: {:?}", save_ok.err());
+        let save_ok = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_stones".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![142], // Water Stone
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            save_ok.is_ok(),
+            "Valid stone exclusion was rejected: {:?}",
+            save_ok.err()
+        );
 
         // 2. Reject nonpositive ID (0)
-        let save_zero = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_zero".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![0],
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let save_zero = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_zero".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![0],
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         assert!(save_zero.is_err(), "Excluded ID 0 was erroneously allowed");
 
         // 3. Reject nonexistent ID
-        let save_nonexistent = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_none".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![9999999],
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(save_nonexistent.is_err(), "Nonexistent excluded ID was erroneously allowed");
+        let save_nonexistent = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_none".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![9999999],
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            save_nonexistent.is_err(),
+            "Nonexistent excluded ID was erroneously allowed"
+        );
 
         // 4. Reject item from different category (e.g. 59194 is in TM category, not stone)
-        let save_wrong_cat = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_wrong".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 1000,
-                max_price_gems: 0,
-                max_qty: 10,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![59194],
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(save_wrong_cat.is_err(), "Excluded item from wrong category was erroneously allowed");
+        let save_wrong_cat = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_wrong".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 1000,
+                    max_price_gems: 0,
+                    max_qty: 10,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![59194],
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            save_wrong_cat.is_err(),
+            "Excluded item from wrong category was erroneously allowed"
+        );
 
         // 5. Test matching: Water Stone (142) excluded, Fire Stone (53) matches
         let rule = &engine.store.accounts[0].rules[0];
-        assert!(!rule.matches_category(Some(142)), "Water Stone was not excluded by matches_category!");
-        assert!(rule.matches_category(Some(53)), "Fire Stone failed to match category!");
+        assert!(
+            !rule.matches_category(Some(142)),
+            "Water Stone was not excluded by matches_category!"
+        );
+        assert!(
+            rule.matches_category(Some(53)),
+            "Fire Stone failed to match category!"
+        );
 
         // 6. Test evaluate_offer
         let mut runtime = AccountRuntime::default();
@@ -5045,7 +6168,10 @@ mod tests {
             nota: None,
         };
         let dec_water = evaluate_offer(&offer_water, &engine.store.accounts[0], &runtime);
-        assert!(!dec_water.matched, "Excluded Water Stone matched evaluate_offer!");
+        assert!(
+            !dec_water.matched,
+            "Excluded Water Stone matched evaluate_offer!"
+        );
 
         let offer_fire = ParsedMarketOffer {
             id: 611692,
@@ -5073,25 +6199,28 @@ mod tests {
     fn test_diagnostics_unrecognized_replies_and_dotted_keys() {
         let (mut engine, path) = temp_test_engine();
 
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_water".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 10,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_water".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 10,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 1000;
 
         // 1. Emit buy for offer 611691
@@ -5119,13 +6248,26 @@ mod tests {
             "msg": "Aguarde para falar no chat"
         });
         let _ = engine.on_message(0, &unrec_error, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Unrecognized error released pending buy!");
-        assert_eq!(engine.runtimes[0].reserved_gold, 2, "Unrecognized error released budget!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Unrecognized error released pending buy!"
+        );
+        assert_eq!(
+            engine.runtimes[0].reserved_gold, 2,
+            "Unrecognized error released budget!"
+        );
 
         // Diagnostic log entry must be present
         let logs = &engine.store.accounts[0].logs;
-        let diag_log = logs.iter().find(|l| l.status == "DIAGNOSTICO").expect("Diagnostic log entry missing");
-        assert!(diag_log.details.contains("chat.flood"), "Diagnostic log missing chave details: {}", diag_log.details);
+        let diag_log = logs
+            .iter()
+            .find(|l| l.status == "DIAGNOSTICO")
+            .expect("Diagnostic log entry missing");
+        assert!(
+            diag_log.details.contains("chat.flood"),
+            "Diagnostic log missing chave details: {}",
+            diag_log.details
+        );
         assert_eq!(diag_log.offer_id, Some(611691));
 
         // 3. Progress non-refusal error (market.sorteio): MUST NOT release budget
@@ -5135,9 +6277,16 @@ mod tests {
             "msg": "Este anúncio acabou de liberar: seu pedido entrou no sorteio."
         });
         let _ = engine.on_message(0, &sorteio_prog, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Lottery progress error released pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Lottery progress error released pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 2);
-        let prog_log = engine.store.accounts[0].logs.iter().find(|l| l.status == "PROGRESSO").expect("Progress log missing");
+        let prog_log = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.status == "PROGRESSO")
+            .expect("Progress log missing");
         assert_eq!(prog_log.offer_id, Some(611691));
 
         // 4. marketComprado with divergent ID: MUST NOT confirm buy 611691
@@ -5150,7 +6299,10 @@ mod tests {
             }]
         });
         let _ = engine.on_message(0, &divergent_confirm, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Divergent marketComprado confirmed pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Divergent marketComprado confirmed pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 2);
 
         // 5. Terminal dotted refusal (market.sorteioPerdeu): RELEASES reservation and logs RECUSADO
@@ -5160,11 +6312,24 @@ mod tests {
             "msg": "Outro jogador levou este anúncio no sorteio da liberação."
         });
         let _ = engine.on_message(0, &sorteio_perdeu, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_none(), "Terminal refusal failed to release outstanding buy!");
-        assert_eq!(engine.runtimes[0].reserved_gold, 0, "Terminal refusal failed to release reserved budget!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_none(),
+            "Terminal refusal failed to release outstanding buy!"
+        );
+        assert_eq!(
+            engine.runtimes[0].reserved_gold, 0,
+            "Terminal refusal failed to release reserved budget!"
+        );
 
-        let rec_log = engine.store.accounts[0].logs.iter().find(|l| l.status == "RECUSADO").expect("Recusado log missing");
-        assert!(rec_log.details.contains("Outro jogador levou") || rec_log.details.contains("market.sorteioPerdeu"));
+        let rec_log = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.status == "RECUSADO")
+            .expect("Recusado log missing");
+        assert!(
+            rec_log.details.contains("Outro jogador levou")
+                || rec_log.details.contains("market.sorteioPerdeu")
+        );
         assert_eq!(rec_log.offer_id, Some(611691));
 
         let _ = std::fs::remove_file(path);
@@ -5175,25 +6340,28 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // Rule for Water Stone (ID 142), maxPriceGold: 500, maxPriceGems: 0
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_water_gold_only".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 500,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_water_gold_only".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 500,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 10000;
         engine.runtimes[0].orbs = 100;
 
@@ -5211,32 +6379,42 @@ mod tests {
             }]
         });
         let cmds1 = engine.on_message(0, &pkt_orb, None);
-        assert!(cmds1.is_empty(), "Orb envelope offer was erroneously purchased with 0 gems ceiling!");
+        assert!(
+            cmds1.is_empty(),
+            "Orb envelope offer was erroneously purchased with 0 gems ceiling!"
+        );
 
         // 2. Update rule to allow maxPriceGems: 2
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_water_gems".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 0,
-                max_price_gems: 2,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_water_gems".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 0,
+                    max_price_gems: 2,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
 
         // Offer now qualifies: sends buy with moeda: "orb", preco: 2
         let cmds2 = engine.on_message(0, &pkt_orb, None);
-        assert_eq!(cmds2.len(), 1, "Failed to buy orb envelope offer with gems ceiling 2");
+        assert_eq!(
+            cmds2.len(),
+            1,
+            "Failed to buy orb envelope offer with gems ceiling 2"
+        );
         assert_eq!(cmds2[0]["t"], "market.comprar");
         assert_eq!(cmds2[0]["id"], 9501);
         assert_eq!(cmds2[0]["moeda"], "orb");
@@ -5258,7 +6436,10 @@ mod tests {
             }]
         });
         let cmds3 = engine.on_message(0, &pkt_conflict_currency, None);
-        assert!(cmds3.is_empty(), "Conflicting currency between envelope and line was not rejected!");
+        assert!(
+            cmds3.is_empty(),
+            "Conflicting currency between envelope and line was not rejected!"
+        );
 
         // 4. Line with explicit conflicting itemId (itemId: 999 on line vs 142 on envelope) -> fail-closed
         let pkt_conflict_id = json!({
@@ -5275,7 +6456,10 @@ mod tests {
             }]
         });
         let cmds4 = engine.on_message(0, &pkt_conflict_id, None);
-        assert!(cmds4.is_empty(), "Conflicting itemId between envelope and line was not rejected!");
+        assert!(
+            cmds4.is_empty(),
+            "Conflicting itemId between envelope and line was not rejected!"
+        );
 
         // 5. Line with no currency on line and no currency on envelope -> fail-closed (never default to gold)
         let pkt_no_currency = json!({
@@ -5290,7 +6474,10 @@ mod tests {
             }]
         });
         let cmds5 = engine.on_message(0, &pkt_no_currency, None);
-        assert!(cmds5.is_empty(), "Offer with missing currency was erroneously defaulted to gold!");
+        assert!(
+            cmds5.is_empty(),
+            "Offer with missing currency was erroneously defaulted to gold!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -5298,32 +6485,39 @@ mod tests {
     #[test]
     fn test_batalha_aviso_terminal_and_progress_events() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_water".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 10,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_water".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 10,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 1000;
 
         // Trigger buy
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 7771, "itemId": 142, "preco": 5, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 7771, "itemId": 142, "preco": 5, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(engine.runtimes[0].outstanding_buy.is_some());
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
 
@@ -5336,9 +6530,15 @@ mod tests {
             }]
         });
         let _ = engine.on_message(0, &aviso_prog, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Aviso progress released pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Aviso progress released pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
-        assert!(engine.store.accounts[0].logs.iter().any(|l| l.status == "PROGRESSO"));
+        assert!(engine.store.accounts[0]
+            .logs
+            .iter()
+            .any(|l| l.status == "PROGRESSO"));
 
         // 2. Terminal event: batalha.ev with k: "aviso", msg: "market.sorteioPerdeu"
         let aviso_terminal = json!({
@@ -5349,10 +6549,22 @@ mod tests {
             }]
         });
         let _ = engine.on_message(0, &aviso_terminal, None);
-        assert!(engine.runtimes[0].outstanding_buy.is_none(), "Aviso terminal failed to release pending buy!");
-        assert_eq!(engine.runtimes[0].reserved_gold, 0, "Aviso terminal failed to release reservation!");
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0, "Aviso terminal failed to restore rule quota!");
-        assert!(engine.store.accounts[0].logs.iter().any(|l| l.status == "RECUSADO"));
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_none(),
+            "Aviso terminal failed to release pending buy!"
+        );
+        assert_eq!(
+            engine.runtimes[0].reserved_gold, 0,
+            "Aviso terminal failed to release reservation!"
+        );
+        assert_eq!(
+            engine.store.accounts[0].rules[0].total_bought, 0,
+            "Aviso terminal failed to restore rule quota!"
+        );
+        assert!(engine.store.accounts[0]
+            .logs
+            .iter()
+            .any(|l| l.status == "RECUSADO"));
 
         let _ = std::fs::remove_file(path);
     }
@@ -5360,50 +6572,66 @@ mod tests {
     #[test]
     fn test_on_send_failure_guard() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_water".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 10,
-                max_price_gems: 0,
-                max_qty: 5,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_water".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 10,
+                    max_price_gems: 0,
+                    max_qty: 5,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 1000;
 
         // Trigger buy for offer 8881
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 8881, "itemId": 142, "preco": 5, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 8881, "itemId": 142, "preco": 5, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(engine.runtimes[0].outstanding_buy.is_some());
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
         // 1. Send failure on market.itens (scan command): MUST NOT release pending buy!
         engine.on_send_failure(0, &json!({ "t": "market.itens" }));
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Scan failure prematurely released pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Scan failure prematurely released pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
         // 2. Send failure on market.comprar with divergent ID: MUST NOT release pending buy!
         engine.on_send_failure(0, &json!({ "t": "market.comprar", "id": 9999 }));
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Divergent buy failure prematurely released pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Divergent buy failure prematurely released pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
 
         // 3. Send failure on matching market.comprar (id 8881): RELEASES pending buy and rolls back quota!
         engine.on_send_failure(0, &json!({ "t": "market.comprar", "id": 8881 }));
-        assert!(engine.runtimes[0].outstanding_buy.is_none(), "Matching buy failure failed to release pending buy!");
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_none(),
+            "Matching buy failure failed to release pending buy!"
+        );
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
@@ -5415,48 +6643,60 @@ mod tests {
         let (mut engine, path) = temp_test_engine();
 
         // 1. Item rule with non-empty excluded_item_ids MUST be rejected
-        let res_item = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_item_bad".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 100,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![142], // Non-empty excludedItemIds on item rule -> invalid!
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(res_item.is_err(), "Non-empty excluded_item_ids on item rule was erroneously allowed!");
+        let res_item = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_item_bad".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 100,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![142], // Non-empty excludedItemIds on item rule -> invalid!
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            res_item.is_err(),
+            "Non-empty excluded_item_ids on item rule was erroneously allowed!"
+        );
 
         // 2. Category rule with unsafe JS integer (> 9_007_199_254_740_991) MUST be rejected
-        let res_unsafe = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_cat_unsafe".into(),
-                target_type: "category".into(),
-                target_category: Some("stone".into()),
-                target_id: None,
-                target_name: "Pedras".into(),
-                max_price_gold: 100,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: vec![9_007_199_254_740_992],
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
-        assert!(res_unsafe.is_err(), "Excluded item ID exceeding JS safe integer was erroneously allowed!");
+        let res_unsafe = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_cat_unsafe".into(),
+                    target_type: "category".into(),
+                    target_category: Some("stone".into()),
+                    target_id: None,
+                    target_name: "Pedras".into(),
+                    max_price_gold: 100,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: vec![9_007_199_254_740_992],
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
+        assert!(
+            res_unsafe.is_err(),
+            "Excluded item ID exceeding JS safe integer was erroneously allowed!"
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -5464,79 +6704,417 @@ mod tests {
     #[test]
     fn test_bounded_aux_logs_divergent_error_id_and_single_lottery_confirm() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_ws".into(),
-                target_type: "item".into(),
-                target_category: None,
-                target_id: Some(json!(142)),
-                target_name: "Water Stone".into(),
-                max_price_gold: 100,
-                max_price_gems: 0,
-                max_qty: 1,
-                infinite: false,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_ws".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(142)),
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 100,
+                    max_price_gems: 0,
+                    max_qty: 1,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 1000;
 
-        let _ = engine.on_message(0, &json!({
-            "t": "market",
-            "linhas": [{"id": 9101, "itemId": 142, "preco": 10, "qtd": 1, "moeda": "gold"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 9101, "itemId": 142, "preco": 10, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
         assert!(engine.runtimes[0].outstanding_buy.is_some());
 
         // 1. Terminal error with divergent explicit offer ID must NOT release pending buy
-        let _ = engine.on_message(0, &json!({
-            "t": "erro",
-            "id": 9999,
-            "chave": "market.sorteioPerdeu"
-        }), None);
-        assert!(engine.runtimes[0].outstanding_buy.is_some(), "Divergent error ID prematurely released pending buy!");
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "erro",
+                "id": 9999,
+                "chave": "market.sorteioPerdeu"
+            }),
+            None,
+        );
+        assert!(
+            engine.runtimes[0].outstanding_buy.is_some(),
+            "Divergent error ID prematurely released pending buy!"
+        );
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
         // 2. Repeated mktSorteio 'lista' ticks + flood of unknown errors must cap aux logs at 5
         for _ in 0..16 {
-            let _ = engine.on_message(0, &json!({
-                "t": "mktSorteio",
-                "id": 9101,
-                "fase": "lista"
-            }), None);
+            let _ = engine.on_message(
+                0,
+                &json!({
+                    "t": "mktSorteio",
+                    "id": 9101,
+                    "fase": "lista"
+                }),
+                None,
+            );
         }
         for i in 0..10 {
-            let _ = engine.on_message(0, &json!({
-                "t": "erro",
-                "chave": format!("unknown.err.{}", i)
-            }), None);
+            let _ = engine.on_message(
+                0,
+                &json!({
+                    "t": "erro",
+                    "chave": format!("unknown.err.{}", i)
+                }),
+                None,
+            );
         }
-        let aux_count = engine.store.accounts[0].logs.iter()
+        let aux_count = engine.store.accounts[0]
+            .logs
+            .iter()
             .filter(|l| l.status == "DIAGNOSTICO" || l.status == "PROGRESSO")
             .count();
-        assert_eq!(aux_count, 5, "Aux diagnostic/progress logs per pending offer must be bounded to 5");
+        assert_eq!(
+            aux_count, 5,
+            "Aux diagnostic/progress logs per pending offer must be bounded to 5"
+        );
 
         // 3. Lottery win (mktSorteio fim ok:true) followed by marketComprado confirms once without double-debiting
-        let _ = engine.on_message(0, &json!({
-            "t": "mktSorteio",
-            "id": 9101,
-            "fase": "fim",
-            "ok": true,
-            "descricao": "1x Water Stone"
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "mktSorteio",
+                "id": 9101,
+                "fase": "fim",
+                "ok": true,
+                "descricao": "1x Water Stone"
+            }),
+            None,
+        );
         let _ = engine.on_message(0, &json!({
             "t": "batalha",
             "ev": [{"k": "marketComprado", "id": 9101, "sorteio": true, "descricao": "1x Water Stone"}]
         }), None);
         assert!(engine.runtimes[0].outstanding_buy.is_none());
-        assert_eq!(engine.runtimes[0].gold, 990, "Balance must be debited once (1000 - 10 = 990)");
-        let confirm_count = engine.store.accounts[0].logs.iter()
+        assert_eq!(
+            engine.runtimes[0].gold, 990,
+            "Balance must be debited once (1000 - 10 = 990)"
+        );
+        let confirm_count = engine.store.accounts[0]
+            .logs
+            .iter()
             .filter(|l| l.status == "CONFIRMADO" && l.offer_id == Some(9101))
             .count();
-        assert_eq!(confirm_count, 1, "CONFIRMADO must be logged once for lottery win + marketComprado");
+        assert_eq!(
+            confirm_count, 1,
+            "CONFIRMADO must be logged once for lottery win + marketComprado"
+        );
+        let lottery_win = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.status == "CONFIRMADO" && l.offer_id == Some(9101))
+            .unwrap();
+        assert_eq!(lottery_win.extra.get("lotteryResult"), Some(&json!("win")));
+        assert_eq!(
+            lottery_win.extra.get("lotteryEvidence"),
+            Some(&json!("mktSorteio.fim.ok"))
+        );
+        assert_eq!(
+            lottery_win.extra.get("lotteryWonAt"),
+            Some(&json!(lottery_win.timestamp))
+        );
+        assert_eq!(
+            lottery_win.extra.get("lotteryConfirmedAt"),
+            Some(&json!(lottery_win.timestamp))
+        );
+
+        // Flattened fields survive a persisted-state reload unchanged.
+        let restored = SniperEngine::new(Some(path.clone())).expect("reload lottery history");
+        let persisted_win = restored.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.status == "CONFIRMADO" && l.offer_id == Some(9101))
+            .unwrap();
+        assert_eq!(persisted_win.extra, lottery_win.extra);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_lottery_loss_requires_explicit_matching_server_outcome() {
+        let (mut engine, path) = temp_test_engine();
+        engine
+            .save_settings(
+                vec![0],
+                SniperSettingsInput {
+                    enabled: true,
+                    rules: vec![Rule {
+                        id: "lottery_rule".into(),
+                        target_id: Some(json!(142)),
+                        target_name: "Water Stone".into(),
+                        max_price_gold: 100,
+                        max_qty: 5,
+                        ..Rule::default()
+                    }],
+                    ..SniperSettingsInput::default()
+                },
+            )
+            .unwrap();
+        engine.runtimes[0].gold = 1000;
+        engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 99001, "itemId": 142, "preco": 10, "qtd": 1, "moeda": "gold"}]
+            }),
+            None,
+        );
+
+        // Updates and a generic 'fim' message are not terminal results.
+        for event in [
+            json!({"t":"mktSorteio","id":99001,"fase":"lista"}),
+            json!({"t":"mktSorteio","id":99001,"fase":"fim","msg":"Sorteio encerrado"}),
+            json!({"t":"mktSorteio","id":99999,"fase":"fim","perdeu":true}),
+            json!({"t":"mktSorteio","id":99001,"fase":"fim","ok":true,"perdeu":true}),
+        ] {
+            engine.on_message(0, &event, None);
+            assert!(engine.runtimes[0].outstanding_buy.is_some());
+            assert!(!engine.store.accounts[0]
+                .logs
+                .iter()
+                .any(|l| l.extra.contains_key("lotteryResult")));
+        }
+
+        engine.on_message(
+            0,
+            &json!({
+                "t":"mktSorteio","id":99001,"fase":"fim","ok":false,
+                "msg":"Outro jogador levou no sorteio"
+            }),
+            None,
+        );
+        assert!(engine.runtimes[0].outstanding_buy.is_none());
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+        assert_eq!(engine.runtimes[0].reserved_gold, 0);
+        let loss = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| {
+                l.offer_id == Some(99001) && l.extra.get("lotteryResult") == Some(&json!("loss"))
+            })
+            .expect("missing server-confirmed loss");
+        assert_eq!(loss.status, "RECUSADO");
+        assert_eq!(
+            loss.extra.get("lotteryEvidence"),
+            Some(&json!("mktSorteio.fim.okFalse"))
+        );
+        assert_eq!(
+            loss.extra.get("lotteryConfirmedAt"),
+            Some(&json!(loss.timestamp))
+        );
+        assert!(!loss.extra.contains_key("lotteryWonAt"));
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_lottery_outcomes_from_purchase_and_terminal_rejection_only() {
+        let (mut engine, path) = temp_test_engine();
+        engine
+            .save_settings(
+                vec![0],
+                SniperSettingsInput {
+                    enabled: true,
+                    rules: vec![Rule {
+                        id: "r_water".into(),
+                        target_id: Some(json!(142)),
+                        target_name: "Water Stone".into(),
+                        max_price_gold: 100,
+                        max_qty: 10,
+                        ..Rule::default()
+                    }],
+                    ..SniperSettingsInput::default()
+                },
+            )
+            .unwrap();
+        engine.runtimes[0].gold = 1000;
+
+        // A normal confirmed purchase remains a plain purchase.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9001,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"batalha", "ev":[{"k":"marketComprado","id":9001,"descricao":"Water Stone"}]
+            }),
+            None,
+        );
+        let normal = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9001) && l.status == "CONFIRMADO")
+            .unwrap();
+        assert!(!normal.extra.contains_key("lotteryResult"));
+
+        // Server lottery entry followed by a purchase event without a lottery
+        // flag is sufficient evidence because both packets match the same order.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9002,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"erro", "op":"market.comprar", "chave":"market.sorteio"
+            }),
+            None,
+        );
+        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        engine.on_message(
+            0,
+            &json!({
+                "t":"batalha", "ev":[{"k":"marketComprado","id":9002,"descricao":"Water Stone"}]
+            }),
+            None,
+        );
+        let won = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9002) && l.status == "CONFIRMADO")
+            .unwrap();
+        assert_eq!(won.extra.get("lotteryResult"), Some(&json!("win")));
+        assert_eq!(
+            won.extra.get("lotteryEvidence"),
+            Some(&json!("marketComprado.afterSorteio"))
+        );
+        assert_eq!(won.extra.get("lotteryWonAt"), Some(&json!(won.timestamp)));
+
+        // A terminal loss key is distinct from ordinary market rejections.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9003,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"erro", "id":9003, "chave":"market.sorteioPerdeu"
+            }),
+            None,
+        );
+        let lost = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9003) && l.status == "RECUSADO")
+            .unwrap();
+        assert_eq!(lost.extra.get("lotteryResult"), Some(&json!("loss")));
+        assert_eq!(
+            lost.extra.get("lotteryEvidence"),
+            Some(&json!("erro.market.sorteioPerdeu"))
+        );
+
+        // A server purchase tagged as a lottery win is sufficient on its own.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9004,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"marketComprado", "id":9004, "sorteio":true, "descricao":"Water Stone"
+            }),
+            None,
+        );
+        let direct_win = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9004) && l.status == "CONFIRMADO")
+            .unwrap();
+        assert_eq!(direct_win.extra.get("lotteryResult"), Some(&json!("win")));
+        assert_eq!(
+            direct_win.extra.get("lotteryEvidence"),
+            Some(&json!("marketComprado.sorteio"))
+        );
+
+        // Ordinary server refusals must not inflate lottery loss statistics.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9005,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"erro", "id":9005, "chave":"market.loteInvalido"
+            }),
+            None,
+        );
+        let regular_refusal = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9005) && l.status == "RECUSADO")
+            .unwrap();
+        assert!(!regular_refusal.extra.contains_key("lotteryResult"));
+
+        // 'aviso' is also an authenticated server path for the loss key.
+        engine.on_message(
+            0,
+            &json!({
+                "t":"market", "linhas":[{"id":9006,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}]
+            }),
+            None,
+        );
+        engine.on_message(
+            0,
+            &json!({
+                "t":"batalha", "ev":[{"k":"aviso", "id":9006, "msg":"market.sorteioPerdeu"}]
+            }),
+            None,
+        );
+        let notice_loss = engine.store.accounts[0]
+            .logs
+            .iter()
+            .find(|l| l.offer_id == Some(9006) && l.status == "RECUSADO")
+            .unwrap();
+        assert_eq!(notice_loss.extra.get("lotteryResult"), Some(&json!("loss")));
+        assert_eq!(
+            notice_loss.extra.get("lotteryEvidence"),
+            Some(&json!("aviso.market.sorteioPerdeu"))
+        );
+
+        // Old persisted logs still deserialize without the new optional fields.
+        let old_log: SniperLogEntry = serde_json::from_value(json!({
+            "id":"legacy", "timestamp":1700000000000u64, "status":"CONFIRMADO",
+            "targetName":"Water Stone", "offerId":9000, "details":"Compra antiga"
+        }))
+        .unwrap();
+        assert!(old_log.extra.get("lotteryResult").is_none());
+        assert!(serde_json::to_value(old_log)
+            .unwrap()
+            .get("lotteryResult")
+            .is_none());
 
         let _ = std::fs::remove_file(path);
     }
@@ -5544,65 +7122,87 @@ mod tests {
     #[test]
     fn test_confirmed_logs_never_evicted_by_non_confirmed_flood_and_seller_preserved() {
         let (mut engine, path) = temp_test_engine();
-        let _ = engine.save_settings(vec![0], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_stone".into(),
-                target_type: "item".into(),
-                target_id: Some(json!(142)),
-                target_category: None,
-                target_name: "Water Stone".into(),
-                max_price_gold: 10000,
-                max_price_gems: 0,
-                max_qty: 999,
-                infinite: true,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_stone".into(),
+                    target_type: "item".into(),
+                    target_id: Some(json!(142)),
+                    target_category: None,
+                    target_name: "Water Stone".into(),
+                    max_price_gold: 10000,
+                    max_price_gems: 0,
+                    max_qty: 999,
+                    infinite: true,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[0].gold = 500_000;
 
         // 0. Category rule ("Pedras") with envelope-only itemId (23 = Cocoon Stone, no itemNome in row) MUST record "Cocoon Stone", NOT "Pedras"!
-        let _ = engine.save_settings(vec![1], SniperSettingsInput {
-            enabled: true,
-            rules: vec![Rule {
-                id: "r_cat_pedras".into(),
-                target_type: "category".into(),
-                target_id: None,
-                target_category: Some("stone".into()),
-                target_name: "Pedras".into(),
-                max_price_gold: 10000,
-                max_price_gems: 0,
-                max_qty: 999,
-                infinite: true,
-                active: true,
-                total_bought: 0,
-                excluded_item_ids: Vec::new(),
-                extra: HashMap::new(),
-            }],
-            config: SniperConfig::default(),
-        });
+        let _ = engine.save_settings(
+            vec![1],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_cat_pedras".into(),
+                    target_type: "category".into(),
+                    target_id: None,
+                    target_category: Some("stone".into()),
+                    target_name: "Pedras".into(),
+                    max_price_gold: 10000,
+                    max_price_gems: 0,
+                    max_qty: 999,
+                    infinite: true,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        );
         engine.runtimes[1].gold = 2_000_000;
-        let cat_cmds = engine.on_message(1, &json!({
-            "t": "market",
-            "aba": "item",
-            "itemId": 23,
-            "moeda": "gold",
-            "linhas": [{"id": 623832, "vendedor": "Rusuel", "preco": 10000, "qtd": 140}]
-        }), None);
+        let cat_cmds = engine.on_message(
+            1,
+            &json!({
+                "t": "market",
+                "aba": "item",
+                "itemId": 23,
+                "moeda": "gold",
+                "linhas": [{"id": 623832, "vendedor": "Rusuel", "preco": 10000, "qtd": 140}]
+            }),
+            None,
+        );
         assert_eq!(cat_cmds.len(), 1);
-        let _ = engine.on_message(1, &json!({
-            "t": "batalha",
-            "ev": [{"k": "marketComprado", "id": 623832, "descricao": "140× Cocoon Stone"}]
-        }), None);
-        let cat_confirmed = engine.store.accounts[1].logs.iter()
+        let _ = engine.on_message(
+            1,
+            &json!({
+                "t": "batalha",
+                "ev": [{"k": "marketComprado", "id": 623832, "descricao": "140× Cocoon Stone"}]
+            }),
+            None,
+        );
+        let cat_confirmed = engine.store.accounts[1]
+            .logs
+            .iter()
             .find(|l| l.status == "CONFIRMADO" && l.offer_id == Some(623832))
             .expect("Category CONFIRMADO entry must exist");
-        assert_eq!(cat_confirmed.target_name, "Cocoon Stone", "Category rule must log specific stone name, never 'Pedras'");
-        assert_eq!(cat_confirmed.extra.get("seller").and_then(|v| v.as_str()), Some("Rusuel"));
+        assert_eq!(
+            cat_confirmed.target_name, "Cocoon Stone",
+            "Category rule must log specific stone name, never 'Pedras'"
+        );
+        assert_eq!(
+            cat_confirmed.extra.get("seller").and_then(|v| v.as_str()),
+            Some("Rusuel")
+        );
 
         // 1. Market offer with seller "@exed" is dispatched and confirmed
         let cmds = engine.on_message(0, &json!({
@@ -5610,45 +7210,257 @@ mod tests {
             "linhas": [{"id": 9201, "itemId": 142, "vendedor": "@exed", "preco": 500, "qtd": 3, "moeda": "gold"}]
         }), None);
         assert_eq!(cmds.len(), 1);
-        let _ = engine.on_message(0, &json!({
-            "t": "batalha",
-            "ev": [{"k": "marketComprado", "id": 9201, "descricao": "3x Water Stone"}]
-        }), None);
+        let _ = engine.on_message(
+            0,
+            &json!({
+                "t": "batalha",
+                "ev": [{"k": "marketComprado", "id": 9201, "descricao": "3x Water Stone"}]
+            }),
+            None,
+        );
 
-        let confirmed = engine.store.accounts[0].logs.iter()
+        let confirmed = engine.store.accounts[0]
+            .logs
+            .iter()
             .find(|l| l.status == "CONFIRMADO" && l.offer_id == Some(9201))
             .expect("CONFIRMADO entry must exist");
         assert_eq!(confirmed.target_name, "Water Stone");
         assert_eq!(confirmed.qty, Some(3));
         assert_eq!(confirmed.price, Some(500));
-        assert_eq!(confirmed.extra.get("seller").and_then(|v| v.as_str()), Some("exed"));
+        assert_eq!(
+            confirmed.extra.get("seller").and_then(|v| v.as_str()),
+            Some("exed")
+        );
+
+        // Keep explicit and legacy server-confirmed lottery losses beside
+        // purchases even when the diagnostics history is flooded.
+        for (id, verified) in [("loss_verified", true), ("sorteio_perdeu_legacy", false)] {
+            let mut extra = HashMap::new();
+            if verified {
+                extra.insert("lotteryResult".into(), json!("loss"));
+            }
+            add_log_to_account(
+                &mut engine.store.accounts[0],
+                SniperLogEntry {
+                    id: id.into(),
+                    timestamp: now_ms(),
+                    status: "RECUSADO".into(),
+                    target_name: "Water Stone".into(),
+                    price: Some(500),
+                    currency: Some("gold".into()),
+                    qty: Some(1),
+                    offer_id: Some(9202),
+                    details: "Derrota de sorteio confirmada pelo servidor".into(),
+                    account_index: Some(0),
+                    extra,
+                },
+            );
+        }
 
         // 2. Flood 600 non-confirmed logs (DISPARADO / RECUSADO / DIAGNOSTICO)
         for i in 0..600u64 {
-            add_log_to_account(&mut engine.store.accounts[0], SniperLogEntry {
-                id: format!("noise_{}", i),
-                timestamp: 100_000 + i,
-                status: if i % 2 == 0 { "RECUSADO".into() } else { "DISPARADO".into() },
-                target_name: "Cocoon Stone".into(),
-                price: Some(9999),
-                currency: Some("gold".into()),
-                qty: Some(1),
-                offer_id: Some(10_000 + i),
-                details: "Noise".into(),
-                account_index: Some(0),
-                extra: HashMap::new(),
-            });
+            add_log_to_account(
+                &mut engine.store.accounts[0],
+                SniperLogEntry {
+                    id: format!("noise_{}", i),
+                    timestamp: 100_000 + i,
+                    status: if i % 2 == 0 {
+                        "RECUSADO".into()
+                    } else {
+                        "DISPARADO".into()
+                    },
+                    target_name: "Cocoon Stone".into(),
+                    price: Some(9999),
+                    currency: Some("gold".into()),
+                    qty: Some(1),
+                    offer_id: Some(10_000 + i),
+                    details: "Noise".into(),
+                    account_index: Some(0),
+                    extra: HashMap::new(),
+                },
+            );
         }
 
-        let remaining_confirmed: Vec<&SniperLogEntry> = engine.store.accounts[0].logs.iter()
+        let remaining_confirmed: Vec<&SniperLogEntry> = engine.store.accounts[0]
+            .logs
+            .iter()
             .filter(|l| l.status == "CONFIRMADO")
             .collect();
-        let remaining_noise_count = engine.store.accounts[0].logs.iter()
-            .filter(|l| l.status != "CONFIRMADO")
+        let remaining_noise_count = engine.store.accounts[0]
+            .logs
+            .iter()
+            .filter(|l| !is_terminal_sniper_result(l))
             .count();
-        assert_eq!(remaining_confirmed.len(), 1, "Confirmed purchase must NEVER be evicted by non-confirmed noise");
+        assert_eq!(
+            remaining_confirmed.len(),
+            1,
+            "Confirmed purchase must NEVER be evicted by non-confirmed noise"
+        );
         assert_eq!(remaining_confirmed[0].offer_id, Some(9201));
-        assert!(remaining_noise_count <= MAX_NON_CONFIRMED_LOGS_PER_ACCOUNT, "Non-confirmed tail is strictly capped");
+        assert!(
+            remaining_noise_count <= MAX_NON_CONFIRMED_LOGS_PER_ACCOUNT,
+            "Non-confirmed tail is strictly capped"
+        );
+        assert_eq!(
+            engine.store.accounts[0].logs.len(),
+            3 + remaining_noise_count
+        );
+        for id in ["loss_verified", "sorteio_perdeu_legacy"] {
+            assert!(
+                engine.store.accounts[0].logs.iter().any(|l| l.id == id),
+                "Server-confirmed lottery loss must survive diagnostic flood"
+            );
+        }
+
+        engine.persist_store_candidate(&engine.store).unwrap();
+        let restored = SniperEngine::new(Some(path.clone())).unwrap();
+        for id in ["loss_verified", "sorteio_perdeu_legacy"] {
+            assert!(
+                restored.store.accounts[0].logs.iter().any(|l| l.id == id),
+                "Confirmed loss must persist across launcher restarts"
+            );
+        }
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_manual_reservation_lifecycle_and_in_flight_coordination() {
+        let (mut engine, path) = temp_test_engine();
+
+        // 1. Initial state: account enabled, known wallet balance
+        engine.store.accounts[0].enabled = true;
+        engine.runtimes[0].gold = 50000;
+        let initial_enabled = engine.store.accounts[0].enabled;
+        let initial_rules = engine.store.accounts[0].rules.clone();
+
+        assert!(!engine.has_in_flight_buy(0));
+        assert!(!engine.runtimes[0].is_manual_reserved());
+        assert_eq!(engine.runtimes[0].available_balance("gold"), Some(50000));
+
+        // 2. Reserve manual on account 0 for offer 9999
+        let res = engine.reserve_manual(0, 9999, Duration::from_millis(5000));
+        assert!(res.is_ok());
+        assert!(engine.runtimes[0].is_manual_reserved());
+        assert_eq!(engine.runtimes[0].manual_offer_id, Some(9999));
+        assert!(!engine.runtimes[1].is_manual_reserved());
+
+        // Automatic purchase attempt while reserved MUST BE BLOCKED!
+        let blocked_buy = engine.try_emit_buy_with_seller(
+            0,
+            1234,
+            None,
+            "Item Test".to_string(),
+            1,
+            100,
+            "gold".to_string(),
+            "seller1".to_string(),
+            now_ms(),
+        );
+        assert!(blocked_buy.is_none(), "Automatic buy must be blocked while manual reservation is active");
+        assert_eq!(engine.store.accounts[0].enabled, initial_enabled, "Enabled state must remain unchanged");
+        assert_eq!(engine.store.accounts[0].rules, initial_rules, "Rules must remain unchanged");
+
+        // 3. Unknown timeout: locks manual reservation until ACK
+        engine.lock_manual_until_ack(0, 9999);
+        assert!(engine.runtimes[0].is_manual_reserved());
+        assert!(engine.runtimes[0].manual_locked_until_ack);
+
+        // Even if time advances beyond TTL, locked_until_ack keeps it reserved!
+        engine.runtimes[0].manual_reserved_until = Some(Instant::now() - Duration::from_secs(10));
+        assert!(engine.runtimes[0].is_manual_reserved(), "Lock until ACK must prevent TTL expiry");
+
+        // 4. Release with mismatched offer ID: ignored!
+        engine.release_manual(0, Some(8888));
+        assert!(engine.runtimes[0].is_manual_reserved(), "Release with wrong offer ID must be ignored");
+
+        // 5. Release with matching offer ID: clears reservation!
+        engine.release_manual(0, Some(9999));
+        assert!(!engine.runtimes[0].is_manual_reserved(), "Matching release must clear reservation");
+        assert_eq!(engine.runtimes[0].manual_offer_id, None);
+        assert!(!engine.runtimes[0].manual_locked_until_ack);
+
+        // A timeout reported after the ACK must not resurrect an already released reservation.
+        engine.lock_manual_until_ack(0, 9999);
+        assert!(!engine.runtimes[0].is_manual_reserved());
+
+        // Positive control: after release, automatic buy succeeds!
+        let allowed_buy = engine.try_emit_buy_with_seller(
+            0,
+            1234,
+            None,
+            "Item Test".to_string(),
+            1,
+            100,
+            "gold".to_string(),
+            "seller1".to_string(),
+            now_ms(),
+        );
+        assert!(allowed_buy.is_some(), "Automatic buy must succeed once manual reservation is released");
+        assert_eq!(engine.store.accounts[0].enabled, initial_enabled, "Enabled must remain true");
+
+        // Clear emitted buy state for next step
+        engine.runtimes[0].outstanding_buy = None;
+        assert!(engine.has_in_flight_offer(0, 1234), "Persisted intent also protects the same offer");
+        assert!(!engine.has_in_flight_offer(0, 7777));
+        let pending_before = serde_json::to_value(&engine.store.accounts[0].pending_intent).unwrap();
+        let reserved_before = engine.runtimes[0].reserved_gold;
+        assert!(engine.reserve_manual(0, 7777, Duration::from_secs(30)).is_ok());
+        engine.release_manual(0, Some(7777));
+        assert_eq!(serde_json::to_value(&engine.store.accounts[0].pending_intent).unwrap(), pending_before);
+        assert_eq!(engine.runtimes[0].reserved_gold, reserved_before);
+        assert!(engine.reserve_manual(0, 1234, Duration::from_secs(30)).is_err());
+        engine.store.accounts[0].pending_intent = None;
+
+        // 6. In-flight buy coordination: outstanding_buy
+        engine.runtimes[0].outstanding_buy = Some(OutstandingBuy {
+            offer_id: 5555,
+            rule_id: None,
+            target_name: "Item InFlight".to_string(),
+            seller: "seller_test".to_string(),
+            qty: 1,
+            price: 1000,
+            currency: "gold".to_string(),
+            sent_at: Instant::now(),
+            retry_count: 0,
+            reserved_amount: 1000,
+            state: BuyState::PendingConfirmation,
+            lottery_observed: false,
+            aux_log_keys: HashSet::new(),
+        });
+        assert!(engine.has_in_flight_buy(0));
+
+        // Only the same automatic offer blocks a manual send.
+        let fail_reserve = engine.reserve_manual(0, 5555, Duration::from_millis(5000));
+        assert!(fail_reserve.is_err(), "Cannot attribute an earlier automatic ACK to another send of the same offer");
+        assert_eq!(engine.store.accounts[0].enabled, initial_enabled, "Enabled must not be modified");
+
+        assert!(engine.reserve_manual(0, 7777, Duration::from_secs(30)).is_ok());
+        assert!(engine.has_in_flight_offer(0, 5555));
+        assert!(engine.runtimes[0].is_manual_reserved());
+        assert_eq!(engine.runtimes[0].outstanding_buy.as_ref().unwrap().reserved_amount, 1000);
+        engine.release_manual(0, Some(7777));
+        assert!(engine.has_in_flight_offer(0, 5555), "Manual completion must preserve the other automatic order");
+
+        assert!(engine.reserve_manual(0, 7777, Duration::from_secs(30)).is_ok());
+        engine.on_message(0, &json!({"t":"marketComprado","id":5555,"qtd":1}), None);
+        assert!(!engine.has_in_flight_offer(0, 5555));
+        assert!(engine.runtimes[0].is_manual_reserved(), "The automatic ACK must not release the manual order");
+        engine.release_manual(0, Some(7777));
+
+        // Once in-flight buy is resolved (cleared), manual reservation succeeds
+        engine.runtimes[0].outstanding_buy = None;
+        assert!(!engine.has_in_flight_buy(0));
+
+        let ok_reserve = engine.reserve_manual(0, 7777, Duration::from_millis(5000));
+        assert!(ok_reserve.is_ok(), "Manual reservation must succeed once in-flight buy resolves");
+        assert!(engine.runtimes[0].is_manual_reserved());
+        assert_eq!(engine.runtimes[0].manual_offer_id, Some(7777));
+        assert_eq!(engine.store.accounts[0].enabled, initial_enabled);
+
+        // Clean up
+        engine.release_manual(0, Some(7777));
+        assert!(!engine.runtimes[0].is_manual_reserved());
 
         let _ = std::fs::remove_file(path);
     }

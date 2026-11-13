@@ -117,6 +117,90 @@
   padding: 0 4px;
 }
 
+/* Combate contra boss: alimentado somente por eventos de arena do servidor. */
+.bsh-boss-live {
+  width: 100%;
+  max-width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  box-sizing: border-box;
+  margin-top: 4px;
+  padding: 5px 9px;
+  border: 1px solid rgba(192, 132, 252, .34);
+  border-radius: 8px;
+  background: rgba(53, 18, 79, .36);
+  font-size: 10px;
+}
+.bsh-boss-live[hidden], .bsh-boss-drop-tracker[hidden], .bsh-boss-hp[hidden], .bsh-boss-hp-row[hidden], .bsh-boss-drops-empty[hidden] { display: none !important; }
+.bsh-boss-live-top { display: flex; gap: 8px; justify-content: space-between; align-items: center; min-width: 0; }
+.bsh-boss-name { max-width: 56%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: #f4e7ff; font-size: 10.5px; }
+.bsh-boss-status { color: #d8b4fe; font-weight: 700; white-space: nowrap; }
+.bsh-boss-hp-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; color: #d8b4fe; font-size: 9px; }
+.bsh-boss-hp-value { color: #fff; font-weight: 800; font-variant-numeric: tabular-nums; }
+.bsh-boss-hp { width: 100%; height: 7px; background: #12091f; border-radius: 5px; overflow: hidden; position: relative; }
+.bsh-boss-hp-fill { position: absolute; inset: 0; transform: scaleX(0); transform-origin: left center; background: linear-gradient(90deg,#a855f7,#e879f9); transition: transform .2s ease; }
+.bsh-boss-details { text-align: center; color: #ceb5e9; font-variant-numeric: tabular-nums; }
+.bsh-boss-result { width: 100%; min-width: 0; color: #f0dafa; font-size: 9px; line-height: 1.25; text-align: center; overflow-wrap: anywhere; }
+.bsh-boss-result[data-result="victory"] { color: #9be8ba; }
+.bsh-boss-result[data-result="defeat"] { color: #f0a3a3; }
+
+/* Registro de recompensas com sprites reais do catálogo de itens do jogo. */
+.bsh-boss-drop-tracker {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 7px;
+  width: 126px;
+  max-height: calc(100% - 24px);
+  min-width: 0;
+  overflow: hidden;
+  margin: 0;
+  padding: 10px 8px;
+  border: 1px solid rgba(192, 132, 252, .3);
+  border-radius: 10px;
+  background: rgba(27, 10, 48, .78);
+  box-sizing: border-box;
+}
+.bsh-boss-drop-tracker.has-overflow-items { height: min(360px, calc(100% - 24px)); }
+.bsh-boss-drop-items { display: flex; flex: 1 1 auto; flex-direction: column; align-items: stretch; gap: 10px; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; min-height: 0; min-width: 0; width: 100%; padding: 7px 5px 3px; scrollbar-width: thin; scrollbar-color: #8151a7 transparent; }
+.bsh-boss-drop-group { --boss-drop-gap: 7px; display: grid; flex: 0 0 auto; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: minmax(44px, max-content); gap: var(--boss-drop-gap); min-width: 0; }
+.bsh-boss-drop-group > :last-child:nth-child(odd) { grid-column: 1 / -1; width: calc((100% - var(--boss-drop-gap)) / 2); justify-self: center; }
+.bsh-boss-drops-empty { margin: 0; color: #d8c9e7; font-size: 8px; line-height: 1.35; }
+.bsh-boss-drop-entry { box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; width: 100%; min-width: 0; min-height: 44px; padding: 3px 2px; border-radius: 6px; border: 1.5px solid #9333ea; background: radial-gradient(circle at 50% 30%, #200d3d 0%, #0d041c 100%); box-shadow: 0 0 8px rgba(168,85,247,.4), inset 0 0 5px rgba(168,85,247,.15); cursor: default; transition: transform .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.bsh-boss-drop-entry:hover { transform: translateY(-1px); border-color: #c084fc; box-shadow: 0 0 12px rgba(192,132,252,.65), inset 0 0 6px rgba(192,132,252,.25); }
+.bsh-boss-drop-sprite { flex: 0 0 auto; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: #d8b4fe; font-size: 16px; }
+.bsh-boss-drop-sprite img { max-width: 22px; max-height: 22px; image-rendering: pixelated; object-fit: contain; filter: drop-shadow(0 2px 3px rgba(0,0,0,.6)); transition: transform .15s ease; }
+.bsh-boss-drop-entry:hover .bsh-boss-drop-sprite img { transform: scale(1.08); }
+.bsh-boss-drop-entry .bsh-boss-drop-badge { top: -4px; right: -3px; font-size: 7px; padding: 2px 3px; }
+.bsh-boss-drop-meta { display: flex; align-items: center; justify-content: center; min-width: 0; }
+.bsh-boss-drop-name { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.bsh-boss-drop-number { font-size: 11px; line-height: 1; font-weight: 800; color: #ffedd5; font-variant-numeric: tabular-nums; letter-spacing: -.2px; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+.bsh-boss-drops-more { display: flex; align-items: center; justify-content: center; align-self: stretch; width: 100%; min-height: 22px; flex: 0 0 auto; border: 1px solid rgba(192,132,252,.42); border-radius: 6px; padding: 3px 4px; margin: 1px 0 0; background: rgba(67,28,94,.42); color: #e9d5ff; font-size: 8px; font-weight: 700; line-height: 1.2; text-align: center; cursor: pointer; }
+.bsh-boss-drops-more:hover { background: rgba(115,48,159,.52); border-color: #c084fc; color: white; }
+.bsh-boss-drops-more:focus-visible { outline: 2px solid #d8b4fe; outline-offset: 2px; }
+
+/* A grade fixa de quatro contas recebe mais informação durante boss. Recolhe
+   altura decorativa primeiro, preservando HP, drops e ações de cada cartão. */
+@media (max-height: 1000px) {
+  .panel.is-blaster-active .battle-slot-hud { padding-top: 5px; padding-bottom: 5px; }
+  .panel.is-blaster-active .bsh-arena { gap: 10px; }
+  .panel.is-blaster-active .bsh-sprite-stage { width: 40px; height: 40px; }
+  .panel.is-blaster-active .bsh-stage-shadow { width: 38px; height: 10px; }
+  .panel.is-blaster-active .bsh-sprite { max-width: 39px; max-height: 39px; }
+  .panel.is-blaster-active .bsh-fighter-name { font-size: 11px; }
+  .panel.is-blaster-active .bsh-boss-live { margin-top: 2px; padding: 3px 6px; gap: 1px; }
+  .panel.is-blaster-active .bsh-boss-drop-tracker { margin: 0; }
+  .panel.is-blaster-active .bsh-boss-result { font-size: 8px; }
+  .panel.is-blaster-active .bsh-important-drops { margin-top: 3px; }
+  .panel.is-blaster-active .bsh-drop-card { min-height: 30px; }
+  .panel.is-blaster-active .bsh-open-game-btn { margin-top: 3px; padding-top: 2px; padding-bottom: 2px; }
+}
+
 /* Botão de pausa de animação */
 .bsh-pause-btn {
   background: transparent;
@@ -286,7 +370,7 @@
 
 /* Botão Abrir Jogo */
 .bsh-open-game-btn {
-  margin-top: 8px;
+  margin-top: 0;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -494,8 +578,9 @@
 }
 
 
-/* A dedicated column protects the fighters from the compact social summary. */
-.battle-slot-hud { padding-left: 154px; }
+/* Equal gutters keep the fight centered between Twitch and boss rewards. */
+.battle-slot-hud { padding-inline: 154px; }
+.bsh-main { width: 100%; max-width: 440px; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .bsh-social { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 126px; box-sizing: border-box; padding: 7px; border: 1px solid #293d59; border-radius: 8px; background: #091324cc; font-size: 9.5px; line-height: 1.4; }
 .bsh-social-twitch, .bsh-social-kick { display: grid; gap: 1px; padding-bottom: 5px; }
 .bsh-social-kick { border-top: 1px solid #293d59; padding-top: 5px; }
@@ -510,16 +595,32 @@
 .bsh-social-points, .bsh-kick-points { font-weight: 800; color: #ffc966; font-variant-numeric: tabular-nums; }
 .bsh-twitch-points { font-weight: 800; color: #d8b4fe; font-variant-numeric: tabular-nums; }
 @container (max-width: 500px) {
-  .battle-slot-hud { padding-left: 12px; }
+  .battle-slot-hud { padding-inline: 12px; }
   .bsh-social { position: static; transform: none; width: 100%; display: flex; gap: 8px; margin-bottom: 4px; flex-shrink: 0; }
   .bsh-social > div { flex: 1; min-width: 0; padding: 0; border: 0; }
+  .battle-slot-hud.has-boss-catalog .bsh-main { width: calc(100% - 112px); max-width: none; margin-right: 112px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-tracker { right: 6px; top: 53px; transform: none; width: 104px; max-height: calc(100% - 59px); padding: 6px 4px; gap: 4px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-tracker.has-overflow-items { height: calc(100% - 59px); }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-items { gap: 7px; padding: 6px 4px 2px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-group { --boss-drop-gap: 4px; grid-auto-rows: minmax(38px, max-content); }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-entry { min-height: 38px; padding: 2px 1px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-sprite { width: 19px; height: 19px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-sprite img { max-width: 19px; max-height: 19px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drop-number { font-size: 9px; }
+  .battle-slot-hud.has-boss-catalog .bsh-boss-drops-more { min-height: 20px; font-size: 7px; }
 }
 
 .panel { container-type: inline-size; }
 .panel:is(.is-hud-active, .is-blaster-active) { grid-template-columns: minmax(0, 1fr); }
 
-/* Sem scroll vertical: layout perfeitamente proporcional que cabe em qualquer altura */
+/* The Headless card is a fixed viewport; optional detail lives in the boss menu. */
 .battle-slot-hud { overflow: hidden !important; overflow-y: hidden !important; justify-content: center; }
+.panel.is-blaster-active .battle-slot-hud.has-live-boss .bsh-mode-banner {
+  display: none;
+}
+@container (min-width: 501px) {
+  .panel.is-blaster-active .battle-slot-hud.has-live-boss .bsh-main { height: 100%; justify-content: space-evenly; }
+}
 @container (max-width: 500px) {
   .battle-slot-hud { padding: 6px 10px; }
   .bsh-mode-banner { font-size: 8px; letter-spacing: .2px; max-width: 100%; white-space: normal; text-align: center; }
@@ -529,6 +630,9 @@
   .bsh-sprite-stage { width: 50px; height: 50px; }
   .bsh-sprite { max-width: 48px; max-height: 48px; }
   .bsh-fighter-name { font-size: 11px; max-width: 100%; }
+  .bsh-boss-live { padding: 3px 6px; gap: 2px; font-size: 9px; }
+  .bsh-boss-name { font-size: 9.5px; }
+  .bsh-boss-drop-entry { min-height: 38px; }
   .bsh-controls-row { gap: 6px; flex-wrap: wrap; margin-top: 4px; }
   .bsh-open-game-btn { margin-top: 6px; }
 }
@@ -549,12 +653,21 @@
 @media (max-height: 800px) {
   @container (max-width: 500px) {
     .battle-slot-hud { padding: 3px 8px; justify-content: space-between; }
-    .bsh-mode-banner { display: none; }
+    .bsh-mode-banner { flex-shrink: 0; margin-bottom: 1px; padding: 1px 6px; font-size: 7px; }
     .bsh-account-flags { flex-shrink: 0; margin: 0; gap: 2px 4px; }
     .bsh-account-flag { min-height: 15px; padding: 1px 5px; font-size: 8px; }
     .bsh-social { flex-shrink: 0; margin: 0; padding: 3px 5px; line-height: 1.15; font-size: 8px; }
     .bsh-social-bonus { font-size: 7px; line-height: 1.1; }
     .bsh-arena { flex-shrink: 0; gap: 5px; }
+    .bsh-boss-live { flex-shrink: 0; margin: 1px 0; padding: 2px 5px; gap: 1px; }
+    .bsh-boss-live-top { font-size: 8px; }
+    .bsh-boss-name { font-size: 8.5px; }
+    .bsh-boss-hp { height: 6px; }
+    .bsh-boss-hp-row { font-size: 8px; }
+    .bsh-boss-details { font-size: 8px; }
+    .bsh-boss-drop-tracker { flex-shrink: 0; margin: 0; gap: 3px; }
+    .bsh-boss-drop-items { padding: 6px 4px 2px; }
+    .bsh-boss-drop-entry { min-height: 38px; padding: 2px 1px; }
     .bsh-fighter-tag { font-size: 7px; margin-bottom: 0; }
     .bsh-sprite-stage { width: 35px; height: 36px; }
     .bsh-sprite { max-width: 33px; max-height: 33px; }
@@ -575,5 +688,41 @@
     .bsh-drop-icon { max-width: 17px; max-height: 17px; }
     .bsh-drop-qty { font-size: 9px; }
     .bsh-open-game-btn { flex-shrink: 0; margin-top: 0; padding: 2px 7px; font-size: 9px; }
+    .bsh-account-flags { min-height: 12px; }
+    .bsh-arena { gap: 3px; }
+    .bsh-sprite-stage { height: 26px; width: 30px; }
+    .bsh-sprite { max-height: 26px; max-width: 26px; }
+    .bsh-stage-shadow { width: 25px; height: 7px; }
+    .bsh-fighter-name { font-size: 8.5px; line-height: 1; }
+    .bsh-social { padding: 1px 4px; gap: 4px; margin-bottom: 0; }
+    .bsh-social-status, .bsh-social-bonus { line-height: 1; }
+    .bsh-boss-live { padding: 1px 5px; }
+    .bsh-boss-live-top, .bsh-boss-details { line-height: 1; }
+    .bsh-boss-drop-entry { min-height: 38px; }
+    .bsh-important-drops { margin-top: 0; }
+    .bsh-drop-card { min-height: 20px; }
+    .bsh-drop-icon-wrap { height: 13px; }
+    .bsh-drop-icon { max-height: 13px; }
+    .bsh-open-game-btn { margin-top: 0; padding: 0 5px; font-size: 8px; line-height: 12px; }
+    .battle-slot-hud:has(.bsh-boss-live:not([hidden])) .bsh-outland-tier { font-size: 7px; }
+    .panel.is-blaster-active .bsh-arena { gap: 3px; }
+    .panel.is-blaster-active .battle-slot-hud.has-live-boss .bsh-main { transform: translateY(-7px); }
+    .panel.is-blaster-active .bsh-sprite-stage { height: 34px; width: 34px; }
+    .panel.is-blaster-active .bsh-sprite { max-height: 34px; max-width: 34px; }
+    .panel.is-blaster-active .bsh-boss-live { margin: 0; padding: 1px 5px; }
+    .panel.is-blaster-active .bsh-boss-drop-tracker { margin: 0; }
+    .panel.is-blaster-active .bsh-boss-drop-entry { min-height: 38px; }
+    .panel.is-blaster-active .bsh-important-drops { margin: 0; }
+    .panel.is-blaster-active .bsh-drop-card { min-height: 21px; }
+    .panel.is-blaster-active .bsh-open-game-btn { margin: 0; padding: 0 5px; font-size: 8px; line-height: 12px; }
+  }
+}
+
+@media (max-height: 650px) {
+  @container (max-width: 500px) {
+    .panel.is-blaster-active .battle-slot-hud.has-live-boss .bsh-main { transform: translateY(4px); }
+    .panel.is-blaster-active .bsh-sprite-stage { height: 23px; width: 25px; }
+    .panel.is-blaster-active .bsh-sprite { max-height: 23px; max-width: 23px; }
+    .panel.is-blaster-active .bsh-drop-card { min-height: 18px; }
   }
 }

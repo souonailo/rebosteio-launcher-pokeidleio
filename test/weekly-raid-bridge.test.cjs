@@ -7,7 +7,7 @@ const vm = require('node:vm');
 const source = fs.readFileSync(path.join(__dirname, '../rust-migration/src-tauri/src/gameplay_bridge.js'), 'utf8');
 const NOW = Date.UTC(2026, 10, 10, 16); // terça, 13h de Brasília
 
-function setup(enabled = true) {
+function setup(enabled = true, storage = new Map()) {
   const timers = [];
   class Socket {
     static OPEN = 1;
@@ -24,7 +24,10 @@ function setup(enabled = true) {
     __idleioAutoRaidEnabled: enabled,
     WebSocket: Socket, location: { href: 'https://pokeidle.io/app' },
     __TAURI_INTERNALS__: { invoke: async () => {} },
-    localStorage: { getItem: () => null },
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, String(value)),
+    },
     performance: { now: () => NOW },
     crypto: { randomUUID: () => 'test-session' },
     setTimeout: (cb) => { timers.push(cb); return timers.length; },
@@ -41,16 +44,18 @@ function setup(enabled = true) {
       id: 'raid-2026-11-16', inscricoesDe: NOW - 3600000, inscricoesAte: NOW + 3600000,
     }, eu: { inscrito: false }, ...extra,
   });
-  return { page, socket, timers, serverPacket };
+  return { page, socket, timers, serverPacket, storage };
 }
 
 test('inscreve uma vez após resposta do servidor, sem enviar se já inscrito', () => {
   const { socket, timers, serverPacket } = setup();
-  socket.emit('message', { t: 'welcome', estado: { items: { '70000': 1 } } });
+  socket.emit('message', { t: 'welcome', estado: { id: 'character-1', items: { '70000': 1 } } });
   timers.forEach(cb => cb());
   assert.equal(socket.sent.filter(m => m.t === 'raid.info').length, 1);
   socket.emit('message', serverPacket());
   socket.emit('message', serverPacket());
+  assert.equal(socket.sent.filter(m => m.t === 'raid.inscrever').length, 1);
+  socket.emit('message', serverPacket({ acao: 'inscreveu', eu: { inscrito: false } }));
   assert.equal(socket.sent.filter(m => m.t === 'raid.inscrever').length, 1);
   socket.emit('message', serverPacket({ eu: { inscrito: true } }));
   socket.emit('message', serverPacket());
@@ -59,7 +64,7 @@ test('inscreve uma vez após resposta do servidor, sem enviar se já inscrito', 
 
 test('não envia inscrição desativado, sem token, fora da janela ou sem confirmação de status', () => {
   const { socket, page, serverPacket } = setup(false);
-  socket.emit('message', { t: 'welcome', estado: { items: { '70000': 1 } } });
+  socket.emit('message', { t: 'welcome', estado: { id: 'character-1', items: { '70000': 1 } } });
   socket.emit('message', serverPacket());
   assert.equal(socket.sent.length, 0);
   page.__idleioAutoRaidEnabled = true;
@@ -70,14 +75,31 @@ test('não envia inscrição desativado, sem token, fora da janela ou sem confir
   assert.equal(socket.sent.filter(m => m.t === 'raid.inscrever').length, 0);
 });
 
-test('aplica janela semanal de Brasília quando edição não fornece limites', () => {
-  const { socket, serverPacket } = setup();
-  socket.emit('message', { t: 'welcome', estado: { items: { '70000': 1 } } });
+test('só consulta raid.info após inventário confirmar Bronze Boss Token', () => {
+  const { socket, timers } = setup();
+  timers.forEach(cb => cb());
+  assert.equal(socket.sent.filter(m => m.t === 'raid.info').length, 0);
+  socket.emit('message', { t: 'welcome', estado: { id: 'character-1', items: {} } });
+  timers.forEach(cb => cb());
+  assert.equal(socket.sent.filter(m => m.t === 'raid.info').length, 0);
+  socket.emit('message', { t: 'estado', items: { '70000': 1 } });
+  timers.forEach(cb => cb());
+  assert.equal(socket.sent.filter(m => m.t === 'raid.info').length, 1);
+});
+
+test('exige janela da edição e preserva a tentativa após recarga', () => {
+  const { socket, serverPacket, storage } = setup();
+  socket.emit('message', { t: 'welcome', estado: { id: 'character-1', items: { '70000': 1 } } });
   socket.emit('message', serverPacket({ edicao: { id: 'weekly' } }));
+  assert.equal(socket.sent.filter(m => m.t === 'raid.inscrever').length, 0);
+  socket.emit('message', serverPacket());
   assert.equal(socket.sent.filter(m => m.t === 'raid.inscrever').length, 1);
-  const { socket: closed, serverPacket: closedPacket } = setup();
-  closed.emit('message', { t: 'welcome', estado: { items: { '70000': 1 } } });
-  const mon = Date.UTC(2026, 10, 9, 20); // segunda, 17h em Brasília
-  closed.emit('message', closedPacket({ agora: mon, edicao: { id: 'closed' } }));
-  assert.equal(closed.sent.filter(m => m.t === 'raid.inscrever').length, 0);
+  const reloaded = setup(true, storage);
+  reloaded.socket.emit('message', { t: 'welcome', estado: { id: 'character-1', items: { '70000': 1 } } });
+  reloaded.socket.emit('message', reloaded.serverPacket());
+  assert.equal(reloaded.socket.sent.filter(m => m.t === 'raid.inscrever').length, 0);
+  reloaded.socket.emit('message', reloaded.serverPacket({ edicao: {
+    id: 'next-week', inscricoesDe: NOW - 1000, inscricoesAte: NOW + 1000,
+  } }));
+  assert.equal(reloaded.socket.sent.filter(m => m.t === 'raid.inscrever').length, 1);
 });

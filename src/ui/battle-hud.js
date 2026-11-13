@@ -472,6 +472,9 @@
         pendingCount: channels.filter(channel => !channel.verified).length };
     },
     outlandTierLabel(state) {
+      const hunt = String(state?.hunt || '').toLowerCase().trim().replace(/[ -]+/g, '_');
+      const outlandHunt = /^(?:brave|tribal|ancient|war|furious|enigmatic|charged|magnetic|evil|freezing|psy|heavy|milch|roll|hard|brute|enraged|dark|trickmaster|banshee|taekwondo)_/.test(hunt);
+      if (!outlandHunt || state?.inCenter === true || state?.bossLive?.inArena === true) return '';
       const tier = state?.outlandTier;
       return state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100
         ? `Outland · tier ${tier}` : 'Outland · aguardando confirmação';
@@ -990,13 +993,13 @@
 
       const tierEl = hud.querySelector('.bsh-outland-tier');
       if (tierEl) {
-        const tierHidden = !this.isBlasterActive(i);
+        const text = this.outlandTierLabel(state);
+        const tierHidden = !this.isBlasterActive(i) || !text;
         if (tierEl.hidden !== tierHidden) tierEl.hidden = tierHidden;
         const tier = state?.outlandTier;
         const confirmed = state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100;
-        const text = this.outlandTierLabel(state);
         if (tierEl.textContent !== text) tierEl.textContent = text;
-        setHudTitle(tierEl, confirmed
+        setHudTitle(tierEl, !text ? '' : confirmed
           ? 'Tier de Outland confirmada pelo servidor para esta conta.'
           : 'Aguardando o servidor confirmar a tier nesta conexão.');
       }

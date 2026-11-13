@@ -492,6 +492,13 @@ if (typeof window !== 'undefined') {
     return st === 'CONFIRMADO' || st === 'OK' || l.success === true;
   }
 
+  function isStoredSniperResultLog(l) {
+    if (isConfirmedSniperLog(l)) return true;
+    const status = String(l && l.status || '').toUpperCase();
+    if (status !== 'RECUSADO' && status !== 'PERDIDO') return false;
+    return String(l.lotteryResult || '').toLowerCase() === 'loss' || /^sorteio_perdeu_/.test(String(l.id || ''));
+  }
+
   // Escuta mensagens do injected.js com auto-desvinculação quando o contexto for invalidado
   function handleWindowMessage(event) {
     if (event.source !== window || !event.data || event.data.source !== 'ROTOM_SNIPER') return;
@@ -504,9 +511,9 @@ if (typeof window !== 'undefined') {
 
     try {
       if (event.data.type === 'SNIPER_LOG') {
-        if (!isConfirmedSniperLog(event.data.log)) return;
+        if (!isStoredSniperResultLog(event.data.log)) return;
         safeStorageGet(['rotom_sniper_logs'], (res) => {
-          const logs = (res.rotom_sniper_logs || []).filter(isConfirmedSniperLog);
+          const logs = (res.rotom_sniper_logs || []).filter(isStoredSniperResultLog);
           const updatedLogs = [event.data.log, ...logs].slice(0, 100);
           safeStorageSet({ rotom_sniper_logs: updatedLogs });
         });
@@ -1136,12 +1143,60 @@ if (typeof window !== 'undefined') {
     }
   }
 
+  /* PIO: relógio em Web Worker. Com o jogo oculto (modo Simples + Eco) o navegador freia setTimeout/setInterval
+     da página para cerca de 1 vez por minuto; dentro de um Worker os relógios seguem no tempo certo e o aviso
+     volta para a página como mensagem, que não é freada. Se o Worker não puder ser criado, usa o relógio normal. */
+  const pioRelogio = (() => {
+    let w = null, seq = 0;
+    const P = new Map(); /* id -> { fn, r, ms, t0, nat } */
+    const nativo = (id, e, ms) => { e.nat = e.r ? setInterval(() => roda(id), ms) : setTimeout(() => roda(id), ms); };
+    function roda(id) {
+      const e = P.get(id); if (!e) return;
+      if (!e.r) P.delete(id);
+      try { e.fn(); } catch (x) { console.error('[Rotom Sniper]: erro em tarefa do relógio:', x); }
+    }
+    function caiParaNormal(motivo) {
+      if (!w) return;
+      try { w.terminate(); } catch (x) { }
+      w = null; window.__pioRelogio = 'normal';
+      console.warn('[Rotom Sniper]: relógio em Worker indisponível (' + motivo + '); usando o relógio normal da página.');
+      const agora = Date.now();
+      for (const [id, e] of P) if (e.nat == null) nativo(id, e, e.r ? e.ms : Math.max(0, e.ms - (agora - e.t0)));
+    }
+    try {
+      const codigo = 'var T={};onmessage=function(e){var d=e.data;if(d.c==="s"){T[d.id]=(d.r?setInterval:setTimeout)(function(){postMessage(d.id);if(!d.r)delete T[d.id];},d.ms);}else if(d.c==="x"){if(T[d.id]!=null){clearTimeout(T[d.id]);clearInterval(T[d.id]);delete T[d.id];}}};';
+      w = new Worker(URL.createObjectURL(new Blob([codigo], { type: 'text/javascript' })));
+      w.onmessage = ev => roda(ev.data);
+      w.onerror = ev => { try { ev.preventDefault(); } catch (x) { } caiParaNormal((ev && ev.message) || 'erro ao carregar'); };
+      window.__pioRelogio = 'worker';
+      console.log('[Rotom Sniper]: relógio em Worker ativo (disparos e varredura sem freio com o jogo oculto).');
+    } catch (x) { w = null; window.__pioRelogio = 'normal'; console.warn('[Rotom Sniper]: Worker bloqueado; usando o relógio normal.', x); }
+    function agenda(fn, ms, r) {
+      const id = 'pr' + (++seq), e = { fn, r, ms: Math.max(0, Number(ms) || 0), t0: Date.now(), nat: null };
+      P.set(id, e);
+      if (w) { try { w.postMessage({ c: 's', id, ms: e.ms, r }); return id; } catch (x) { caiParaNormal('postMessage'); return id; } }
+      nativo(id, e, e.ms);
+      return id;
+    }
+    return {
+      timeout: (fn, ms) => agenda(fn, ms, false),
+      intervalo: (fn, ms) => agenda(fn, ms, true),
+      limpar: id => {
+        if (typeof id !== 'string') { clearTimeout(id); clearInterval(id); return; }
+        const e = P.get(id); if (!e) return;
+        P.delete(id);
+        if (e.nat != null) { clearTimeout(e.nat); clearInterval(e.nat); }
+        else if (w) { try { w.postMessage({ c: 'x', id }); } catch (x) { } }
+      }
+    };
+  })();
+
   function clearOfferTimers(offerId) {
     if (sniperState.scheduledOffers[offerId]) {
       const timers = Array.isArray(sniperState.scheduledOffers[offerId])
         ? sniperState.scheduledOffers[offerId]
         : [sniperState.scheduledOffers[offerId]];
-      timers.forEach(t => clearTimeout(t));
+      timers.forEach(t => pioRelogio.limpar(t));
       delete sniperState.scheduledOffers[offerId];
     }
   }
@@ -1517,6 +1572,11 @@ if (typeof window !== 'undefined') {
       console.log(`[Rotom Sniper]: Compra cancelada para #${offerId} (${targetName}): Auto-Sniper está desativado.`);
       return;
     }
+    // Transient coordination gate: if manual RMT buy is active on this account, yield to manual purchase
+    if (window.__idleioRmtManualBusy && window.__idleioRmtManualBusy > Date.now()) {
+      console.log(`[Rotom Sniper]: Compra pausada temporariamente para #${offerId} (${targetName}): Compra manual RMT em andamento.`);
+      return;
+    }
     if (sniperState.confirmedOffers[offerId]) return;
 
     if (ruleId) {
@@ -1665,6 +1725,7 @@ if (typeof window !== 'undefined') {
     const sent = sendRaw(payload);
 
     if (sent) {
+      automaticInFlightOffers.add(Number(offerId));
       sniperState.sentBuyOrders = sniperState.sentBuyOrders || {};
       sniperState.sentBuyOrders[offerId] = orderQty;
       if (!isRetry) {
@@ -1712,16 +1773,67 @@ if (typeof window !== 'undefined') {
           }
           emitSniperBought(ruleId, offerId, buyQty);
         }
+
+        /* PIO: registrar perda. O jogo não manda erro quando outro jogador leva o anúncio (ou ganha o sorteio):
+           sem confirmação nem recusa em 5 s após o 1º disparo, grava PERDIDO no histórico. */
+        const perdas = sniperState.pioPerdaAgendada = sniperState.pioPerdaAgendada || {};
+        if (!perdas[offerId]) {
+          perdas[offerId] = Date.now();
+          pioRelogio.timeout(() => {
+            delete perdas[offerId];
+            const rec = sniperState.pioRecusados || {};
+            if (sniperState.confirmedOffers[offerId] || (rec[offerId] && Date.now() - rec[offerId] < 60000)) return;
+            if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === Number(offerId)) return;
+            emitSniperLog({
+              id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              timestamp: Date.now(),
+              ruleId: ruleId || '',
+              targetName: targetName,
+              seller: seller || '',
+              offerId: offerId,
+              price: preco,
+              qty: buyQty,
+              currency: moeda,
+              status: 'PERDIDO',
+              details: 'Sem confirmação em 5 s após o disparo: outro comprador levou ou o sorteio foi para outro'
+            });
+          }, 5000);
+        }
       } else {
         console.log(`[Rotom Sniper]: 🔁 Ordem de reforço #${offerId} enviada ao servidor dentro da janela de 3s.`);
       }
     } else {
+      sniperState.lastBuyAttempt = null;
+      if (sniperState.recentAttemptsByOffer) {
+        delete sniperState.recentAttemptsByOffer[offerId];
+      }
       showRotomHudToast(
         'ERRO AO DISPARAR',
         `Não foi possível enviar a ordem de compra para #${offerId}. WebSocket desconectado.`,
         'error'
       );
     }
+  }
+
+  // Independent from lastBuyAttempt: concurrent offers may resolve out of order.
+  // Only explicit server outcomes clear these IDs; elapsed time is not evidence.
+  const automaticInFlightOffers = new Set();
+  window.__rotomSniperHasInFlight = (offerId) => {
+    return offerId == null ? automaticInFlightOffers.size > 0 : automaticInFlightOffers.has(Number(offerId));
+  };
+
+  function observeAutomaticOutcome(packet, fallbackKind) {
+    if (!packet || typeof packet !== 'object') return;
+    const id = extractExplicitOfferId(packet);
+    if (id == null || !automaticInFlightOffers.has(id)) return;
+    const kind = String(packet.k || packet.t || fallbackKind || '');
+    const purchase = kind === 'marketComprado' || kind === 'marketCompradoLote';
+    const lottery = kind === 'mktSorteio' && packet.fase === 'fim' &&
+      (packet.ok === true || packet.ok === false || packet.perdeu === true);
+    const op = String(packet.op || packet.acao || '');
+    const rejection = ['erro','aviso','recusa'].includes(kind) &&
+      (!op || op === 'market.comprar') && !isLotteryProgress(packet) && isTerminalMarketRejection(packet);
+    if (purchase || lottery || rejection) automaticInFlightOffers.delete(id);
   }
 
   function processMarketAnuncios(anunciosList) {
@@ -2074,7 +2186,7 @@ if (typeof window !== 'undefined') {
           const timers = [];
 
           // 1º Disparo: +100ms após a liberação (garante que o anúncio já está liberado no servidor e front)
-          timers.push(setTimeout(() => {
+          timers.push(pioRelogio.timeout(() => {
             // Diagnóstico: quanto depois da liberação (no relógio do servidor) o disparo saiu.
             // Acima de ~1s indica aba em segundo plano com timers freados pelo navegador.
             const atrasoMs = agoraDoServidor() - compravelEm;
@@ -2107,7 +2219,7 @@ if (typeof window !== 'undefined') {
           }, releaseDelayMs));
 
           // 2º Disparo (Garantia dentro dos 3s): +700ms após liberação se ainda não confirmado
-          timers.push(setTimeout(() => {
+          timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               console.log(`[Rotom Sniper]: 🔄 Reforço de compra pós-liberação #${offerId} (+700ms)...`);
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
@@ -2115,7 +2227,7 @@ if (typeof window !== 'undefined') {
           }, releaseDelayMs + 600));
 
           // 3º Disparo (Reforço final dentro dos 3s): +1500ms após liberação se ainda não confirmado
-          timers.push(setTimeout(() => {
+          timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               console.log(`[Rotom Sniper]: 🔄 Reforço final de compra pós-liberação #${offerId} (+1500ms)...`);
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
@@ -2131,12 +2243,12 @@ if (typeof window !== 'undefined') {
           executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, false, itemId);
 
           const timers = [];
-          timers.push(setTimeout(() => {
+          timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
           }, 700));
-          timers.push(setTimeout(() => {
+          timers.push(pioRelogio.timeout(() => {
             if (!sniperState.confirmedOffers[offerId]) {
               executeBuyOrder(offerId, buyQty, preco, moeda, targetDisplayName, matchedRule ? matchedRule.id : '', matchedDesc, seller, true, itemId);
             }
@@ -2207,6 +2319,7 @@ if (typeof window !== 'undefined') {
   }
 
   function handlePendingBuyReplyPacket(packet, defaultOp) {
+    observeAutomaticOutcome(packet, defaultOp);
     if (!sniperState.lastBuyAttempt || (Date.now() - sniperState.lastBuyAttempt.timestamp >= 12000)) return;
     const last = sniperState.lastBuyAttempt;
     const pendingOffId = Number(last.offerId);
@@ -2248,6 +2361,9 @@ if (typeof window !== 'undefined') {
         targetName: last.targetName,
         offerId: last.offerId,
         status: 'RECUSADO',
+        ...(String(chave).toLowerCase() === 'market.sorteioperdeu' ? {
+          lotteryResult: 'loss', lotteryConfirmedAt: Date.now()
+        } : {}),
         details: `❌ Recusado pelo servidor: ${errMsg}`
       });
     } else if (isLotteryProgress(packet)) {
@@ -2280,6 +2396,7 @@ if (typeof window !== 'undefined') {
 
   function processMarketEvent(e) {
     if (!e || typeof e !== 'object') return;
+    observeAutomaticOutcome(e);
     const evKey = String(e.k || e.t || '');
 
     if (evKey === 'marketComprado') {
@@ -2337,6 +2454,7 @@ if (typeof window !== 'undefined') {
         currency: refCompra ? refCompra.currency : undefined,
         qty: qtdDesc ? Number(qtdDesc[1]) : (refCompra ? refCompra.qty : 1),
         status: 'CONFIRMADO',
+        ...(e.sorteio === true ? { lotteryResult: 'win', lotteryWonAt: Date.now() } : {}),
         details: detailParts.length ? detailParts.join(' · ') : `Confirmado pelo servidor: ${desc}`
       });
     } else if (evKey === 'mktSorteio') {
@@ -2347,7 +2465,7 @@ if (typeof window !== 'undefined') {
         if (evId != null && evId === offId) {
           const fase = sanitizeDiagText(e.fase || '', 24);
           if (fase === 'fim') {
-            if (e.perdeu || (!e.ok && e.msg)) {
+            if ((e.perdeu === true || e.ok === false) && e.ok !== true) {
               delete sniperState.boughtOffers[offId];
               delete sniperState.confirmedOffers[offId];
               (sniperState.pioRecusados = sniperState.pioRecusados || {})[offId] = Date.now();
@@ -2365,9 +2483,11 @@ if (typeof window !== 'undefined') {
                 targetName: ultCompra.targetName,
                 offerId: offId,
                 status: 'RECUSADO',
+                lotteryResult: 'loss',
+                lotteryConfirmedAt: Date.now(),
                 details: `❌ Recusado pelo servidor: ${motivo}`
               });
-            } else if (e.ok) {
+            } else if (e.ok === true && e.perdeu !== true) {
               if (sniperState.confirmedOffers[offId]) {
                 sniperState.lastBuyAttempt = null;
                 return;
@@ -2395,6 +2515,8 @@ if (typeof window !== 'undefined') {
                 currency: ultCompra.currency,
                 qty: qtdDesc ? Number(qtdDesc[1]) : (ultCompra.qty || 1),
                 status: 'CONFIRMADO',
+                lotteryResult: 'win',
+                lotteryWonAt: Date.now(),
                 details: detailParts.join(' · ')
               });
             }
@@ -3067,7 +3189,11 @@ if (typeof window !== 'undefined') {
   const scanTimeouts = new Set();
   function limparScanTimeouts() {
     for (const id of scanTimeouts) {
-      clearTimeout(id);
+      if (typeof pioRelogio !== 'undefined' && pioRelogio && typeof pioRelogio.limpar === 'function') {
+        pioRelogio.limpar(id);
+      } else {
+        clearTimeout(id);
+      }
     }
     scanTimeouts.clear();
   }
@@ -3078,7 +3204,11 @@ if (typeof window !== 'undefined') {
       scanTimeouts.delete(id);
       fn();
     };
-    id = setTimeout(run, ms);
+    if (typeof pioRelogio !== 'undefined' && pioRelogio && typeof pioRelogio.timeout === 'function') {
+      id = pioRelogio.timeout(run, ms);
+    } else {
+      id = setTimeout(run, ms);
+    }
     scanTimeouts.add(id);
     return id;
   }
@@ -3086,7 +3216,7 @@ if (typeof window !== 'undefined') {
   let scanCycle = 0;
   const pioModoRapido = () => Object.keys(sniperState.scheduledOffers || {}).length > 0 || (sniperState.pioQuenteAte || 0) > Date.now();
   let pioUltimaVarredura = 0;
-  setInterval(() => {
+  pioRelogio.intervalo(() => {
     if (!sniperState.enabled) return;
     const ws = getGameWs();
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -7246,9 +7376,6 @@ queueMicrotask(() => {
       if (Array.isArray(result.rotom_sniper_logs)) {
         const onlyConfirmed = result.rotom_sniper_logs.filter(isConfirmedCockpitLog);
         sniperLogs = onlyConfirmed;
-        if (onlyConfirmed.length !== result.rotom_sniper_logs.length) {
-          chrome.storage.local.set({ rotom_sniper_logs: onlyConfirmed });
-        }
         renderLogs();
       }
       const gold = result.rotom_player_gold;

@@ -548,6 +548,7 @@
     const markup = filteredArr.map(r => {
         const dividerMarkup = '';
         const [sc,sl] = stateStatus(r); const a = r.a || {}; const lead=getLead(r); const spr=pokeSprite(lead); const hunt=prettyHunt(r.hunt)||'Aguardando dados da caça';
+        const outlandTier = window.PioBattleHud.outlandTierLabel(r);
         const selected = !!grid.children[r.i]?.classList.contains('expanded');
         return `${dividerMarkup}<article class="leaf-account state-${sc} ${r.ok?'is-live':''} ${attention(r)?'is-attention':''} ${selected?'is-selected':''}" data-i="${r.i}">
           <div class="leaf-account-top">
@@ -558,7 +559,7 @@
             <div class="leaf-account-state ${sc}">${sl}</div>
           </div>
           <div class="leaf-hunt-row"><span class="leaf-hunt-glyph">${ico('hunt')}</span><span class="leaf-hunt-name">Em caça <b>${escH(hunt)}</b></span><span class="leaf-hunt-time">${a.seconds?Math.floor(a.seconds/3600)+'h '+String(Math.floor(a.seconds%3600/60)).padStart(2,'0')+'m':'—'}</span></div>
-          <div class="leaf-outland-tier" title="Tier confirmada pelo servidor nesta conexão">${escH(window.PioBattleHud.outlandTierLabel(r))}</div>
+          ${outlandTier ? `<div class="leaf-outland-tier" title="Tier confirmada pelo servidor nesta conexão">${escH(outlandTier)}</div>` : ''}
           <div class="leaf-account-metrics">
             <div class="leaf-metric" title="${(r.equippedBall && r.equippedBall.name) ? `${escH(r.equippedBall.name)}: ${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}` : `Bolas: ${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}`}"><div class="mk">Bolas</div><div class="mv">${((r.equippedBall && r.equippedBall.infinite) || (+r.balls >= 999999)) ? '∞' : fmtCompact(r.balls)}</div></div>
             <div class="leaf-metric" title="Shiny"><div class="mk">Shiny</div><div class="mv">${a.shinyFound!=null?fmtCompact(a.shinyFound):'—'}</div></div>

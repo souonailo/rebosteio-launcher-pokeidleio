@@ -180,6 +180,13 @@
     },
     blasterSend: (index, data) => invoke('blaster_send', { index, data }).catch(() => false),
     blasterAutoRaid: (enabled) => invoke('blaster_auto_raid_set', { enabled }),
+    // Boss de arena: operação independente da inscrição semanal (raid).
+    blasterBossCatalog: (index) => invoke('blaster_boss_catalog', { index }),
+    blasterBossStatus: (index) => invoke('blaster_boss_status', { index }),
+    blasterBossSelectPokemon: (index, pokemonId) => invoke('blaster_boss_select_pokemon', { index, pokemonId }),
+    blasterBossPokemonConfigure: (index, bossKey, primaryId, fighterId) => invoke('blaster_boss_pokemon_configure', { index, bossKey, primaryId, fighterId }),
+    blasterBossConfigure: (index, enabled, bossKey, mode, quantity, distribution = []) =>
+      invoke('blaster_boss_configure', { index, enabled, bossKey, mode, quantity, distribution }),
     sessionTokenSave: (index, token, nick) => invoke('session_token_save', { index, token, nick }).catch(() => false),
     sessionTokenGet: (index) => invoke('session_token_get', { index }).catch(() => null),
     onSessionToken: (cb) => listen('session:token', (e) => cb(e.payload)),
@@ -211,7 +218,7 @@
     webviewFillCreds: (index, email, pass) => invoke('webview_fill_creds', { index, email, pass }).catch(() => false),
 
     // 10. Metadados
-    appVersion: '2.0.65',
+    appVersion: '2.0.129',
     instanceId: 1,
     getInstanceInfo: async () => {
       try {
@@ -263,6 +270,7 @@
     const previous = window.stCache?.[index]?.d;
     if (previous) state = {...previous, ...state, a: {...previous.a, ...state.a}};
     state = window.PioInventory.project(state);
+    window.PioBossHistory?.observe(index, state);
     if (typeof window.stCache !== 'undefined') {
       window.stCache[index] = { t: Date.now(), d: state };
     }

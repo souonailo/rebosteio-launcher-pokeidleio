@@ -43,6 +43,12 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
       String(val || '').split(/\s+/).filter(Boolean).forEach(c => this.classList._set.add(c));
     }
     get className() { return this._className || ''; }
+    matches(selectors) {
+      return selectors.split(',').some(selector => {
+        const name = selector.trim();
+        return name.startsWith('.') ? this.classList.contains(name.slice(1)) : this.tagName.toLowerCase() === name.toLowerCase();
+      });
+    }
     set innerHTML(html) {
       this._innerHTML = html;
       this.children = [];
@@ -298,20 +304,27 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
 
   const tierEl = hudEl.querySelector('.bsh-outland-tier');
   PioBattleHud.update(panel, 0, {...fakeState, live: true, outlandTier: 2});
+  assert.equal(tierEl.textContent, '');
+  assert.equal(tierEl.hidden, true);
+  const outlandState = {...fakeState, hunt: 'enraged_typhlosion'};
+  PioBattleHud.update(panel, 0, {...outlandState, live: true, outlandTier: 2});
   assert.equal(tierEl.textContent, 'Outland · tier 2');
   assert.equal(tierEl.hidden, false);
-  PioBattleHud.update(panel, 0, {...fakeState, live: false, outlandTier: 2});
+  PioBattleHud.update(panel, 0, {...outlandState, live: false, outlandTier: 2});
   assert.equal(tierEl.textContent, 'Outland · aguardando confirmação');
   for (const outlandTier of [undefined, null, 0, '2']) {
-    PioBattleHud.update(panel, 0, {...fakeState, live: true, outlandTier});
+    PioBattleHud.update(panel, 0, {...outlandState, live: true, outlandTier});
     assert.equal(tierEl.textContent, 'Outland · aguardando confirmação');
   }
-  PioBattleHud.update(panel, 0, {...fakeState, live: true, outlandTier: 3});
+  PioBattleHud.update(panel, 0, {...outlandState, live: true, outlandTier: 3});
   assert.equal(tierEl.textContent, 'Outland · tier 3');
+  PioBattleHud.update(panel, 0, {...outlandState, hunt: 'centro', live: true, outlandTier: 3});
+  assert.equal(tierEl.textContent, '');
+  assert.equal(tierEl.hidden, true);
 
   PioBattleHud.setBlasterActive(0, false);
   assert.equal(PioBattleHud.isBlasterActive(0), false);
-  PioBattleHud.update(panel, 0, {...fakeState, live: true, outlandTier: 2});
+  PioBattleHud.update(panel, 0, {...outlandState, live: true, outlandTier: 2});
   assert.equal(tierEl.hidden, true);
   assert.equal(panel.classList.contains('is-blaster-active'), false);
 
@@ -369,7 +382,9 @@ test('Battle Slot HUD - module logic, rendering, and lifecycle', () => {
   };
   const stackedTimeBonus = PioBattleHud.formatKickBonus(null, stackedTimeAccount);
   assert.equal(stackedTimeBonus.active, true);
-  assert.equal(stackedTimeBonus.text, 'EXP +15% · 1h 30m');
+  // Date.now() advances between fixture creation and render. If a millisecond
+  // rolls over, the live countdown may already display 1h29m, not exactly 1h30m.
+  assert.match(stackedTimeBonus.text, /^EXP \+15% · 1h (?:29|30)m$/);
 
   // Catch bonus com tempo restante 1h 05m
   const catchBonus = PioBattleHud.formatKickBonus({ bonusCatch: 1, bonusQty: 3, bonusTime: '1h 05m' }, null);
@@ -512,6 +527,12 @@ test('independent Kick and Twitch points fields, 0 vs missing vs stale, and 4-ac
         String(val || '').split(/\s+/).filter(Boolean).forEach(c => this.classList._set.add(c));
       }
       get className() { return this._className || ''; }
+      matches(selectors) {
+        return selectors.split(',').some(selector => {
+          const name = selector.trim();
+          return name.startsWith('.') ? this.classList.contains(name.slice(1)) : this.tagName.toLowerCase() === name.toLowerCase();
+        });
+      }
       set innerHTML(html) {
         this._innerHTML = html;
         this.children = [];

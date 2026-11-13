@@ -1,32 +1,35 @@
-pub mod userscripts;
-pub mod credentials;
 pub mod account_proxy;
+pub mod auto_boss;
+pub mod auto_depot;
+pub mod credentials;
+pub mod daily_pass;
 pub mod desktop_settings;
-pub mod social_store;
 pub mod game_headless;
 mod hunt_session;
-pub mod daily_pass;
-pub mod auto_depot;
-pub mod kick_service;
-pub mod kick_connections;
 pub mod kick_browser;
+pub mod kick_connections;
 pub mod kick_rewards;
-pub mod twitch_service;
-pub mod twitch_chat;
-pub mod twitch_browser;
-mod twitch_rewards;
-pub mod webview_manager;
-pub mod webview_memory;
+pub mod kick_service;
 pub mod pio_arquivos;
 mod runtime_paths;
+mod rmt;
+mod rmt_sprites;
 pub mod sniper;
+pub mod social_store;
+pub mod twitch_browser;
+pub mod twitch_chat;
+mod twitch_rewards;
+pub mod twitch_service;
+pub mod userscripts;
+pub mod webview_manager;
+pub mod webview_memory;
 
+use serde::Serialize;
+use serde_json::json;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Window};
-use serde::Serialize;
-use serde_json::json;
 
 #[tauri::command]
 fn app_version() -> String {
@@ -65,11 +68,22 @@ async fn webview_fill_creds(
     email: String,
     pass: String,
 ) -> Result<bool, String> {
-    manager.fill_credentials(&app, index, &email, &pass).await.map(|_| true)
+    manager
+        .fill_credentials(&app, index, &email, &pass)
+        .await
+        .map(|_| true)
 }
 
 #[tauri::command]
-async fn webview_settings(app:AppHandle,manager:tauri::State<'_,Arc<webview_manager::WebviewManager>>,index:usize,zoom:Option<f64>,muted:Option<bool>)->Result<webview_manager::ViewSettings,String>{manager.configure_view(&app,index,zoom,muted).await}
+async fn webview_settings(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
+    index: usize,
+    zoom: Option<f64>,
+    muted: Option<bool>,
+) -> Result<webview_manager::ViewSettings, String> {
+    manager.configure_view(&app, index, zoom, muted).await
+}
 
 #[derive(Serialize)]
 pub struct WindowStateResponse {
@@ -78,7 +92,7 @@ pub struct WindowStateResponse {
 }
 
 #[tauri::command]
-async fn window_control(window: Window, action: String) -> Result<WindowStateResponse,String> {
+async fn window_control(window: Window, action: String) -> Result<WindowStateResponse, String> {
     let mut is_max = window.is_maximized().unwrap_or(false);
     match action.as_str() {
         "minimize" => {
@@ -96,12 +110,19 @@ async fn window_control(window: Window, action: String) -> Result<WindowStateRes
         "close" => {
             let _ = window.close();
         }
-        "show" => { desktop_settings::restore_window(window.app_handle()); }
-        "drag" => { let _ = window.start_dragging(); }
+        "show" => {
+            desktop_settings::restore_window(window.app_handle());
+        }
+        "drag" => {
+            let _ = window.start_dragging();
+        }
         _ => {}
     }
     let _ = window.emit_to("main", "window:maximized", is_max);
-    Ok(WindowStateResponse { maximized: is_max, visible:window.is_visible().unwrap_or(false) })
+    Ok(WindowStateResponse {
+        maximized: is_max,
+        visible: window.is_visible().unwrap_or(false),
+    })
 }
 
 #[tauri::command]
@@ -123,7 +144,12 @@ fn set_awake(on: bool) -> bool {
 }
 
 #[tauri::command]
-fn set_min_to_tray(state:tauri::State<'_, desktop_settings::DesktopSettings>, on:bool)->Result<bool,String>{state.set_min_to_tray(on)}
+fn set_min_to_tray(
+    state: tauri::State<'_, desktop_settings::DesktopSettings>,
+    on: bool,
+) -> Result<bool, String> {
+    state.set_min_to_tray(on)
+}
 
 #[tauri::command]
 fn preset_read(name: String) -> Option<String> {
@@ -161,15 +187,20 @@ fn instance_new(target_id: Option<usize>) -> Result<bool, String> {
 }
 
 pub fn spawn_new_instance(target_id: usize) -> Result<bool, String> {
-    let current_exe = std::env::current_exe().map_err(|e| format!("Não foi possível localizar executável atual: {}", e))?;
-    println!("[Instance] Abrindo nova instância {} com executável: {:?}", target_id, current_exe);
+    let current_exe = std::env::current_exe()
+        .map_err(|e| format!("Não foi possível localizar executável atual: {}", e))?;
+    println!(
+        "[Instance] Abrindo nova instância {} com executável: {:?}",
+        target_id, current_exe
+    );
 
     #[cfg(windows)]
     {
         let mut cmd = std::process::Command::new(&current_exe);
         cmd.arg(format!("--instance={}", target_id));
         cmd.env("PIO_INSTANCE", target_id.to_string());
-        cmd.spawn().map_err(|e| format!("Falha ao abrir nova instância: {}", e))?;
+        cmd.spawn()
+            .map_err(|e| format!("Falha ao abrir nova instância: {}", e))?;
         Ok(true)
     }
     #[cfg(not(windows))]
@@ -177,7 +208,8 @@ pub fn spawn_new_instance(target_id: usize) -> Result<bool, String> {
         let mut cmd = std::process::Command::new(&current_exe);
         cmd.arg(format!("--instance={}", target_id));
         cmd.env("PIO_INSTANCE", target_id.to_string());
-        cmd.spawn().map_err(|e| format!("Falha ao abrir nova instância: {}", e))?;
+        cmd.spawn()
+            .map_err(|e| format!("Falha ao abrir nova instância: {}", e))?;
         Ok(true)
     }
 }
@@ -188,7 +220,11 @@ fn errlog_write(origin: String, msg: String) -> bool {
     let _ = fs::create_dir_all(&dir);
     let log_file = dir.join("relatorio-de-erros.log");
     use std::io::Write;
-    if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(log_file) {
+    if let Ok(mut f) = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)
+    {
         let _ = writeln!(f, "[LOG] [{}] {}", origin, msg);
     }
     true
@@ -218,17 +254,38 @@ fn backup_save(name: String, content: String, _header: Option<String>) -> bool {
 }
 
 #[tauri::command]
-async fn system_notify(app:AppHandle,title:String,body:String)->Result<bool,String>{
-    tauri::async_runtime::spawn_blocking(move||{
+async fn system_notify(app: AppHandle, title: String, body: String) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
         use tauri_plugin_notification::NotificationExt;
-        match app.notification().builder().title(&title).body(&body).show(){
-            Ok(())=>Ok(true),
-            Err(error)=>{
-                #[cfg(windows)] {return tauri_winrt_notification::Toast::new(tauri_winrt_notification::Toast::POWERSHELL_APP_ID).title(&title).text1(&body).show().map(|_|true).map_err(|_|error.to_string());}
-                #[cfg(not(windows))] {Err(error.to_string())}
+        match app
+            .notification()
+            .builder()
+            .title(&title)
+            .body(&body)
+            .show()
+        {
+            Ok(()) => Ok(true),
+            Err(error) => {
+                #[cfg(windows)]
+                {
+                    return tauri_winrt_notification::Toast::new(
+                        tauri_winrt_notification::Toast::POWERSHELL_APP_ID,
+                    )
+                    .title(&title)
+                    .text1(&body)
+                    .show()
+                    .map(|_| true)
+                    .map_err(|_| error.to_string());
+                }
+                #[cfg(not(windows))]
+                {
+                    Err(error.to_string())
+                }
             }
         }
-    }).await.map_err(|e|e.to_string())?
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -252,8 +309,15 @@ fn userscript_raw_url(u: url::Url) -> url::Url {
         let p: Vec<&str> = u.path().split('/').filter(|s| !s.is_empty()).collect();
         if let Some(i) = p.iter().position(|s| *s == "blob") {
             if i >= 2 && p.len() > i + 2 {
-                let raw = format!("https://raw.githubusercontent.com/{}/{}/{}", p[0], p[1], p[i + 1..].join("/"));
-                if let Ok(r) = url::Url::parse(&raw) { return r; }
+                let raw = format!(
+                    "https://raw.githubusercontent.com/{}/{}/{}",
+                    p[0],
+                    p[1],
+                    p[i + 1..].join("/")
+                );
+                if let Ok(r) = url::Url::parse(&raw) {
+                    return r;
+                }
             }
         }
     }
@@ -263,32 +327,75 @@ fn userscript_raw_url(u: url::Url) -> url::Url {
 #[tauri::command]
 async fn userscript_fetch(url: String) -> serde_json::Value {
     let fail = |e: &str| serde_json::json!({"ok": false, "error": e});
-    let Ok(mut u) = url::Url::parse(url.trim()).map(userscript_raw_url) else { return fail("Link inválido."); };
+    let Ok(mut u) = url::Url::parse(url.trim()).map(userscript_raw_url) else {
+        return fail("Link inválido.");
+    };
     let client = match reqwest::Client::builder()
         .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(12))
         .user_agent(concat!("PIO-Rebosteio/", env!("CARGO_PKG_VERSION")))
-        .build() { Ok(c) => c, Err(_) => return fail("Não foi possível acessar o GitHub.") };
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return fail("Não foi possível acessar o GitHub."),
+    };
     for hops in 0..=3 {
         let allowed = u.scheme() == "https"
-            && matches!(u.host_str(), Some("github.com") | Some("raw.githubusercontent.com"))
+            && matches!(
+                u.host_str(),
+                Some("github.com") | Some("raw.githubusercontent.com")
+            )
             && u.path().to_ascii_lowercase().ends_with(".js");
         if !allowed {
-            return fail(if hops > 0 { "O GitHub redirecionou para um endereço fora da lista (link de release?). Use o link do arquivo .js dentro do repositório." } else { "Use um link https do GitHub para um arquivo .js" });
+            return fail(if hops > 0 {
+                "O GitHub redirecionou para um endereço fora da lista (link de release?). Use o link do arquivo .js dentro do repositório."
+            } else {
+                "Use um link https do GitHub para um arquivo .js"
+            });
         }
-        let resp = match client.get(u.clone()).header("Accept", "text/plain").send().await {
-            Ok(r) => r, Err(_) => return fail("Não foi possível acessar o GitHub."),
+        let resp = match client
+            .get(u.clone())
+            .header("Accept", "text/plain")
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(_) => return fail("Não foi possível acessar o GitHub."),
         };
         let status = resp.status();
         if status.is_redirection() {
-            if hops == 3 { return fail("Redirecionamentos demais."); }
-            let next = resp.headers().get("location").and_then(|v| v.to_str().ok()).and_then(|l| u.join(l).ok());
-            match next { Some(n) => { u = userscript_raw_url(n); continue; } None => return fail("Redirecionamento inválido.") }
+            if hops == 3 {
+                return fail("Redirecionamentos demais.");
+            }
+            let next = resp
+                .headers()
+                .get("location")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|l| u.join(l).ok());
+            match next {
+                Some(n) => {
+                    u = userscript_raw_url(n);
+                    continue;
+                }
+                None => return fail("Redirecionamento inválido."),
+            }
         }
-        if status.as_u16() != 200 { return fail(&format!("GitHub respondeu HTTP {}", status.as_u16())); }
-        if resp.content_length().map(|n| n > 2 * 1024 * 1024).unwrap_or(false) { return fail("O script passa de 2 MB."); }
-        let Ok(bytes) = resp.bytes().await else { return fail("Falha ao ler o script."); };
-        if bytes.len() > 2 * 1024 * 1024 { return fail("O script passa de 2 MB."); }
+        if status.as_u16() != 200 {
+            return fail(&format!("GitHub respondeu HTTP {}", status.as_u16()));
+        }
+        if resp
+            .content_length()
+            .map(|n| n > 2 * 1024 * 1024)
+            .unwrap_or(false)
+        {
+            return fail("O script passa de 2 MB.");
+        }
+        let Ok(bytes) = resp.bytes().await else {
+            return fail("Falha ao ler o script.");
+        };
+        if bytes.len() > 2 * 1024 * 1024 {
+            return fail("O script passa de 2 MB.");
+        }
         let code = String::from_utf8_lossy(&bytes).to_string();
         let t = code.trim();
         if t.is_empty() || t.starts_with('<') {
@@ -314,20 +421,47 @@ fn account_clear(index: usize) -> bool {
 }
 
 #[tauri::command]
-async fn proxy_apply(app:AppHandle,manager:tauri::State<'_,Arc<webview_manager::WebviewManager>>,headless:tauri::State<'_,Arc<game_headless::GameHeadlessManager>>)->Result<serde_json::Value,String>{
-    let _transition=manager.transition.lock().await;
-    let mut changed=Vec::new();let mut errors=Vec::new();
+async fn proxy_apply(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
+    headless: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+) -> Result<serde_json::Value, String> {
+    let _transition = manager.transition.lock().await;
+    let mut changed = Vec::new();
+    let mut errors = Vec::new();
     for index in 0..4 {
-        match manager.proxy_changed(index){
-            Ok(false)=>continue,
-            Err(error)=>{manager.destroy(&app,index).await?;headless.stop(index).await;errors.push(json!({"index":index,"error":error}));continue;},
-            Ok(true)=>{}
+        match manager.proxy_changed(index) {
+            Ok(false) => continue,
+            Err(error) => {
+                manager.destroy(&app, index).await?;
+                headless.stop(index).await;
+                errors.push(json!({"index":index,"error":error}));
+                continue;
+            }
+            Ok(true) => {}
         }
         if manager.is_headless(index).await {
-            let config=game_headless::BlasterConfig{token:headless.get_token(index).await,nick:headless.get_nick(index).await,ws_url:headless.get_ws_url(index).await,hunt:None};
-            if let Err(error)=headless.start(app.clone(),index,config).await{let _=app.emit_to("main","blaster:status",json!({"index":index,"status":"error","error":error}));errors.push(json!({"index":index,"error":"Falha ao reconectar Blaster pelo proxy"}));continue;}
+            let config = game_headless::BlasterConfig {
+                token: headless.get_token(index).await,
+                nick: headless.get_nick(index).await,
+                ws_url: headless.get_ws_url(index).await,
+                hunt: None,
+            };
+            if let Err(error) = headless.start(app.clone(), index, config).await {
+                let _ = app.emit_to(
+                    "main",
+                    "blaster:status",
+                    json!({"index":index,"status":"error","error":error}),
+                );
+                errors
+                    .push(json!({"index":index,"error":"Falha ao reconectar Blaster pelo proxy"}));
+                continue;
+            }
             manager.mark_proxy(index);
-        }else{manager.destroy(&app,index).await?;changed.push(index);}
+        } else {
+            manager.destroy(&app, index).await?;
+            changed.push(index);
+        }
     }
     Ok(json!({"changed":changed,"errors":errors}))
 }
@@ -340,13 +474,19 @@ pub struct AutoStartResponse {
 
 #[tauri::command]
 fn autostart_get() -> AutoStartResponse {
-    AutoStartResponse { on: desktop_settings::autostart_enabled(), suportado: cfg!(windows) }
+    AutoStartResponse {
+        on: desktop_settings::autostart_enabled(),
+        suportado: cfg!(windows),
+    }
 }
 
 #[tauri::command]
-async fn autostart_set(app:AppHandle,on:bool)->Result<bool,String>{
-    let saved=tauri::async_runtime::spawn_blocking(move||desktop_settings::set_autostart(on)).await.map_err(|e|e.to_string())??;
-    let _=app.emit_to("main","autostart:change",saved);Ok(saved)
+async fn autostart_set(app: AppHandle, on: bool) -> Result<bool, String> {
+    let saved = tauri::async_runtime::spawn_blocking(move || desktop_settings::set_autostart(on))
+        .await
+        .map_err(|e| e.to_string())??;
+    let _ = app.emit_to("main", "autostart:change", saved);
+    Ok(saved)
 }
 
 // ----------------- MASTER BLASTER HEADLESS -----------------
@@ -360,36 +500,79 @@ async fn blaster_start(
     index: usize,
     config: game_headless::BlasterConfig,
 ) -> Result<(), String> {
-    if index >= 4 { return Err("Conta inválida".into()); }
+    if index >= 4 {
+        return Err("Conta inválida".into());
+    }
     let _auth = manager.auth_locks[index].lock().await;
     let _transition = views.transition.lock().await;
-    if manager.is_running(index).await { return Ok(()); }
+    if manager.is_running(index).await {
+        return Ok(());
+    }
     // Startup may request headless before a guest exists. Read that profile's
     // official history in a hidden guest instead of starting a second session.
-    if app.get_webview(&format!("game-account-{}", index)).is_none() {
+    if app
+        .get_webview(&format!("game-account-{}", index))
+        .is_none()
+    {
         views.set_headless(index, false).await;
         views.set_visibility_state(index, false).await;
-        views.create_or_update(&app, &window, index, 0.0, 0.0, 800.0, 600.0, None).await?;
+        views
+            .create_or_update(&app, &window, index, 0.0, 0.0, 800.0, 600.0, None)
+            .await?;
         let mut ready = false;
         for _ in 0..100 {
-            if views.execute(&app, index, "typeof window.__idleioTakeHuntSession === 'function'").await.unwrap_or_default() == true {
-                ready = true; break;
+            if views
+                .execute(
+                    &app,
+                    index,
+                    "typeof window.__idleioTakeHuntSession === 'function'",
+                )
+                .await
+                .unwrap_or_default()
+                == true
+            {
+                ready = true;
+                break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
-        if !ready { return Err("Aguarde o jogo carregar antes de ativar o Headless".into()); }
+        if !ready {
+            return Err("Aguarde o jogo carregar antes de ativar o Headless".into());
+        }
     }
-    if manager.get_token(index).await.is_none() && config.token.as_deref().unwrap_or("").is_empty() {
-        let session = views.execute(&app, index,
-            "({token: localStorage.getItem('sessao'), nick: localStorage.getItem('nick')})").await?;
-        let token = session.get("token").and_then(|v| v.as_str()).filter(|v| !v.is_empty()).ok_or("Faça login na conta antes de ativar o Headless")?;
-        manager.set_token(index, token.into(), session.get("nick").and_then(|v| v.as_str()).map(str::to_owned)).await;
+    if manager.get_token(index).await.is_none() && config.token.as_deref().unwrap_or("").is_empty()
+    {
+        let session = views
+            .execute(
+                &app,
+                index,
+                "({token: localStorage.getItem('sessao'), nick: localStorage.getItem('nick')})",
+            )
+            .await?;
+        let token = session
+            .get("token")
+            .and_then(|v| v.as_str())
+            .filter(|v| !v.is_empty())
+            .ok_or("Faça login na conta antes de ativar o Headless")?;
+        manager
+            .set_token(
+                index,
+                token.into(),
+                session
+                    .get("nick")
+                    .and_then(|v| v.as_str())
+                    .map(str::to_owned),
+            )
+            .await;
     }
     views.set_headless(index, true).await;
     let handoff = async {
-        let snapshot = views.execute(&app, index, "window.__idleioTakeHuntSession()" ).await?;
+        let snapshot = views
+            .execute(&app, index, "window.__idleioTakeHuntSession()")
+            .await?;
         manager.import_hunt_session(index, &snapshot).await
-    }.await;
+    }
+    .await;
     if let Err(error) = handoff {
         views.set_headless(index, false).await;
         // The handoff may already have frozen the old socket. Recreate from
@@ -443,11 +626,77 @@ async fn blaster_send(
 }
 
 #[tauri::command]
+async fn blaster_boss_catalog(
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    index: usize,
+) -> Result<Vec<serde_json::Value>, String> {
+    manager.boss_catalog(index).await
+}
+
+#[tauri::command]
+async fn blaster_boss_status(
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    index: usize,
+) -> Result<serde_json::Value, String> {
+    manager.boss_status(index).await
+}
+
+#[tauri::command]
+fn blaster_boss_history(index: usize, #[allow(non_snake_case)] accountId: Option<String>)
+    -> Result<Vec<auto_boss::BossHistoryRecord>, String> {
+    if index >= 4 { return Err("Conta inválida".into()); }
+    auto_boss::read_history(index, accountId.as_deref().unwrap_or(""))
+}
+
+#[tauri::command]
+async fn blaster_boss_select_pokemon(
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    index: usize,
+    #[allow(non_snake_case)] pokemonId: serde_json::Value,
+) -> Result<bool, String> {
+    manager.boss_select_pokemon(index, pokemonId).await
+}
+
+#[tauri::command]
+async fn blaster_boss_pokemon_configure(
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    index: usize,
+    #[allow(non_snake_case)] bossKey: String,
+    #[allow(non_snake_case)] primaryId: serde_json::Value,
+    #[allow(non_snake_case)] fighterId: serde_json::Value,
+) -> Result<serde_json::Value, String> {
+    manager.boss_configure_pokemon(index, bossKey, primaryId, fighterId).await
+}
+
+#[tauri::command]
+async fn blaster_boss_configure(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
+    index: usize,
+    enabled: bool,
+    #[allow(non_snake_case)] bossKey: Option<String>,
+    mode: String,
+    quantity: Option<u32>,
+    distribution: Option<Vec<auto_boss::BossAllocation>>,
+) -> Result<serde_json::Value, String> {
+    let mode = match mode.as_str() {
+        "all" => auto_boss::BossMode::All,
+        "quantity" => auto_boss::BossMode::Quantity,
+        "demand" => auto_boss::BossMode::Demand,
+        "infinite" => auto_boss::BossMode::Infinite,
+        _ => return Err("Modo inválido: use all, quantity, demand ou infinite".into()),
+    };
+    manager
+        .boss_configure(&app, index, enabled, bossKey, mode, quantity, distribution)
+        .await
+}
+
+#[tauri::command]
 fn blaster_auto_raid_set(
     manager: tauri::State<'_, Arc<game_headless::GameHeadlessManager>>,
     enabled: bool,
-) {
-    manager.auto_raid_enabled.store(enabled, std::sync::atomic::Ordering::Relaxed);
+) -> Result<bool, String> {
+    manager.set_auto_raid_enabled(enabled)
 }
 
 #[tauri::command]
@@ -492,16 +741,25 @@ async fn telemetry_report(
 // ----------------- TWITCH IRC -----------------
 
 #[tauri::command]
-fn twitch_creds_load() -> Result<serde_json::Value,String> {
+fn twitch_creds_load() -> Result<serde_json::Value, String> {
     social_store::try_load("twitch")
 }
 
 #[tauri::command]
-async fn twitch_creds_save(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, data: serde_json::Value) -> Result<bool,String> {
-    let _save=manager.save_lock.lock().await;
-    if !twitch_service::save_creds(data.clone()) { return Err("Falha ao salvar credenciais Twitch".into()); }
+async fn twitch_creds_save(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    data: serde_json::Value,
+) -> Result<bool, String> {
+    let _save = manager.save_lock.lock().await;
+    if !twitch_service::save_creds(data.clone()) {
+        return Err("Falha ao salvar credenciais Twitch".into());
+    }
     manager.configure(&app, &data).await;
-    app.state::<Arc<twitch_chat::TwitchChatServiceManager>>().inner().configure(&app, &data).await;
+    app.state::<Arc<twitch_chat::TwitchChatServiceManager>>()
+        .inner()
+        .configure(&app, &data)
+        .await;
     Ok(true)
 }
 
@@ -525,25 +783,60 @@ async fn twitch_sync_lives(
 }
 
 #[tauri::command]
-async fn twitch_status_get(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_status().await) }
+async fn twitch_status_get(
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+) -> Result<serde_json::Value, String> {
+    Ok(manager.get_status().await)
+}
 
 #[tauri::command]
-async fn twitch_chat_status_get(chat: tauri::State<'_, Arc<twitch_chat::TwitchChatServiceManager>>) -> Result<serde_json::Value,String> { Ok(chat.get_status().await) }
+async fn twitch_chat_status_get(
+    chat: tauri::State<'_, Arc<twitch_chat::TwitchChatServiceManager>>,
+) -> Result<serde_json::Value, String> {
+    Ok(chat.get_status().await)
+}
 
 #[tauri::command]
-async fn twitch_points_get(manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_points().await) }
+async fn twitch_points_get(
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+) -> Result<serde_json::Value, String> {
+    Ok(manager.get_points().await)
+}
 
 #[tauri::command]
-async fn twitch_points_refresh(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize) -> Result<serde_json::Value,String> { manager.refresh(&app, index, true).await }
+async fn twitch_points_refresh(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    index: usize,
+) -> Result<serde_json::Value, String> {
+    manager.refresh(&app, index, true).await
+}
 
 #[tauri::command]
-async fn twitch_session_open(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize, slug: String) -> Result<bool,String> { manager.open(&app, index, &slug).await }
+async fn twitch_session_open(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    index: usize,
+    slug: String,
+) -> Result<bool, String> {
+    manager.open(&app, index, &slug).await
+}
 
 #[tauri::command]
-async fn twitch_session_close(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, index: usize) -> Result<bool,String> { manager.close(&app, index).await }
+async fn twitch_session_close(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    index: usize,
+) -> Result<bool, String> {
+    manager.close(&app, index).await
+}
 
 #[tauri::command]
-async fn twitch_point_channels(app: AppHandle, manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>, channels: Vec<Vec<String>>) -> Result<bool,String> {
+async fn twitch_point_channels(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<twitch_service::TwitchServiceManager>>,
+    channels: Vec<Vec<String>>,
+) -> Result<bool, String> {
     manager.set_channels(channels).await;
     manager.sync_chat_targets(&app).await;
     Ok(true)
@@ -552,15 +845,22 @@ async fn twitch_point_channels(app: AppHandle, manager: tauri::State<'_, Arc<twi
 // ----------------- KICK -----------------
 
 #[tauri::command]
-fn kick_creds_load() -> Result<serde_json::Value,String> {
+fn kick_creds_load() -> Result<serde_json::Value, String> {
     social_store::try_load("kick")
 }
 
 #[tauri::command]
-async fn kick_creds_save(app: AppHandle, manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>, data: serde_json::Value) -> Result<bool,String> {
-    let _save=manager.save_lock.lock().await;
-    if !kick_service::save_creds(data.clone()) { return Err("Falha ao salvar credenciais Kick".into()); }
-    manager.configure(&app, data).await; Ok(true)
+async fn kick_creds_save(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+    data: serde_json::Value,
+) -> Result<bool, String> {
+    let _save = manager.save_lock.lock().await;
+    if !kick_service::save_creds(data.clone()) {
+        return Err("Falha ao salvar credenciais Kick".into());
+    }
+    manager.configure(&app, data).await;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -581,19 +881,46 @@ async fn kick_sync_lives(
 }
 
 #[tauri::command]
-async fn kick_status_get(manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_status().await) }
+async fn kick_status_get(
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+) -> Result<serde_json::Value, String> {
+    Ok(manager.get_status().await)
+}
 
 #[tauri::command]
-async fn kick_points_get(manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>) -> Result<serde_json::Value,String> { Ok(manager.get_points().await) }
+async fn kick_points_get(
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+) -> Result<serde_json::Value, String> {
+    Ok(manager.get_points().await)
+}
 
 #[tauri::command]
-async fn kick_points_refresh(app: AppHandle, manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>, index: usize) -> Result<serde_json::Value,String> { manager.refresh(&app,index,true).await }
+async fn kick_points_refresh(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+    index: usize,
+) -> Result<serde_json::Value, String> {
+    manager.refresh(&app, index, true).await
+}
 
 #[tauri::command]
-async fn kick_session_open(app: AppHandle, manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>, index: usize, slug: String) -> Result<bool,String> { manager.open(&app,index,&slug).await }
+async fn kick_session_open(
+    app: AppHandle,
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+    index: usize,
+    slug: String,
+) -> Result<bool, String> {
+    manager.open(&app, index, &slug).await
+}
 
 #[tauri::command]
-async fn kick_point_channels(manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>, channels: Vec<Vec<String>>) -> Result<bool,String> { manager.set_channels(channels).await; Ok(true) }
+async fn kick_point_channels(
+    manager: tauri::State<'_, Arc<kick_service::KickServiceManager>>,
+    channels: Vec<Vec<String>>,
+) -> Result<bool, String> {
+    manager.set_channels(channels).await;
+    Ok(true)
+}
 
 // ----------------- AUTH & CAMOUFOX -----------------
 
@@ -610,7 +937,10 @@ fn login_components(app: &AppHandle) -> Option<(PathBuf, PathBuf, Option<PathBuf
     let executable = std::env::current_exe().ok()?;
     let cwd = std::env::current_dir().unwrap_or_default();
     let root = runtime_paths::source_root(&executable, &cwd)?;
-    runtime_paths::source_login(&root, std::env::var_os("PIO_NAILO_PYTHON").map(PathBuf::from))
+    runtime_paths::source_login(
+        &root,
+        std::env::var_os("PIO_NAILO_PYTHON").map(PathBuf::from),
+    )
 }
 
 #[tauri::command]
@@ -626,9 +956,13 @@ async fn camoufox_login(
     views: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
 ) -> Result<serde_json::Value, String> {
     let index = data.get("index").and_then(|v| v.as_u64()).unwrap_or(0) as usize;
-    if index >= 4 { return Err("Conta inválida".into()); }
+    if index >= 4 {
+        return Err("Conta inválida".into());
+    }
     let _auth = manager.auth_locks[index].lock().await;
-    if views.is_headless(index).await { return Err("Conta em modo Blaster; sessão existente preservada".into()); }
+    if views.is_headless(index).await {
+        return Err("Conta em modo Blaster; sessão existente preservada".into());
+    }
     let email = data.get("email").and_then(|v| v.as_str()).unwrap_or("");
     let password = data.get("password").and_then(|v| v.as_str()).unwrap_or("");
     let proxy = data.get("proxy").cloned();
@@ -645,10 +979,13 @@ async fn camoufox_login(
         let json_str = payload.to_string();
 
         let mut command = tokio::process::Command::new(python);
-        if let Some(browser) = browser { command.env("PIO_NAILO_CAMOUFOX", browser); }
+        if let Some(browser) = browser {
+            command.env("PIO_NAILO_CAMOUFOX", browser);
+        }
         #[cfg(windows)]
         command.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        let output = command.arg(script_path)
+        let output = command
+            .arg(script_path)
             .arg("--json")
             .arg(&json_str)
             .output()
@@ -658,10 +995,19 @@ async fn camoufox_login(
         let stdout = String::from_utf8_lossy(&output.stdout);
         for line in stdout.lines().rev() {
             if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(line.trim()) {
-                if parsed.get("success").and_then(|v| v.as_bool()).unwrap_or(false) {
+                if parsed
+                    .get("success")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false)
+                {
                     if let Some(token) = parsed.get("token").and_then(|v| v.as_str()) {
-                        let nick = parsed.get("nick").and_then(|v| v.as_str()).map(|s| s.to_string());
-                        manager.set_token(index, token.to_string(), nick.clone()).await;
+                        let nick = parsed
+                            .get("nick")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string());
+                        manager
+                            .set_token(index, token.to_string(), nick.clone())
+                            .await;
                         let _ = app.emit(
                             "session:token",
                             json!({
@@ -687,8 +1033,12 @@ fn auth_cancel_login(_index: usize) -> bool {
 
 #[tauri::command]
 async fn auth_window_open(app: AppHandle, index: usize, url: String) -> Result<bool, String> {
-    if index >= 4 { return Err("Conta inválida".into()); }
-    let target: url::Url = url.parse().map_err(|_| "Endereço de autenticação inválido")?;
+    if index >= 4 {
+        return Err("Conta inválida".into());
+    }
+    let target: url::Url = url
+        .parse()
+        .map_err(|_| "Endereço de autenticação inválido")?;
     if target.scheme() != "https" || !target.username().is_empty() || target.password().is_some() {
         return Err("Endereço de autenticação inválido".into());
     }
@@ -699,20 +1049,32 @@ async fn auth_window_open(app: AppHandle, index: usize, url: String) -> Result<b
         return Ok(true);
     }
     let proxy = account_proxy::for_account(index)?;
-    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::External("about:blank".parse().unwrap()))
-        .title(format!("Autenticação - Conta {}", index + 1))
-        .inner_size(800.0, 700.0)
-        .data_directory(webview_manager::get_account_profile_dir(index))
-        .user_agent(webview_manager::CHROME_USER_AGENT)
-        .additional_browser_args(&webview_memory::browser_args(proxy.as_ref().map(|p| &p.url)));
-    if let Some(proxy) = &proxy { builder = builder.proxy_url(proxy.url.clone()); }
+    let mut builder = WebviewWindowBuilder::new(
+        &app,
+        &label,
+        WebviewUrl::External("about:blank".parse().unwrap()),
+    )
+    .title(format!("Autenticação - Conta {}", index + 1))
+    .inner_size(800.0, 700.0)
+    .data_directory(webview_manager::get_account_profile_dir(index))
+    .user_agent(webview_manager::CHROME_USER_AGENT)
+    .additional_browser_args(&webview_memory::browser_args(
+        proxy.as_ref().map(|p| &p.url),
+    ));
+    if let Some(proxy) = &proxy {
+        builder = builder.proxy_url(proxy.url.clone());
+    }
     let window = builder.build().map_err(|e| e.to_string())?;
-    let view = app.get_webview(&label).ok_or("Janela de autenticação indisponível")?;
+    let view = app
+        .get_webview(&label)
+        .ok_or("Janela de autenticação indisponível")?;
     if let Err(error) = account_proxy::authenticate(&view, proxy.as_ref()).await {
         let _ = window.destroy();
         return Err(error);
     }
-    window.navigate(target).map_err(|_| "Não foi possível abrir a autenticação")?;
+    window
+        .navigate(target)
+        .map_err(|_| "Não foi possível abrir a autenticação")?;
     Ok(true)
 }
 
@@ -772,35 +1134,73 @@ async fn webview_eval(
 
 #[tauri::command]
 fn webview_navigate(app: AppHandle, index: usize, url: Option<String>) -> Result<(), String> {
-    let view = app.get_webview(&format!("game-account-{}", index)).ok_or("WebView indisponível")?;
+    let view = app
+        .get_webview(&format!("game-account-{}", index))
+        .ok_or("WebView indisponível")?;
     match url {
         Some(url) => view.navigate(url.parse().map_err(|e: url::ParseError| e.to_string())?),
         None => view.reload(),
-    }.map_err(|e| e.to_string())
+    }
+    .map_err(|e| e.to_string())
 }
 
 fn game_index(webview: &tauri::Webview) -> Result<usize, String> {
-    if webview.url().ok().and_then(|u| u.host_str().map(str::to_owned)).as_deref() != Some("pokeidle.io") {
+    if webview
+        .url()
+        .ok()
+        .and_then(|u| u.host_str().map(str::to_owned))
+        .as_deref()
+        != Some("pokeidle.io")
+    {
         return Err("Origem inválida".into());
     }
-    webview.label().strip_prefix("game-account-").and_then(|s| s.parse::<usize>().ok())
-        .filter(|i| *i < 4).ok_or_else(|| "WebView inválida".into())
+    webview
+        .label()
+        .strip_prefix("game-account-")
+        .and_then(|s| s.parse::<usize>().ok())
+        .filter(|i| *i < 4)
+        .ok_or_else(|| "WebView inválida".into())
 }
 
 #[tauri::command]
-fn webview_eval_result(webview: tauri::Webview, manager: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
-    request_id: u64, value: serde_json::Value, error: Option<String>) -> Result<(), String> {
+fn webview_eval_result(
+    webview: tauri::Webview,
+    manager: tauri::State<'_, Arc<webview_manager::WebviewManager>>,
+    request_id: u64,
+    value: serde_json::Value,
+    error: Option<String>,
+) -> Result<(), String> {
     manager.resolve(game_index(&webview)?, request_id, value, error);
     Ok(())
 }
 
 #[tauri::command]
-fn game_console_message(webview: tauri::Webview, app: AppHandle, message: String) -> Result<(), String> {
+fn game_console_message(
+    webview: tauri::Webview,
+    app: AppHandle,
+    message: String,
+) -> Result<(), String> {
     let index = game_index(&webview)?;
-    if message.len() >= 2_000_000 || !["__PGST__", "__PGIV__", "__PGDLG__", "__RBZOOM__", "__GMSET__", "__GMXHR__"].iter().any(|p| message.starts_with(p)) {
+    if message.len() >= 2_000_000
+        || ![
+            "__PGST__",
+            "__PGIV__",
+            "__PGDLG__",
+            "__RBZOOM__",
+            "__GMSET__",
+            "__GMXHR__",
+        ]
+        .iter()
+        .any(|p| message.starts_with(p))
+    {
         return Err("Mensagem inválida".into());
     }
-    app.emit_to("main", "game:console", json!({"index": index, "message": message})).map_err(|e| e.to_string())
+    app.emit_to(
+        "main",
+        "game:console",
+        json!({"index": index, "message": message}),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -812,19 +1212,13 @@ async fn report_gameplay(
     session: String,
     event: serde_json::Value,
 ) -> Result<(), String> {
-    if session.is_empty() || session.len() > 64 { return Err("Sessão inválida".into()); }
-    if webview.url().ok().and_then(|u| u.host_str().map(str::to_owned)).as_deref() != Some("pokeidle.io") {
-        return Err("Origem inválida".into());
+    if session.is_empty() || session.len() > 64 {
+        return Err("Sessão inválida".into());
     }
-    let label = webview.label().to_string();
-    let index: usize = if let Some(idx_str) = label.strip_prefix("game-account-") {
-        idx_str.parse().unwrap_or(0)
-    } else if let Some(idx_str) = label.strip_prefix("embedded-acc-") {
-        idx_str.parse().unwrap_or(0)
-    } else {
-        0
-    };
-    if views.is_headless(index).await { return Ok(()); }
+    let index = game_index(&webview)?;
+    if views.is_headless(index).await {
+        return Ok(());
+    }
 
     headless.update_telemetry_event(&app, index, &event).await;
     Ok(())
@@ -843,24 +1237,18 @@ async fn report_gameplay_batch(
     if session.is_empty() || session.len() > 64 || events.is_empty() || events.len() > 64 {
         return Err("Lote inválido".into());
     }
-    if webview.url().ok().and_then(|u| u.host_str().map(str::to_owned)).as_deref() != Some("pokeidle.io") {
-        return Err("Origem inválida".into());
-    }
+    let index = game_index(&webview)?;
     if events.iter().map(|e| e.to_string().len()).sum::<usize>() > 1024 * 1024 {
         return Err("Lote muito grande".into());
     }
 
-    let label = webview.label().to_string();
-    let index: usize = if let Some(idx_str) = label.strip_prefix("game-account-") {
-        idx_str.parse().unwrap_or(0)
-    } else if let Some(idx_str) = label.strip_prefix("embedded-acc-") {
-        idx_str.parse().unwrap_or(0)
-    } else {
-        0
-    };
-    if views.is_headless(index).await { return Ok(()); }
+    if views.is_headless(index).await {
+        return Ok(());
+    }
 
-    let has_welcome = events.iter().any(|e| e.get("t").and_then(|v| v.as_str()) == Some("welcome"));
+    let has_welcome = events
+        .iter()
+        .any(|e| e.get("t").and_then(|v| v.as_str()) == Some("welcome"));
     for event in events {
         headless.update_telemetry_event(&app, index, &event).await;
     }
@@ -881,7 +1269,7 @@ pub fn run() {
     let webview_manager = Arc::new(webview_manager::WebviewManager::new());
 
     #[allow(unused_mut)]
-    let mut context=tauri::generate_context!();
+    let mut context = tauri::generate_context!();
     let id = crate::credentials::get_instance_id();
     if id > 1 {
         context.config_mut().identifier = format!("com.pionailo.launcher.instancia{}", id);
@@ -889,11 +1277,12 @@ pub fn run() {
     }
     // An isolated native profile is available only in debug builds for lifecycle tests.
     #[cfg(debug_assertions)]
-    if let Some(path)=std::env::var_os("PIO_NAILO_TEST_PROFILE") {
-        let _=path;
-        context.config_mut().app.windows[0].create=false;
+    if let Some(path) = std::env::var_os("PIO_NAILO_TEST_PROFILE") {
+        let _ = path;
+        context.config_mut().app.windows[0].create = false;
     }
     tauri::Builder::default()
+        .manage(rmt::Rmt::default())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
@@ -979,6 +1368,17 @@ pub fn run() {
             auto_depot::auto_depot_get,
             auto_depot::auto_depot_set,
             sniper::sniper_get_state,
+            rmt::rmt_poll,
+            rmt::rmt_defer,
+            rmt::rmt_packet,
+            rmt::rmt_snapshot,
+            rmt::rmt_open,
+            rmt_sprites::rmt_sprite,
+            rmt::rmt_history_request,
+            rmt::rmt_accounts,
+            rmt::rmt_buy_quote,
+            rmt::rmt_buy_confirm,
+            rmt::rmt_offers_request,
             sniper::sniper_save,
             sniper::sniper_clear_history,
             sniper::sniper_ingest,
@@ -1003,6 +1403,12 @@ pub fn run() {
             blaster_stop,
             blaster_status,
             blaster_send,
+            blaster_boss_catalog,
+            blaster_boss_status,
+            blaster_boss_history,
+            blaster_boss_select_pokemon,
+            blaster_boss_pokemon_configure,
+            blaster_boss_configure,
             blaster_auto_raid_set,
             session_token_save,
             session_token_get,

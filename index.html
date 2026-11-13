@@ -2616,6 +2616,7 @@
   <link rel="stylesheet" href="src/ui/battle-hud.css">
   <link rel="stylesheet" href="src/ui/streamer-points-modal.css">
   <link rel="stylesheet" href="src/ui/depot-settings.css">
+  <link rel="stylesheet" href="src/ui/tool-dialog-themes.css">
   <script src="src/ui/runtime-performance.js"></script>
   <script src="src/ui/capture-value.js"></script>
   <script src="src/ui/auto-depot.js"></script>
@@ -11513,9 +11514,10 @@ return {portal:isPort,live,sk:!!(P.sock&&P.sock.readyState===1),hasBalls,hasInv,
           const stTxt = r.st === 'off' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdOff') + '</span>'
             : r.st === 'wait' ? '<span style="color:var(--cd-muted, #6e7681)">' + t('cdWaiting') + '</span>'
               : '<span style="color:var(--cd-positive, #3fb950)">' + t('cdHunting') + '</span>' + folegoTxt(r); // o pokémon em uso agora tem coluna própria
+          const outlandTier = window.PioBattleHud.outlandTierLabel(stCache[r.i]?.d);
           s += '<tr data-i="' + r.i + '"><td><span class="cd-dot" style="background:' + r.dot + '"></span>' + esc(r.name) + '</td>'
             + '<td>' + (r.lead ? (r.lead.shiny ? '✨ ' : '') + esc(r.lead.name) + ' <b style="color:var(--cd-secondary, #adbac7)">Lv' + nf(r.lead.level) + '</b>' : '—') + '</td>'
-            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + '<div class="cd-outland-tier">' + esc(window.PioBattleHud.outlandTierLabel(stCache[r.i]?.d)) + '</div></td>'
+            + '<td>' + (r.hunt ? esc(r.hunt) + melhorTxt(r) : '—') + (outlandTier ? '<div class="cd-outland-tier">' + esc(outlandTier) + '</div>' : '') + '</td>'
             + '<td style="color:var(--cd-secondary, #adbac7)">' + (r.st === 'on' ? tsec(r.secs) : '—') + '</td>'
             + '<td style="color:' + ((r.gph || 0) < 0 ? 'var(--cd-warning, #f0883e)' : 'var(--cd-positive, #3fb950)') + '">' + (r.st === 'on' ? ncs(r.gph) : '—') + '</td>'
             + '<td style="color:var(--cd-xp, #79c0ff)">' + (r.st === 'on' ? nc(r.xph) : '—') + '</td>'

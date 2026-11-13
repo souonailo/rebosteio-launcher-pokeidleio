@@ -600,6 +600,41 @@
 }
 
 /* History logs */
+.sniper-lottery-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px 24px;
+  flex-wrap: wrap;
+  color: var(--color-text-secondary, #8b949e);
+  font-size: 11.5px;
+  padding: 9px 12px;
+  background: var(--color-bg-base, #0a111c);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+}
+
+.sniper-lottery-summary strong { color: var(--color-text-primary, #f0f6fc); }
+
+.sniper-history-views {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sniper-history-view {
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.12));
+  background: var(--color-bg-base, #0a111c);
+  color: var(--color-text-secondary, #8b949e);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.sniper-history-view span { margin-left: 4px; font-weight: 700; }
+.sniper-history-view.active { color: var(--color-text-primary, #f0f6fc); background: var(--color-surface-2, #1c2e46); border-color: var(--color-accent, #58a6ff); }
+.sniper-history-view:focus-visible { outline: 2px solid var(--color-accent, #58a6ff); outline-offset: 2px; }
+
 .sniper-history-list {
   display: flex;
   flex-direction: column;
@@ -650,6 +685,19 @@
   font-size: 10.5px;
   white-space: nowrap;
 }
+
+.sniper-history-datetime {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 3px;
+  min-width: 165px;
+}
+
+.sniper-history-day { font-size: 10.5px; font-weight: 600; color: var(--color-text-secondary, #8b949e); }
+.sniper-history-result { display: inline-block; font-weight: 700; font-size: 10.5px; margin-right: 7px; }
+.sniper-history-result.won { color: #56d364; }
+.sniper-history-result.lost { color: #ff7b72; }
 
 .sniper-history-desc {
   flex: 1;

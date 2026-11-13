@@ -1,6 +1,6 @@
 [package]
 name = "pio-nailo-rust"
-version = "2.0.74"
+version = "2.0.129"
 description = "Launcher nativo em Rust para PokeIdle multi-contas"
 edition = "2021"
 
@@ -23,6 +23,7 @@ futures-util = "0.3"
 reqwest = { version = "0.12", features = ["json", "cookies", "socks"] }
 url = "2.5"
 base64 = "0.22"
+rusqlite = { version = "0.38", features = ["bundled"] }
 
 
 [target.'cfg(windows)'.dependencies]

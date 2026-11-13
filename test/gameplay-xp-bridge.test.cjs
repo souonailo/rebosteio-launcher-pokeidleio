@@ -25,6 +25,7 @@ async function throughBridge(message) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../rust-migration/src-tauri/src/gameplay_bridge.js'), 'utf8'), {
     window, URL, crypto: { randomUUID: () => 'xp-fixture' }, performance: { now: () => 0 },
     localStorage: { getItem: () => null }, queueMicrotask: () => {},
+    setInterval: () => 0,
     setTimeout: callback => { timers.push(callback); return timers.length; }
   });
   const socket = new window.WebSocket('wss://pokeidle.io/ws');

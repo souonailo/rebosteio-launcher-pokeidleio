@@ -234,6 +234,278 @@
     }
   ];
 
+  // Nomes de fallback para recibos; esta tabela não define quais itens aparecem.
+  const BOSS_REWARD_ITEMS = new Map([
+    [70000, 'Bronze Boss Token'], [70011, 'Key Fragment'], [70012, 'Shiny Stone Fragment'],
+    [70013, 'Bicycle Fragment'], [70014, 'Mega Stone Fragment'],
+    [70015, 'Mega Shiny Stone Fragment'], [70017, 'Shiny Egg Fragment'],
+    [70040, 'Common House'], [70041, 'Uncommon House'], [70042, 'Rare House'],
+    [70043, 'Mythic House'], [70044, 'Legendary House'],
+    [70060, 'Founder Box'], [70061, 'Co-Founder Box'],
+    [70080, 'Common Bicycle'], [70081, 'Uncommon Bicycle'], [70082, 'Rare Bicycle'],
+    [70083, 'Mythic Bicycle'], [70084, 'Legendary Bicycle'],
+    [70090, 'Mystic Ticket'], [70091, 'Mystery Egg P2'], [70092, 'Mystery Egg P3'],
+    [70093, 'Mystery Egg P4'], [70094, 'Shiny Egg'], [70095, 'Safari Ticket']
+  ]);
+  const bossItemSprites = window.PioBossItemSprites || {};
+  const bossItemNameIds = window.PioBossItemNameIds || {};
+  const bossRewardSprites = new Map([...BOSS_REWARD_ITEMS.keys()].map(id => [id, `${id}.png`]));
+  for (const [id, sprite] of Object.entries(bossItemSprites)) {
+    if (/^\d+$/.test(id) && /^\d+\.(?:png|gif|webp)$/.test(sprite)) {
+      bossRewardSprites.set(Number(id), sprite);
+    }
+  }
+  const bossSpritePath = id => {
+    const filename = bossRewardSprites.get(Number(id));
+    return filename && /^\d+\.(?:png|gif|webp)$/.test(filename)
+      ? `src/ui/assets/boss-drops/${filename}` : '';
+  };
+
+  function bossItemIdentity(item) {
+    const suppliedName = typeof item === 'string' ? item : item?.nome || item?.name || '';
+    const id = Number(item?.itemId ?? item?.id ?? bossItemNameIds[String(suppliedName).trim().toLowerCase()] ?? 0);
+    const validId = Number.isSafeInteger(id) && id > 0 ? id : 0;
+    const name = String(suppliedName || BOSS_REWARD_ITEMS.get(validId) || '').trim().slice(0, 100);
+    if (!name && !validId) return null;
+    return { id: validId, name: name || `Item #${validId}` };
+  }
+
+  const BOSS_DROP_CACHE_KEY = 'pio-boss-drop-catalog-v1';
+  let cachedBossDrops = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem(BOSS_DROP_CACHE_KEY) || '[]');
+    if (Array.isArray(stored)) cachedBossDrops = stored.slice(0, 500).filter(item => bossItemIdentity(item));
+  } catch (_) { /* armazenamento indisponível: o catálogo online continua funcionando */ }
+
+  function rememberBossDropCatalog(catalog, fullCatalog) {
+    if (!catalog.length && !fullCatalog.length) return;
+    const drops = new Map();
+    const playableKeys = new Set(catalog.map(boss => String(boss?.key || '')));
+    for (const boss of [...catalog, ...fullCatalog.filter(boss => !playableKeys.has(String(boss?.key || '')))]) {
+      const bossName = String(boss?.nome || boss?.name || boss?.key || '').slice(0, 100);
+      for (const drop of Array.isArray(boss?.drops) ? boss.drops : []) {
+        const item = bossItemIdentity(drop);
+        if (!item) continue;
+        const key = item.id ? `id:${item.id}` : `name:${item.name.toLowerCase()}`;
+        const previous = drops.get(key);
+        if (previous) {
+          if (bossName && !previous.bosses.includes(bossName)) previous.bosses.push(bossName);
+        } else drops.set(key, { ...item, bosses: bossName ? [bossName] : [] });
+      }
+    }
+    if (!drops.size) return;
+    const next = Array.from(drops.values());
+    if (JSON.stringify(next) === JSON.stringify(cachedBossDrops)) return;
+    cachedBossDrops = next;
+    try { localStorage.setItem(BOSS_DROP_CACHE_KEY, JSON.stringify(next)); } catch (_) { /* sem persistência */ }
+  }
+
+  function bossInventoryQuantity(state, id) {
+    if (!id || state?.inventoryKnown === false) return null;
+    const stock = state?.invMap;
+    if (!stock || typeof stock !== 'object') return null;
+    const raw = stock[String(id)];
+    if (raw == null) return state?.inventoryKnown === true ? 0 : null;
+    const qty = Number(raw);
+    return Number.isFinite(qty) && qty >= 0 ? Math.floor(qty) : null;
+  }
+
+  const BOSS_ITEM_FAMILY_ORDER = { tm: 0, ticket: 1, stone: 2, other: 3 };
+  const BOSS_ITEM_FAMILY_LABEL = { tm: 'TMs', ticket: 'Tickets', stone: 'Stones', other: 'Outros drops de boss' };
+  function bossItemFamily(name) {
+    const normalized = String(name || '').toLowerCase();
+    if (/\b(?:tm|hm)\b|\bdisk\b|\bdisco\b/.test(normalized)) return 'tm';
+    if (/\bticket\b|\bbilhete\b|\bingresso\b/.test(normalized)) return 'ticket';
+    if (/\bstone\b|\bpedra\b/.test(normalized)) return 'stone';
+    return 'other';
+  }
+
+  function collectBossRewardTelemetry(state) {
+    const catalog = Array.isArray(state?.bossesJogaveis) ? state.bossesJogaveis : [];
+    const fullCatalog = Array.isArray(state?.bossesCatalogo) ? state.bossesCatalogo : [];
+    rememberBossDropCatalog(catalog, fullCatalog);
+    const rows = new Map();
+    const add = (drop, quantity = 0, fromBoss = '') => {
+      const item = bossItemIdentity(drop);
+      if (!item) return;
+      const key = item.id ? `id:${item.id}` : `name:${item.name.toLowerCase()}`;
+      const existing = rows.get(key) || { ...item, qty: 0, bosses: new Set() };
+      existing.qty += Number.isFinite(+quantity) && +quantity > 0 ? +quantity : 0;
+      if (fromBoss) existing.bosses.add(String(fromBoss));
+      rows.set(key, existing);
+    };
+    for (const item of cachedBossDrops) {
+      add(item);
+      const key = item.id ? `id:${item.id}` : `name:${item.name.toLowerCase()}`;
+      for (const boss of Array.isArray(item.bosses) ? item.bosses : []) rows.get(key)?.bosses.add(boss);
+    }
+    for (const boss of catalog) {
+      const name = String(boss?.nome || boss?.name || boss?.key || '');
+      for (const drop of Array.isArray(boss?.drops) ? boss.drops : []) add(drop, 0, name);
+    }
+    for (const drop of Array.isArray(state?.bossDrops) ? state.bossDrops : []) {
+      add(drop, drop.qty ?? drop.qtd ?? 0, drop.bossName || drop.bossKey || '');
+    }
+    return Array.from(rows.values()).map(row => ({
+      id: row.id, name: row.name, qty: row.qty, owned: bossInventoryQuantity(state, row.id),
+      bosses: Array.from(row.bosses), family: bossItemFamily(row.name),
+      sprite: bossSpritePath(row.id)
+    })).sort((a, b) => BOSS_ITEM_FAMILY_ORDER[a.family] - BOSS_ITEM_FAMILY_ORDER[b.family]
+      || (a.id && b.id ? a.id - b.id : a.name.localeCompare(b.name, 'pt-BR')));
+  }
+
+  function battleTime(ms) {
+    const seconds = Math.max(0, Math.floor(ms / 1000));
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  }
+
+  function updateBossTracker(hud, state, index) {
+    const live = state?.bossLive || null;
+    const isHeadless = PioBattleHud.isBlasterActive(index);
+    const show = isHeadless && live?.inArena === true;
+    const historyButton = hud.querySelector('.bsh-boss-drops-more');
+    if (historyButton) setHudAttribute(historyButton, 'title', live?.durationMs != null
+      ? `Última batalha · ${battleTime(live.durationMs)} · Ver histórico` : 'Ver histórico de batalhas');
+    hud.classList.toggle('has-live-boss', show);
+    hud.classList.toggle('has-boss-catalog', isHeadless);
+    const battle = hud.querySelector('.bsh-boss-live');
+    if (battle) {
+      battle.hidden = !show;
+      if (show) {
+        const bossName = String(live?.bossName || live?.bossKey || 'Boss selecionado');
+        const inArena = live?.inArena === true;
+        const currentHp = Number(live?.currentHp);
+        const maxHp = Number(live?.maxHp);
+        const hpKnown = inArena && live?.currentHp != null && Number.isFinite(currentHp) && Number.isFinite(maxHp) && maxHp > 0;
+        const percent = hpKnown ? Math.max(0, Math.min(100, (currentHp / maxHp) * 100)) : null;
+        const result = live?.winner === 'victory' || live?.status === 'victory' ? 'Vitória confirmada'
+          : live?.winner === 'defeat' || live?.status === 'defeat' ? 'Derrota confirmada' : '';
+        const status = inArena ? 'Batalha ao vivo' : result || (live?.uncertain ? 'Entrada sem confirmação — verifique o jogo'
+          : live?.pending ? 'Aguardando confirmação da entrada'
+          : live?.status === 'completed' ? 'Meta atingida'
+          : live?.status === 'error' || live?.status === 'save_error' ? 'Verificar batalha' : 'Aguardando arena');
+        setSocialText(battle.querySelector('.bsh-boss-name'), bossName);
+        setSocialText(battle.querySelector('.bsh-boss-status'), status);
+        const turn = Number(live?.turn);
+        const done = Number(live?.completed);
+        const limit = Number(live?.limit);
+        const tokens = live?.tokenBalance == null ? null : Number(live.tokenBalance);
+        const elapsed = live?.durationMs ?? (inArena && live?.startedAtMs != null ? Date.now() - live.startedAtMs : null);
+        const details = [elapsed == null ? null : `Tempo ${battleTime(elapsed)}`, Number.isInteger(turn) && turn > 0 && inArena ? `Ataques ${turn}` : null,
+          Number.isFinite(done) && done >= 0 ? `Feitos ${fmtNumber(done)}${['quantity', 'demand'].includes(live?.mode) && Number.isFinite(limit) && limit > 0 ? `/${fmtNumber(limit)}` : ''}` : null,
+          Number.isFinite(tokens) && tokens >= 0 ? `${fmtNumber(tokens)} tokens` : null].filter(Boolean).join(' · ');
+        setSocialText(battle.querySelector('.bsh-boss-details'), details || 'Aguardando dados do servidor');
+        const fill = battle.querySelector('.bsh-boss-hp-fill');
+        const hpText = battle.querySelector('.bsh-boss-hp-value');
+        const bar = battle.querySelector('.bsh-boss-hp');
+        const hpRow = battle.querySelector('.bsh-boss-hp-row');
+        if (hpRow) hpRow.hidden = !inArena;
+        if (bar) bar.hidden = !hpKnown;
+        if (hpKnown) {
+          setHudStyle(fill, 'transform', `scaleX(${(percent / 100).toFixed(3)})`);
+          setSocialText(hpText, `${fmtNumber(currentHp)} / ${fmtNumber(maxHp)} HP`);
+        } else if (inArena) {
+          setSocialText(hpText, 'Aguardando dados');
+        }
+
+        const resultEl = battle.querySelector('.bsh-boss-result');
+        if (resultEl) {
+          const terminal = !inArena && !!result;
+          resultEl.hidden = !terminal;
+          setHudAttribute(resultEl, 'data-result', result.startsWith('Vitória') ? 'victory' : result ? 'defeat' : '');
+          if (terminal) {
+            const rewards = live?.lastBattleDrops;
+            let rewardText;
+            if (!Array.isArray(rewards)) rewardText = 'Recompensas não informadas';
+            else if (rewards.length === 0) rewardText = 'Sem itens nesta batalha';
+            else {
+              const lines = rewards.slice(0, 3).map(item => {
+                const qty = Number(item?.qty ?? item?.qtd);
+                const name = String(item?.name || item?.nome || (item?.id ? `Item #${item.id}` : 'Item'));
+                return `${qty > 0 ? `+${fmtNumber(qty)} ` : ''}${name}`;
+              });
+              if (rewards.length > 3) lines.push(`+${rewards.length - 3} outros`);
+              rewardText = lines.join(' · ');
+            }
+            setSocialText(resultEl, rewardText);
+          }
+        }
+      }
+    }
+
+    const section = hud.querySelector('.bsh-boss-drop-tracker');
+    if (!section) return;
+    section.hidden = !isHeadless;
+    if (section.hidden) return;
+    const rows = collectBossRewardTelemetry(state);
+    const familyCounts = rows.reduce((counts, row) => {
+      counts[row.family] = (counts[row.family] || 0) + 1;
+      return counts;
+    }, {});
+    const visualRows = Object.values(familyCounts).reduce((total, count) => total + Math.ceil(count / 2), 0);
+    section.classList.toggle('has-overflow-items', visualRows > (hud.clientHeight < 360 ? 4 : hud.clientHeight < 430 ? 5 : 6));
+    const list = section.querySelector('.bsh-boss-drop-items');
+    if (!list) return;
+    const empty = section.querySelector('.bsh-boss-drops-empty');
+    if (empty) {
+      empty.hidden = rows.length > 0;
+      setSocialText(empty, 'Aguardando tabela de drops dos bosses');
+    }
+    const signature = JSON.stringify(rows.map(r => [r.id, r.name, r.qty, r.owned, r.sprite, r.family, r.bosses]));
+    if (list.dataset.signature === signature) return;
+    list.dataset.signature = signature;
+    const scrollTop = list.scrollTop;
+    list.replaceChildren();
+    let group = null;
+    let activeFamily = '';
+    for (const row of rows) {
+      if (row.family !== activeFamily) {
+        activeFamily = row.family;
+        group = document.createElement('div');
+        group.className = 'bsh-boss-drop-group';
+        group.dataset.family = activeFamily;
+        group.setAttribute('role', 'group');
+        group.setAttribute('aria-label', BOSS_ITEM_FAMILY_LABEL[activeFamily]);
+        list.appendChild(group);
+      }
+      const card = document.createElement('div');
+      card.className = 'bsh-drop-card bsh-boss-drop-entry';
+      card.setAttribute('role', 'listitem');
+      const ownedText = row.owned == null ? '—' : fmtNumber(row.owned);
+      card.setAttribute('aria-label', `${row.name}: ${ownedText} no inventário, ${fmtNumber(row.qty)} obtidos na sessão`);
+      card.title = `${row.name}\nNo inventário: ${ownedText}\nNa sessão: +${fmtNumber(row.qty)}${row.bosses.length ? `\nBosses: ${row.bosses.join(', ')}` : ''}`;
+      const badge = document.createElement('span');
+      badge.className = 'bsh-drop-badge bsh-boss-drop-badge';
+      badge.textContent = `+${fmtNumber(row.qty)}`;
+      if (row.qty <= 0) badge.style.display = 'none';
+      const sprite = document.createElement('span');
+      sprite.className = 'bsh-drop-icon-wrap bsh-boss-drop-sprite';
+      if (row.sprite) {
+        const img = document.createElement('img');
+        img.className = 'bsh-drop-icon';
+        img.src = row.sprite;
+        img.alt = row.name;
+        img.loading = 'lazy';
+        img.onerror = () => { img.hidden = true; sprite.textContent = '✦'; };
+        sprite.appendChild(img);
+      } else {
+        sprite.textContent = '✦';
+      }
+      const label = document.createElement('span');
+      label.className = 'bsh-boss-drop-name';
+      label.textContent = row.name;
+      const qty = document.createElement('span');
+      qty.className = 'bsh-drop-qty bsh-boss-drop-number';
+      qty.textContent = `x${ownedText}`;
+      const meta = document.createElement('span');
+      meta.className = 'bsh-boss-drop-meta';
+      meta.append(label, qty);
+      card.append(badge, sprite, meta);
+      group.appendChild(card);
+    }
+    list.scrollTop = scrollTop;
+  }
+
   const dropBaselines = new Map();
 
   function resolveItemTelemetry(def, state, panelIndex) {
@@ -472,6 +744,9 @@
         pendingCount: channels.filter(channel => !channel.verified).length };
     },
     outlandTierLabel(state) {
+      const hunt = String(state?.hunt || '').toLowerCase().trim().replace(/[ -]+/g, '_');
+      const outlandHunt = /^(?:brave|tribal|ancient|war|furious|enigmatic|charged|magnetic|evil|freezing|psy|heavy|milch|roll|hard|brute|enraged|dark|trickmaster|banshee|taekwondo)_/.test(hunt);
+      if (!outlandHunt || state?.inCenter === true || state?.bossLive?.inArena === true) return '';
       const tier = state?.outlandTier;
       return state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100
         ? `Outland · tier ${tier}` : 'Outland · aguardando confirmação';
@@ -837,10 +1112,31 @@
             <div class="bsh-outland-tier" hidden></div>
           </div>
         </div>
+        <div class="bsh-boss-live" hidden aria-live="polite" aria-label="Batalha contra boss nesta conta">
+          <div class="bsh-boss-live-top">
+            <strong class="bsh-boss-name">Boss selecionado</strong>
+            <span class="bsh-boss-status">Aguardando arena</span>
+          </div>
+          <div class="bsh-boss-hp-row" hidden>
+            <span>Vida do boss</span>
+            <strong class="bsh-boss-hp-value">Aguardando dados</strong>
+          </div>
+          <div class="bsh-boss-hp" hidden aria-label="Barra de vida restante do boss">
+            <div class="bsh-boss-hp-fill"></div>
+          </div>
+          <div class="bsh-boss-details">Aguardando dados do servidor</div>
+          <div class="bsh-boss-result" hidden aria-live="polite"></div>
+        </div>
         <div class="bsh-controls-row">
           <button type="button" class="bsh-pause-btn">Pausar animação</button>
           <button type="button" class="bsh-switch-mode-btn">
             ${isBlaster ? 'Usar painel de batalha' : 'Ativar Headless'}
+          </button>
+          <button type="button" class="bsh-open-game-btn">
+            Abrir jogo
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
+              <path d="M7 17L17 7M17 7H7M17 7V17"/>
+            </svg>
           </button>
         </div>
         <div class="bsh-divider"></div>
@@ -875,13 +1171,19 @@
             </div>
           `).join('')}
         </div>
-        <button type="button" class="bsh-open-game-btn">
-          Abrir jogo
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3">
-            <path d="M7 17L17 7M17 7H7M17 7V17"/>
-          </svg>
-        </button>
+        <div class="bsh-boss-drop-tracker" aria-label="Catálogo de itens de boss desta conta" hidden>
+          <div class="bsh-boss-drop-items" role="list" aria-label="Itens de boss e quantidades no inventário desta conta"></div>
+          <p class="bsh-boss-drops-empty" hidden>Aguardando catálogo de bosses da conta</p>
+          <button type="button" class="bsh-boss-drops-more">Ver histórico</button>
+        </div>
       `;
+
+      const main = document.createElement('div');
+      main.className = 'bsh-main';
+      for (const child of [...hud.children]) {
+        if (!child.matches('.bsh-social, .bsh-boss-drop-tracker')) main.appendChild(child);
+      }
+      hud.insertBefore(main, hud.querySelector('.bsh-boss-drop-tracker'));
 
       // Eventos internos do HUD
       hud.querySelector('.bsh-twitch-points').onclick = event => window.PioStreamerPoints?.open(i, 'twitch', event.currentTarget);
@@ -890,6 +1192,7 @@
       hud.querySelector('.bsh-kick-points').onmouseenter = event => window.PioStreamerPoints?.preview(i, 'kick', event.currentTarget);
       hud.querySelector('.bsh-twitch-points').onmouseleave = () => window.PioStreamerPoints?.leave();
       hud.querySelector('.bsh-kick-points').onmouseleave = () => window.PioStreamerPoints?.leave();
+      hud.querySelector('.bsh-boss-drops-more').onclick = () => window.PioAutoBossPanel?.openHistory?.(i);
       const pauseBtn = hud.querySelector('.bsh-pause-btn');
       pauseBtn.onclick = () => {
         this.togglePause(i);
@@ -988,7 +1291,10 @@
       }
 
       state = window.PioInventory.project(state);
+      const switchModeBtn = hud.querySelector('.bsh-switch-mode-btn');
+      if (switchModeBtn) setSocialText(switchModeBtn, this.isBlasterActive(i) ? 'Usar painel de batalha' : 'Ativar Headless');
       updateHeadlessIndicators(hud, state);
+      updateBossTracker(hud, state, i);
       const a = (state && state.a) || {};
 
       // 1. Líder do Jogador
@@ -1013,7 +1319,11 @@
       }
 
       // 2. Caça Atual
-      const huntRaw = (state && state.hunt) || '';
+      const bossLive = state?.bossLive;
+      const bossInArena = this.isBlasterActive(i) && bossLive?.inArena === true;
+      const huntRaw = bossInArena ? String(bossLive.bossName || bossLive.bossKey || '') : ((state && state.hunt) || '');
+      const huntTag = hud.querySelector('.bsh-fighter-hunt .bsh-fighter-tag');
+      if (huntTag) setSocialText(huntTag, bossInArena ? 'BOSS NA ARENA' : 'CAÇA ATUAL');
       const huntDex = resolveDexFromHunt(huntRaw);
       const huntSpriteEl = hud.querySelector('.bsh-hunt-sprite');
       const huntNameEl = hud.querySelector('.bsh-hunt-name');
@@ -1035,13 +1345,13 @@
 
       const tierEl = hud.querySelector('.bsh-outland-tier');
       if (tierEl) {
-        const tierHidden = !this.isBlasterActive(i);
+        const text = this.outlandTierLabel(state);
+        const tierHidden = !this.isBlasterActive(i) || !text;
         if (tierEl.hidden !== tierHidden) tierEl.hidden = tierHidden;
         const tier = state?.outlandTier;
         const confirmed = state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100;
-        const text = this.outlandTierLabel(state);
         if (tierEl.textContent !== text) tierEl.textContent = text;
-        setHudTitle(tierEl, confirmed
+        setHudTitle(tierEl, !text ? '' : confirmed
           ? 'Tier de Outland confirmada pelo servidor para esta conta.'
           : 'Aguardando o servidor confirmar a tier nesta conexão.');
       }
@@ -1111,6 +1421,9 @@
 
   PioBattleHud.IMPORTANT_DROPS = IMPORTANT_DROPS;
   PioBattleHud.resolveItemTelemetry = resolveItemTelemetry;
+  PioBattleHud.collectBossRewardTelemetry = collectBossRewardTelemetry;
+  PioBattleHud.BOSS_REWARD_ITEMS = BOSS_REWARD_ITEMS;
+  PioBattleHud.BOSS_ITEM_SPRITES = bossItemSprites;
   PioBattleHud.formatKickBonus = formatKickBonus;
 
   window.PioBattleHud = PioBattleHud;

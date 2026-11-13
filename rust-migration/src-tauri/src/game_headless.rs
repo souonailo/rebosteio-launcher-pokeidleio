@@ -2,10 +2,11 @@ use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::{mpsc, Mutex, RwLock};
 
 use tokio_tungstenite::tungstenite::protocol::Message;
 
@@ -13,6 +14,8 @@ use tokio_tungstenite::tungstenite::protocol::Message;
 #[serde(rename_all = "camelCase")]
 pub struct PokemonTeamMember {
     pub id: Option<serde_json::Value>,
+    #[serde(default)]
+    pub slot: Option<u32>,
     pub sid: Option<u32>,
     pub name: Option<String>,
     pub level: Option<u32>,
@@ -68,6 +71,18 @@ pub struct HeadlessState {
     pub raw_drops: serde_json::Map<String, serde_json::Value>,
     #[serde(default)]
     pub drops: serde_json::Map<String, serde_json::Value>,
+    /// Playable boss metadata including entry cost and possible drops, supplied by welcome.
+    #[serde(default)]
+    pub bosses_jogaveis: Vec<serde_json::Value>,
+    /// Full boss listing supplied by welcome, including bosses without a playable sheet.
+    #[serde(default)]
+    pub bosses_catalogo: Vec<serde_json::Value>,
+    #[serde(default)]
+    pub boss_live: crate::auto_boss::BossLive,
+    #[serde(default)]
+    pub boss_drops: Vec<crate::auto_boss::BossDrop>,
+    #[serde(skip)]
+    pub boss_history_pending: Vec<crate::auto_boss::BossHistoryRecord>,
     pub gold: i64,
     pub diamonds: i64,
     #[serde(default)]
@@ -166,6 +181,11 @@ impl HeadlessState {
             inv_map: Default::default(),
             raw_drops: Default::default(),
             drops: Default::default(),
+            bosses_jogaveis: Vec::new(),
+            bosses_catalogo: Vec::new(),
+            boss_live: Default::default(),
+            boss_drops: Vec::new(),
+            boss_history_pending: Vec::new(),
             gold: 0,
             diamonds: 0,
             gemas: 0,
@@ -214,55 +234,340 @@ pub struct BlasterHandle {
 #[derive(Default)]
 struct WeeklyRaidGuard {
     attempted_edition: Option<String>,
-    attempted_at: u64,
     confirmed_edition: Option<String>,
+    confirmed_cycle: Option<u64>,
+    owner_cid: Option<String>,
+    owner_nick: Option<String>,
+    had_token: bool,
+    info_pending: bool,
+    next_info_at: u64,
+    info_failures: u32,
+    active_cycle: Option<u64>,
 }
 
 impl WeeklyRaidGuard {
+    // The weekly registration cycle changes on Tuesday at 12:00 in Brasília
+    // (UTC-3), even if the previous edition was already confirmed. Anchor:
+    // 1970-01-06 15:00 UTC = Tuesday 12:00 BRT.
+    const WEEK_MS: u64 = 7 * 86_400_000;
+    const TUESDAY_NOON_BRT_UTC_MS: u64 = 5 * 86_400_000 + 15 * 3_600_000;
+    const INFO_TIMEOUT_MS: u64 = 60_000;
+    const INFO_REFRESH_MS: u64 = 5 * 60_000;
+
+    fn brazil_cycle(now_ms: u64) -> u64 {
+        now_ms.saturating_sub(Self::TUESDAY_NOON_BRT_UTC_MS) / Self::WEEK_MS
+    }
+
+    fn reserve_bronze_for_unconfirmed_cycle(&self, enabled: bool, now_ms: u64) -> bool {
+        enabled && self.confirmed_cycle != Some(Self::brazil_cycle(now_ms))
+    }
+
+    fn check_owner(&mut self, state: &HeadlessState) {
+        let changed = if let (Some(old), false) = (self.owner_cid.as_deref(), state.cid.is_empty())
+        {
+            old != state.cid
+        } else if let Some(old) = self.owner_nick.as_deref() {
+            !old.eq_ignore_ascii_case(&state.name)
+        } else {
+            false
+        };
+        if changed {
+            *self = Self::default();
+        }
+        if !state.cid.is_empty() {
+            self.owner_cid = Some(state.cid.clone());
+        }
+        if !state.name.is_empty() {
+            self.owner_nick = Some(state.name.clone());
+        }
+    }
+
+    fn note_confirmed(&mut self, edition_id: &str, edition_opens: Option<u64>, now_ms: u64) {
+        // Repeated packets from the previous edition must never mark a new
+        // Brazil week as confirmed just because the clock crossed Tuesday.
+        if self.confirmed_edition.as_deref() != Some(edition_id) {
+            self.confirmed_edition = Some(edition_id.to_string());
+            self.confirmed_cycle = Some(Self::brazil_cycle(edition_opens.unwrap_or(now_ms)));
+        }
+    }
+
+    fn retry_info_after_failure(&mut self, now_ms: u64) {
+        self.info_pending = false;
+        self.info_failures = self.info_failures.saturating_add(1).min(5);
+        // 1, 2, 4, 8, then 15 minutes, checked on the 1s supervisor tick.
+        let delay = (60_000u64 << self.info_failures.saturating_sub(1)).min(15 * 60_000);
+        self.next_info_at = now_ms.saturating_add(delay);
+    }
+
+    fn should_request_info(&mut self, state: &HeadlessState, enabled: bool, now_ms: u64) -> bool {
+        self.check_owner(state);
+        // Inventory is an authoritative complete gameplay.items map. Neither
+        // wild loot events nor the local clock may manufacture a token.
+        let has_token = state.inventory_known
+            && state
+                .inv_map
+                .get("70000")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+                >= 1;
+        if !enabled || !has_token {
+            self.had_token = false;
+            self.info_pending = false;
+            self.next_info_at = 0;
+            return false;
+        }
+        if !self.had_token {
+            // A token may have arrived after hours without any balance.
+            // Check immediately on the next 1s tick, regardless of prior
+            // timeout/backoff incurred before it was consumed.
+            self.had_token = true;
+            self.info_pending = false;
+            self.info_failures = 0;
+            self.next_info_at = 0;
+        }
+
+        let cycle = Self::brazil_cycle(now_ms);
+        if self.active_cycle != Some(cycle) {
+            self.active_cycle = Some(cycle);
+            self.info_pending = false;
+            self.info_failures = 0;
+            self.next_info_at = 0;
+        }
+        if state.raid_inscrito == Some(true) {
+            if let (Some(edition), Some(opens)) =
+                (state.raid_edicao.as_deref(), state.raid_inscricoes_de)
+            {
+                self.note_confirmed(edition, Some(opens), now_ms);
+            }
+        }
+        if self.confirmed_cycle == Some(cycle) {
+            return false;
+        }
+
+        if self.info_pending {
+            if now_ms >= self.next_info_at {
+                self.retry_info_after_failure(now_ms);
+            }
+            return false;
+        }
+        if now_ms < self.next_info_at {
+            return false;
+        }
+        self.info_pending = true;
+        self.next_info_at = now_ms.saturating_add(Self::INFO_TIMEOUT_MS);
+        true
+    }
+
+    fn observe_info_response(&mut self, message: &serde_json::Value, now_ms: u64) {
+        let m = message.get("data").unwrap_or(message);
+        if m.get("recusa").is_some_and(|v| !v.is_null()) {
+            if self.info_pending {
+                self.retry_info_after_failure(now_ms);
+            }
+            return;
+        }
+        let Some(edition) = m.get("edicao") else {
+            if self.info_pending {
+                self.retry_info_after_failure(now_ms);
+            }
+            return;
+        };
+        let Some(id) = edition.get("id").and_then(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .or_else(|| v.as_u64().map(|n| n.to_string()))
+        }) else {
+            if self.info_pending {
+                self.retry_info_after_failure(now_ms);
+            }
+            return;
+        };
+        self.info_pending = false;
+        self.info_failures = 0;
+        self.next_info_at = now_ms.saturating_add(Self::INFO_REFRESH_MS);
+        if m["eu"]["inscrito"] == true {
+            self.note_confirmed(
+                &id,
+                edition.get("inscricoesDe").and_then(|v| v.as_u64()),
+                now_ms,
+            );
+        } else if self.confirmed_edition.as_deref() != Some(id.as_str()) {
+            // A server-observed change of edition overrides the local cycle
+            // estimate. A new, unregistered edition must become eligible.
+            self.confirmed_cycle = None;
+        }
+    }
+
     fn should_enroll(&mut self, message: &serde_json::Value, tokens: u64, local_now: u64) -> bool {
         let m = message.get("data").unwrap_or(message);
-        if m["recusa"].is_string() { return false; }
-        let Some(edition) = m.get("edicao") else { return false; };
-        let Some(id) = edition.get("id").filter(|v| v.is_string() || v.is_u64()) else { return false; };
-        let id = if let Some(s) = id.as_str() { s.to_string() } else { id.to_string() };
-        if m["eu"]["inscrito"] == true || m["acao"] == "inscreveu" {
-            self.confirmed_edition = Some(id);
+        if m["recusa"].is_string() {
             return false;
         }
-        if m["eu"]["inscrito"] != false || self.confirmed_edition.as_deref() == Some(id.as_str()) || tokens < 1 {
+        let Some(edition) = m.get("edicao") else {
             return false;
-        }
-        let Some(server_now) = m["agora"].as_u64() else { return false; };
-        let in_window = if let (Some(opens), Some(closes)) = (
-            edition["inscricoesDe"].as_u64(), edition["inscricoesAte"].as_u64()
-        ) {
-            opens <= server_now && server_now < closes
-        } else {
-            // Horário oficial em Brasília (UTC-3): terça 12h até segunda 16h.
-            let brazil_ms = server_now.saturating_sub(3 * 60 * 60_000);
-            let weekday = (brazil_ms / 86_400_000 + 4) % 7; // domingo = 0
-            let hour = (brazil_ms / 3_600_000) % 24;
-            match weekday {
-                1 => hour < 16,
-                2 => hour >= 12,
-                _ => true,
-            }
         };
-        if !in_window { return false; }
-        if self.attempted_edition.as_deref() == Some(id.as_str())
-            && local_now.saturating_sub(self.attempted_at) < 5 * 60_000 {
+        let Some(id) = edition.get("id").filter(|v| v.is_string() || v.is_u64()) else {
+            return false;
+        };
+        let id = if let Some(s) = id.as_str() {
+            s.to_string()
+        } else {
+            id.to_string()
+        };
+        if m["eu"]["inscrito"] == true {
+            self.note_confirmed(
+                &id,
+                edition.get("inscricoesDe").and_then(|v| v.as_u64()),
+                local_now,
+            );
+            return false;
+        }
+        if m["acao"] == "inscreveu" {
+            return false;
+        }
+        if m["eu"]["inscrito"] != false
+            || self.confirmed_edition.as_deref() == Some(id.as_str())
+            || tokens < 1
+        {
+            return false;
+        }
+        let Some(server_now) = m["agora"].as_u64() else {
+            return false;
+        };
+        let in_window = if let (Some(opens), Some(closes)) = (
+            edition["inscricoesDe"].as_u64(),
+            edition["inscricoesAte"].as_u64(),
+        ) {
+            opens < closes && opens <= server_now && server_now < closes
+        } else {
+            // The game's current edition must supply its actual registration window.
+            false
+        };
+        if !in_window {
+            return false;
+        }
+        if self.attempted_edition.as_deref() == Some(id.as_str()) {
             return false;
         }
         self.attempted_edition = Some(id);
-        self.attempted_at = local_now;
         true
     }
 }
 
+/// Persist an intent before dispatch, so a lost reply or restart cannot spend
+/// another token for the same character and edition.
+#[derive(Default)]
+struct WeeklyRaidAttempts {
+    file: PathBuf,
+    attempts: HashMap<String, String>,
+    writable: bool,
+}
+
+impl WeeklyRaidAttempts {
+    fn load(file: PathBuf) -> Self {
+        let (attempts, writable) = match std::fs::read(&file) {
+            Ok(bytes) => match serde_json::from_slice(&bytes) {
+                Ok(attempts) => (attempts, true),
+                Err(error) => {
+                    eprintln!("weekly raid attempts unreadable: {error}");
+                    (HashMap::new(), false)
+                }
+            },
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (HashMap::new(), true),
+            Err(error) => {
+                eprintln!("weekly raid attempts unavailable: {error}");
+                (HashMap::new(), false)
+            }
+        };
+        Self { file, attempts, writable }
+    }
+
+    fn mark(&mut self, character: &str, edition: &str) -> Result<bool, String> {
+        if !self.writable || character.is_empty() || edition.is_empty() {
+            return Err("Diário da inscrição semanal indisponível".into());
+        }
+        if self.attempts.get(character).is_some_and(|saved| saved == edition) {
+            return Ok(false);
+        }
+        let mut next = self.attempts.clone();
+        next.insert(character.to_owned(), edition.to_owned());
+        let dir = self.file.parent().ok_or("Caminho inválido para o diário semanal")?;
+        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+        let staged = self.file.with_extension("json.tmp");
+        std::fs::write(&staged, serde_json::to_vec(&next).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        replace_weekly_raid_journal(&staged, &self.file).map_err(|e| e.to_string())?;
+        self.attempts = next;
+        Ok(true)
+    }
+}
+
+#[cfg(windows)]
+fn replace_weekly_raid_journal(from: &Path, to: &Path) -> std::io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn MoveFileExW(existing: *const u16, replacement: *const u16, flags: u32) -> i32;
+    }
+    let from_w: Vec<u16> = from.as_os_str().encode_wide().chain(Some(0)).collect();
+    let to_w: Vec<u16> = to.as_os_str().encode_wide().chain(Some(0)).collect();
+    if unsafe { MoveFileExW(from_w.as_ptr(), to_w.as_ptr(), 0x1 | 0x8) } == 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
+}
+
+#[cfg(not(windows))]
+fn replace_weekly_raid_journal(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::rename(from, to)
+}
+
+fn load_auto_raid_enabled(file: &Path) -> bool {
+    match std::fs::read(file) {
+        Ok(bytes) => match serde_json::from_slice::<serde_json::Value>(&bytes) {
+            Ok(saved) => saved.get("enabled").and_then(|value| value.as_bool()).unwrap_or(false),
+            Err(error) => {
+                eprintln!("weekly raid configuration invalid: {error}");
+                false
+            }
+        },
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(error) => {
+            eprintln!("weekly raid configuration unavailable: {error}");
+            false
+        }
+    }
+}
+
+fn save_auto_raid_enabled(file: &Path, enabled: bool) -> Result<(), String> {
+    std::fs::create_dir_all(file.parent().ok_or("Caminho inválido para o registro semanal")?)
+        .map_err(|error| error.to_string())?;
+    let staged = file.with_extension("json.tmp");
+    std::fs::write(&staged, json!({"enabled": enabled}).to_string())
+        .map_err(|error| error.to_string())?;
+    replace_weekly_raid_journal(&staged, file).map_err(|error| error.to_string())
+}
+
 #[cfg(test)]
 mod weekly_raid_tests {
-    use super::WeeklyRaidGuard;
+    use super::{load_auto_raid_enabled, parse_game_message, save_auto_raid_enabled, HeadlessState, WeeklyRaidAttempts, WeeklyRaidGuard};
     use serde_json::json;
+
+    fn cycle_start(week: u64) -> u64 {
+        WeeklyRaidGuard::TUESDAY_NOON_BRT_UTC_MS + week * WeeklyRaidGuard::WEEK_MS
+    }
+
+    fn fixture(tokens: Option<u64>) -> HeadlessState {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        state.cid = "character-0".into();
+        state.live = true;
+        if let Some(tokens) = tokens {
+            state.inventory_known = true;
+            state.inv_map.insert("70000".into(), json!(tokens));
+        }
+        state
+    }
 
     #[test]
     fn weekly_raid_uses_server_state_and_throttles_attempts() {
@@ -276,7 +581,7 @@ mod weekly_raid_tests {
         assert!(!guard.should_enroll(&packet, 0, 1));
         assert!(guard.should_enroll(&packet, 1, 1));
         assert!(!guard.should_enroll(&packet, 1, 2));
-        assert!(guard.should_enroll(&packet, 1, 300_002));
+        assert!(!guard.should_enroll(&packet, 1, 300_002));
         let confirmed = json!({"t":"raid","edicao":{"id":"week-42"},"eu":{"inscrito":true}});
         assert!(!guard.should_enroll(&confirmed, 1, 300_003));
         assert!(!guard.should_enroll(&packet, 1, 1_000_000));
@@ -296,9 +601,212 @@ mod weekly_raid_tests {
             json!({"t":"raid","agora":now,"edicao":{"id":"b","inscricoesDe":now-20,"inscricoesAte":now-10},"eu":{"inscrito":false}}),
             json!({"t":"raid","agora":now,"edicao":{"id":"c","inscricoesDe":now-20,"inscricoesAte":now+20}}),
             json!({"t":"raid","agora":now,"edicao":{"id":"d","inscricoesDe":now-20,"inscricoesAte":now+20},"eu":{"inscrito":false},"recusa":"raid.recusa.semToken"}),
+            json!({"t":"raid","agora":now,"edicao":{"id":"e"},"eu":{"inscrito":false}}),
         ] {
-            assert!(!guard.should_enroll(&packet, 1, now), "rejected packet: {packet}");
+            assert!(
+                !guard.should_enroll(&packet, 1, now),
+                "rejected packet: {packet}"
+            );
         }
+    }
+
+    #[test]
+    fn registration_intent_survives_restart_and_is_scoped_by_character_and_edition() {
+        let unique = format!("pio-weekly-raid-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let dir = std::env::temp_dir().join(unique);
+        let file = dir.join("attempts.json");
+        let mut journal = WeeklyRaidAttempts::load(file.clone());
+        assert_eq!(journal.mark("character-a", "week-1").unwrap(), true);
+        assert_eq!(journal.mark("character-a", "week-1").unwrap(), false);
+        let mut restarted = WeeklyRaidAttempts::load(file);
+        assert_eq!(restarted.mark("character-a", "week-1").unwrap(), false);
+        assert_eq!(restarted.mark("character-b", "week-1").unwrap(), true);
+        assert_eq!(restarted.mark("character-a", "week-2").unwrap(), true);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn auto_registration_setting_survives_restart_and_invalid_data_disables_it() {
+        let unique = format!("pio-weekly-raid-config-{}-{}", std::process::id(),
+            std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos());
+        let dir = std::env::temp_dir().join(unique);
+        let file = dir.join("auto-raid-config.json");
+        assert!(!load_auto_raid_enabled(&file));
+        save_auto_raid_enabled(&file, true).unwrap();
+        assert!(load_auto_raid_enabled(&file));
+        save_auto_raid_enabled(&file, false).unwrap();
+        assert!(!load_auto_raid_enabled(&file));
+        std::fs::write(&file, "invalid").unwrap();
+        assert!(!load_auto_raid_enabled(&file));
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn no_token_never_queries_and_acquisition_triggers_check_from_gameplay_items() {
+        let mut guard = WeeklyRaidGuard::default();
+        let week = cycle_start(1000);
+        let mut state = fixture(None);
+        assert!(!guard.should_request_info(&state, true, week));
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"nick":"Fixture","id":"character-0","items":{}}}),
+            &mut state,
+        );
+        assert!(state.inventory_known);
+        for offset in [0, 1_000, 60_000, 3_600_000] {
+            assert!(!guard.should_request_info(&state, true, week + offset));
+        }
+        // Drops reported in batalha are not the source for the decision.
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{
+                "k":"morte","quem":"selvagem","drops":[{"itemId":70000,"qtd":1}]
+            }]}),
+            &mut state,
+        );
+        assert!(!guard.should_request_info(&state, true, week + 3_601_000));
+        parse_game_message(&json!({"t":"estado","items":{"70000":1}}), &mut state);
+        assert!(guard.should_request_info(&state, true, week + 3_602_000));
+        assert!(!guard.should_request_info(&state, true, week + 3_603_000));
+        assert!(!guard.should_request_info(&state, false, week + 3_604_000));
+        parse_game_message(&json!({"t":"estado","items":{"70000":0}}), &mut state);
+        assert!(!guard.should_request_info(&state, true, week + 3_605_000));
+        parse_game_message(&json!({"t":"estado","items":{"70000":2}}), &mut state);
+        assert!(
+            guard.should_request_info(&state, true, week + 3_606_000),
+            "a later authoritative token acquisition must restart eligibility"
+        );
+    }
+
+    #[test]
+    fn confirmed_edition_stops_queries_until_next_brazil_tuesday_noon() {
+        let mut guard = WeeklyRaidGuard::default();
+        let week = cycle_start(1001);
+        let mut state = fixture(Some(2));
+        assert_eq!(
+            WeeklyRaidGuard::brazil_cycle(week - 1) + 1,
+            WeeklyRaidGuard::brazil_cycle(week)
+        );
+        assert!(guard.reserve_bronze_for_unconfirmed_cycle(true, week));
+        assert!(guard.should_request_info(&state, true, week + 1));
+        let confirmed = json!({"t":"raid","edicao":{
+            "id":"edition-1001","inscricoesDe":week,"inscricoesAte":week + 3_600_000
+        },"eu":{"inscrito":true}});
+        guard.observe_info_response(&confirmed, week + 2);
+        parse_game_message(&confirmed, &mut state);
+        assert!(state.raid_inscrito == Some(true));
+        assert!(!guard.reserve_bronze_for_unconfirmed_cycle(true, week + 3));
+        for offset in [3, 60_000, 300_000, WeeklyRaidGuard::WEEK_MS - 1] {
+            assert!(!guard.should_request_info(&state, true, week + offset));
+        }
+        // A stale raidInscrito=true must never release the last boss token in
+        // the new edition before an actual raid.info confirmation arrives.
+        let next_week = week + WeeklyRaidGuard::WEEK_MS;
+        assert_eq!(state.raid_inscrito, Some(true));
+        assert!(guard.reserve_bronze_for_unconfirmed_cycle(true, next_week));
+        assert!(
+            guard.should_request_info(&state, true, next_week),
+            "the new Brazilian cycle must recheck despite prior registration"
+        );
+        // Late packets from the old edition cannot mark the new week confirmed.
+        guard.observe_info_response(&confirmed, next_week + 1);
+        assert!(guard.reserve_bronze_for_unconfirmed_cycle(true, next_week + 1));
+        assert!(
+            !guard.should_request_info(&state, true, next_week + 2),
+            "valid but stale response uses controlled refresh interval"
+        );
+        let next = json!({"t":"raid","edicao":{
+            "id":"edition-1002","inscricoesDe":next_week,
+            "inscricoesAte":next_week + 3_600_000
+        },"agora":next_week + 300_001,"eu":{"inscrito":false}});
+        guard.observe_info_response(&next, next_week + 300_001);
+        parse_game_message(&next, &mut state);
+        assert_eq!(state.raid_inscrito, Some(false));
+        assert!(
+            guard.should_enroll(&next, 2, next_week + 300_001),
+            "new edition can enroll once eligible"
+        );
+    }
+
+    #[test]
+    fn failed_raid_info_uses_bounded_backoff_without_poll_flooding() {
+        let mut guard = WeeklyRaidGuard::default();
+        let start = cycle_start(1002) + 10_000;
+        let state = fixture(Some(1));
+        assert!(guard.should_request_info(&state, true, start));
+        assert!(!guard.should_request_info(&state, true, start + 59_999));
+        assert!(
+            !guard.should_request_info(&state, true, start + 60_000),
+            "a timed-out request first schedules a retry, never floods"
+        );
+        assert_eq!(guard.info_failures, 1);
+        assert!(!guard.should_request_info(&state, true, start + 119_999));
+        assert!(guard.should_request_info(&state, true, start + 120_000));
+        guard.observe_info_response(
+            &json!({"t":"raid","recusa":"temporarily-unavailable"}),
+            start + 120_001,
+        );
+        assert_eq!(guard.info_failures, 2);
+        assert!(!guard.should_request_info(&state, true, start + 240_000));
+        assert!(guard.should_request_info(&state, true, start + 240_001));
+        let valid = json!({"t":"raid","edicao":{"id":"edition-1002"},"eu":{"inscrito":false}});
+        guard.observe_info_response(&valid, start + 240_002);
+        assert_eq!(guard.info_failures, 0);
+        assert!(!guard.should_request_info(&state, true, start + 540_001));
+        assert!(guard.should_request_info(&state, true, start + 540_002));
+    }
+
+    #[test]
+    fn reconnect_keeps_weekly_confirmation_and_new_character_gets_fresh_check() {
+        let week = cycle_start(1003);
+        let mut guard = WeeklyRaidGuard::default();
+        let mut state = fixture(Some(2));
+        assert!(guard.should_request_info(&state, true, week + 1));
+        let confirmed = json!({"t":"raid","edicao":{"id":"edition-1003","inscricoesDe":week},"eu":{"inscrito":true}});
+        guard.observe_info_response(&confirmed, week + 2);
+        parse_game_message(&confirmed, &mut state);
+        parse_game_message(&json!({"t":"disconnected"}), &mut state);
+        assert!(!state.inventory_known);
+        assert!(!guard.should_request_info(&state, true, week + 5));
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"nick":"Fixture","id":"character-0","items":{"70000":2}}}),
+            &mut state,
+        );
+        assert_eq!(
+            state.raid_inscrito, None,
+            "welcome correctly forgets the previous visual server snapshot"
+        );
+        assert!(
+            !guard.should_request_info(&state, true, week + 6),
+            "the local confirmed guard survives the same account reconnect"
+        );
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"nick":"Other","id":"character-1","items":{"70000":2}}}),
+            &mut state,
+        );
+        assert!(
+            guard.should_request_info(&state, true, week + 7),
+            "a different authenticated character must not inherit registration"
+        );
+    }
+
+    #[test]
+    fn server_new_edition_observation_clears_current_cycle_confirmation() {
+        let week = cycle_start(1004);
+        let mut guard = WeeklyRaidGuard::default();
+        let state = fixture(Some(1));
+        guard.check_owner(&state);
+        guard.observe_info_response(
+            &json!({"t":"raid","edicao":{"id":"old","inscricoesDe":week},"eu":{"inscrito":true}}),
+            week + 1,
+        );
+        assert!(!guard.should_request_info(&state, true, week + 2));
+        guard.observe_info_response(&json!({"t":"raid","edicao":{"id":"new","inscricoesDe":week + 10_000},"eu":{"inscrito":false}}), week + 10_001);
+        assert!(guard.reserve_bronze_for_unconfirmed_cycle(true, week + 10_002));
+        assert!(
+            !guard.should_request_info(&state, true, week + 10_002),
+            "a valid server response still uses the normal refresh interval"
+        );
+        assert!(guard.should_request_info(&state, true, week + 310_001));
     }
 }
 
@@ -306,14 +814,306 @@ mod weekly_raid_tests {
 pub struct GameHeadlessManager {
     pub auth_locks: [tokio::sync::Mutex<()>; 4],
     pub auto_raid_enabled: AtomicBool,
+    raid_config_lock: std::sync::Mutex<()>,
+    raid_attempts: Mutex<WeeklyRaidAttempts>,
+    pub bosses: RwLock<crate::auto_boss::BossFleet>,
     clients: RwLock<HashMap<usize, BlasterHandle>>,
     tokens: RwLock<HashMap<usize, String>>,
     nicks: RwLock<HashMap<usize, String>>,
     states: RwLock<HashMap<usize, HeadlessState>>,
-    ws_urls: RwLock<HashMap<usize,String>>,
+    ws_urls: RwLock<HashMap<usize, String>>,
 }
 
 impl GameHeadlessManager {
+    pub fn set_auto_raid_enabled(&self, enabled: bool) -> Result<bool, String> {
+        let _guard = self.raid_config_lock.lock().map_err(|error| error.to_string())?;
+        let file = crate::credentials::get_app_data_dir().join("auto-raid-config.json");
+        save_auto_raid_enabled(&file, enabled)?;
+        self.auto_raid_enabled.store(enabled, Ordering::Relaxed);
+        Ok(enabled)
+    }
+
+    pub async fn boss_catalog(&self, index: usize) -> Result<Vec<serde_json::Value>, String> {
+        if index >= 4 {
+            return Err("Conta inválida".into());
+        }
+        Ok(self
+            .states
+            .read()
+            .await
+            .get(&index)
+            .map(|s| s.bosses_jogaveis.clone())
+            .unwrap_or_default())
+    }
+
+    pub async fn boss_status(&self, index: usize) -> Result<serde_json::Value, String> {
+        if index >= 4 {
+            return Err("Conta inválida".into());
+        }
+        let states = self.states.read().await;
+        let state = states.get(&index);
+        let live = state.map(|s| s.boss_live.clone());
+        let online = state.is_some_and(|s| s.live);
+        let alias = state
+            .map(|s| s.name.clone())
+            .unwrap_or_else(|| format!("Conta {}", index + 1));
+        let inventory_known = state.is_some_and(|s| s.live && s.inventory_known);
+        let inventory = state.filter(|_| inventory_known).map(|s| s.inv_map.clone());
+        let team = state
+            .filter(|s| s.live)
+            .map(|s| {
+                s.team
+                    .iter()
+                    .filter(|member| member.slot.is_some())
+                    .cloned()
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let active_id = state.filter(|s| s.live).and_then(|s| s.active_id.clone());
+        let cid = state.map(|s| s.cid.clone());
+        drop(states);
+        let fleet = self.bosses.read().await;
+        let mut status = fleet.accounts[index].status(live.as_ref());
+        status["index"] = json!(index);
+        status["online"] = json!(online);
+        status["alias"] = json!(alias);
+        status["cid"] = json!(cid);
+        status["inventoryKnown"] = json!(inventory_known);
+        status["inventory"] = json!(inventory);
+        status["team"] = json!(team);
+        status["activeId"] = json!(active_id);
+        if cid.as_deref().is_some_and(|cid| !cid.is_empty()
+            && fleet.accounts[index].settings.pokemon_owner_id.as_deref() != Some(cid)) {
+            status["pokemonProfiles"] = json!({});
+        }
+        Ok(status)
+    }
+
+    pub async fn boss_select_pokemon(
+        &self,
+        index: usize,
+        pokemon_id: serde_json::Value,
+    ) -> Result<bool, String> {
+        if index >= 4 {
+            return Err("Conta inválida".into());
+        }
+        // Keep configuration locked until queued, so enabling cannot race this switch.
+        let fleet = self.bosses.read().await;
+        let states = self.states.read().await;
+        let state = states
+            .get(&index)
+            .ok_or("Conecte esta conta para receber a equipe")?;
+        let command = crate::auto_boss::team_selection_command(
+            state,
+            &fleet.accounts[index].settings,
+            &pokemon_id,
+        )?;
+        drop(states);
+        let clients = self.clients.read().await;
+        let client = clients
+            .get(&index)
+            .ok_or("Ative o Headless desta conta para trocar o Pokémon pelo launcher")?;
+        client
+            .out_tx
+            .send(Message::Text(command.to_string().into()))
+            .await
+            .map_err(|e| e.to_string())?;
+        Ok(true)
+    }
+
+    pub async fn boss_configure_pokemon(
+        &self,
+        index: usize,
+        boss_key: String,
+        primary_id: serde_json::Value,
+        fighter_id: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        if index >= 4 { return Err("Conta inválida".into()); }
+        let mut fleet = self.bosses.write().await;
+        let states = self.states.read().await;
+        let state = states.get(&index).ok_or("Conecte a conta para receber a equipe")?;
+        let previous = fleet.accounts[index].clone();
+        fleet.accounts[index].configure_pokemon_profile(state, &boss_key, primary_id, fighter_id)?;
+        if let Err(error) = fleet.save() {
+            fleet.accounts[index] = previous;
+            return Err(format!("Falha ao salvar os Pokémon do boss: {error}"));
+        }
+        drop(states);
+        drop(fleet);
+        self.boss_status(index).await
+    }
+
+    pub async fn boss_configure(
+        &self,
+        app: &AppHandle,
+        index: usize,
+        enabled: bool,
+        boss_key: Option<String>,
+        mode: crate::auto_boss::BossMode,
+        quantity: Option<u32>,
+        distribution: Option<Vec<crate::auto_boss::BossAllocation>>,
+    ) -> Result<serde_json::Value, String> {
+        if index >= 4 {
+            return Err("Conta inválida".into());
+        }
+        if enabled && !crate::auto_boss::is_valid_config_with_distribution(mode, quantity, distribution.as_deref()) {
+            if mode == crate::auto_boss::BossMode::Quantity {
+                return Err("Informe uma quantidade de 1 a 100000".into());
+            } else if distribution.is_some() {
+                return Err("A soma das porcentagens da distribuição deve ser exatamente 100%".into());
+            }
+        }
+        // The socket's receipt handler and its command sender use this same
+        // lock. Validation, persistent write and UI state form one transition.
+        let mut fleet = self.bosses.write().await;
+        let mut states = self.states.write().await;
+        let current = fleet.accounts[index].settings.clone();
+        let account = states.get(&index);
+        let (owner, owner_id, in_arena, effective_key, initial_tokens, demand_target) = if enabled {
+            let state = account.ok_or("Conecte a conta para receber o catálogo de bosses")?;
+            if !state.live {
+                return Err("Conecte a conta antes de ativar o Auto Boss".into());
+            }
+
+            let has_distribution = distribution.as_ref().is_some_and(|d| !d.is_empty());
+            if let Some(ref dist) = distribution {
+                if !dist.is_empty() {
+                    crate::auto_boss::validate_distribution(dist, &state.bosses_jogaveis)?;
+                }
+            }
+
+            let key = if has_distribution {
+                distribution
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .find(|a| a.percent > 0)
+                    .map(|a| a.boss_key.clone())
+                    .unwrap_or_else(|| boss_key.clone().unwrap_or_else(|| current.boss_key.clone()))
+            } else {
+                boss_key
+                    .filter(|s| !s.trim().is_empty())
+                    .unwrap_or_else(|| current.boss_key.clone())
+            };
+
+            let is_distribution_mode = has_distribution
+                || (distribution.is_none() && current.distribution.as_ref().is_some_and(|d| !d.is_empty()));
+            let is_same_dist = match (&current.distribution, &distribution) {
+                (None, None) => true,
+                (Some(a), Some(b)) => a == b,
+                _ => false,
+            };
+            let is_same_key = if is_distribution_mode {
+                true
+            } else {
+                current.boss_key == key
+            };
+            let is_active_demand_noop = current.enabled
+                && current.mode == crate::auto_boss::BossMode::Demand
+                && mode == crate::auto_boss::BossMode::Demand
+                && is_same_key
+                && is_same_dist;
+
+            let (initial_tokens, demand_target) = if is_active_demand_noop {
+                (current.initial_tokens, current.quantity)
+            } else {
+                let boss = crate::auto_boss::boss_catalog_entry(&state.bosses_jogaveis, &key)
+                    .ok_or("Boss indisponível no catálogo jogável informado pelo servidor")?;
+                let (item_id, fee) = crate::auto_boss::boss_cost(boss)
+                    .ok_or("O servidor não informou o custo de entrada deste boss")?;
+
+                let tokens = if state.inventory_known {
+                    state.inv_map.get(&item_id).and_then(|v| v.as_u64()).unwrap_or(0)
+                } else {
+                    0
+                };
+
+                match mode {
+                    crate::auto_boss::BossMode::Demand => {
+                        if !state.inventory_known {
+                            return Err("Aguarde o carregamento do inventário para configurar o modo demanda".into());
+                        }
+                        if tokens < fee {
+                            return Err("Saldo insuficiente de tokens para iniciar o modo demanda".into());
+                        }
+                        let target = u32::try_from(tokens / fee)
+                            .map_err(|_| "Saldo de tokens excede o limite de entradas por execução".to_string())?;
+                        (Some(tokens), Some(target))
+                    }
+                    crate::auto_boss::BossMode::Infinite => {
+                        (Some(tokens), None)
+                    }
+                    _ => (None, quantity),
+                }
+            };
+
+            (
+                Some(state.name.clone()),
+                (!state.cid.is_empty()).then(|| state.cid.clone()),
+                state.boss_live.in_arena,
+                key,
+                initial_tokens,
+                demand_target,
+            )
+        } else {
+            (
+                account.map(|state| state.name.clone()),
+                None,
+                account.is_some_and(|state| state.boss_live.in_arena),
+                boss_key.filter(|s| !s.trim().is_empty()).unwrap_or(current.boss_key),
+                None,
+                quantity,
+            )
+        };
+        let replace_return_pokemon = enabled && (!fleet.accounts[index].settings.enabled
+            || (fleet.accounts[index].settings.boss_key != effective_key
+                && !(distribution.as_ref().is_some_and(|d| !d.is_empty())
+                    && fleet.accounts[index].settings.distribution == distribution))
+            || fleet.accounts[index].settings.return_pokemon_id.is_none());
+        let return_pokemon = if replace_return_pokemon {
+            let state = account.ok_or("Conecte esta conta para escolher o Pokémon principal")?;
+            let profile = (fleet.accounts[index].settings.pokemon_owner_id.as_deref() == Some(state.cid.as_str()))
+                .then(|| fleet.accounts[index].settings.pokemon_profiles.get(&effective_key))
+                .flatten();
+            let primary = profile.map(|profile| &profile.primary_id)
+                .or(fleet.accounts[index].settings.return_pokemon_id.as_ref())
+                .or(state.active_id.as_ref())
+                .ok_or("O servidor ainda não informou o Pokémon ativo; atualize a equipe")?;
+            let fighter = profile.map(|profile| &profile.fighter_id).unwrap_or(primary);
+            if !crate::auto_boss::available_team_member(state, primary)
+                || !crate::auto_boss::available_team_member(state, fighter) {
+                return Err("O Pokémon principal ou combatente não está mais na equipe desta conta".into());
+            }
+            Some(primary.clone())
+        } else { None };
+        let previous = fleet.accounts[index].clone();
+        fleet.accounts[index]
+            .configure_checked_with_plan(
+                enabled,
+                effective_key,
+                mode,
+                demand_target,
+                owner,
+                owner_id,
+                in_arena,
+                distribution,
+                initial_tokens,
+            )?;
+        if let Some(primary) = return_pokemon { fleet.accounts[index].settings.return_pokemon_id = Some(primary); }
+        if let Err(error) = fleet.save() {
+            fleet.accounts[index] = previous;
+            return Err(format!("Falha ao salvar a configuração de boss: {error}"));
+        }
+        if let Some(state) = states.get_mut(&index) {
+            crate::auto_boss::apply_runtime_state(state, &fleet.accounts[index].settings);
+            let _ = app.emit("blaster:update", json!({"index":index,"state":&*state}));
+            let _ = app.emit("st:push", json!({"index":index,"state":&*state}));
+        }
+        drop(states);
+        drop(fleet);
+        self.boss_status(index).await
+    }
+
     pub async fn location_status(&self, index: usize) -> serde_json::Value {
         let states = self.states.read().await;
         let state = states.get(&index);
@@ -321,55 +1121,103 @@ impl GameHeadlessManager {
     }
     pub fn new() -> Self {
         let sessions = crate::credentials::load_sessions();
-        let states = sessions.iter().filter_map(|(index, saved)| {
-            let nick = saved.nick.as_ref()?;
-            let session = crate::hunt_session::HuntSession::load(*index, nick)?;
-            let mut state = HeadlessState::new(*index, nick.clone());
-            state.hunt_session = Some(session);
-            state.update_rates(0);
-            Some((*index, state))
-        }).collect();
+        let states = sessions
+            .iter()
+            .filter_map(|(index, saved)| {
+                let nick = saved.nick.as_ref()?;
+                let session = crate::hunt_session::HuntSession::load(*index, nick)?;
+                let mut state = HeadlessState::new(*index, nick.clone());
+                state.hunt_session = Some(session);
+                state.update_rates(0);
+                Some((*index, state))
+            })
+            .collect();
         Self {
             auth_locks: std::array::from_fn(|_| tokio::sync::Mutex::new(())),
-            auto_raid_enabled: AtomicBool::new(false),
+            auto_raid_enabled: AtomicBool::new(load_auto_raid_enabled(
+                &crate::credentials::get_app_data_dir().join("auto-raid-config.json"),
+            )),
+            raid_config_lock: std::sync::Mutex::new(()),
+            raid_attempts: Mutex::new(WeeklyRaidAttempts::load(
+                crate::credentials::get_app_data_dir().join("weekly-raid-attempts.json"),
+            )),
+            bosses: RwLock::new(crate::auto_boss::BossFleet::load()),
             clients: RwLock::new(HashMap::new()),
-            tokens: RwLock::new(sessions.iter().map(|(i,s)| (*i, s.token.clone())).collect()),
-            nicks: RwLock::new(sessions.iter().filter_map(|(i,s)| s.nick.clone().map(|n| (*i,n))).collect()),
+            tokens: RwLock::new(
+                sessions
+                    .iter()
+                    .map(|(i, s)| (*i, s.token.clone()))
+                    .collect(),
+            ),
+            nicks: RwLock::new(
+                sessions
+                    .iter()
+                    .filter_map(|(i, s)| s.nick.clone().map(|n| (*i, n)))
+                    .collect(),
+            ),
             states: RwLock::new(states),
             ws_urls: RwLock::new(HashMap::new()),
         }
     }
 
-    pub async fn import_hunt_session(&self, index: usize, snapshot: &serde_json::Value) -> Result<(), String> {
-        let nick = snapshot["nick"].as_str().ok_or("Nick do histórico ausente")?;
-        let expected = self.get_nick(index).await.ok_or("Nick autenticado ausente")?;
-        if !nick.eq_ignore_ascii_case(&expected) { return Err("Histórico pertence a outra conta".into()); }
+    pub async fn import_hunt_session(
+        &self,
+        index: usize,
+        snapshot: &serde_json::Value,
+    ) -> Result<(), String> {
+        let nick = snapshot["nick"]
+            .as_str()
+            .ok_or("Nick do histórico ausente")?;
+        let expected = self
+            .get_nick(index)
+            .await
+            .ok_or("Nick autenticado ausente")?;
+        if !nick.eq_ignore_ascii_case(&expected) {
+            return Err("Histórico pertence a outra conta".into());
+        }
         let session = crate::hunt_session::HuntSession::import(nick, &snapshot["saved"])?;
-        session.checkpoint(index).map_err(|e| format!("Não foi possível salvar o histórico: {e}"))?;
+        session
+            .checkpoint(index)
+            .map_err(|e| format!("Não foi possível salvar o histórico: {e}"))?;
         let mut states = self.states.write().await;
-        let state = states.entry(index).or_insert_with(|| HeadlessState::new(index, nick.into()));
-        if let Some(tier) = server_outland_tier(snapshot) { state.outland_tier = Some(tier); }
+        let state = states
+            .entry(index)
+            .or_insert_with(|| HeadlessState::new(index, nick.into()));
+        if let Some(tier) = server_outland_tier(snapshot) {
+            state.outland_tier = Some(tier);
+        }
         state.hunt_session = Some(session);
         state.update_rates(0);
         Ok(())
     }
 
     pub async fn pause_hunt_session(&self, index: usize) {
-        if let Some(session) = self.states.write().await.get_mut(&index).and_then(|s| s.hunt_session.as_mut()) {
+        if let Some(session) = self
+            .states
+            .write()
+            .await
+            .get_mut(&index)
+            .and_then(|s| s.hunt_session.as_mut())
+        {
             session.pause();
-            if let Err(error) = session.checkpoint(index) { eprintln!("hunt checkpoint {index}: {error}"); }
+            if let Err(error) = session.checkpoint(index) {
+                eprintln!("hunt checkpoint {index}: {error}");
+            }
         }
     }
 
     pub async fn hunt_restore_script(&self, index: usize) -> String {
         let states = self.states.read().await;
-        let Some(session) = states.get(&index).and_then(|s| s.hunt_session.as_ref()) else { return String::new(); };
+        let Some(session) = states.get(&index).and_then(|s| s.hunt_session.as_ref()) else {
+            return String::new();
+        };
         let nick = serde_json::to_string(&session.nick).unwrap();
         let saved = serde_json::to_string(&session.snapshot()).unwrap();
         // A script remains installed across navigation. Its marker makes this
         // handoff single-use, so a later reload cannot restore an old snapshot.
         let nonce = serde_json::to_string(&format!("{}:{}", session.nick, saved)).unwrap();
-        format!(r#"(() => {{
+        format!(
+            r#"(() => {{
           if (location.hostname !== 'pokeidle.io' || window.top !== window) return;
           const nick = {nick}, saved = {saved}, nonce = {nonce};
           if ((localStorage.getItem('nick') || '').toLowerCase() !== nick) return;
@@ -377,7 +1225,8 @@ impl GameHeadlessManager {
           if (localStorage.getItem(marker) === nonce) return;
           localStorage.setItem('sessao-hunt:' + nick, JSON.stringify(saved));
           localStorage.setItem(marker, nonce);
-        }})();"#)
+        }})();"#
+        )
     }
 
     pub async fn set_token(&self, index: usize, token: String, nick: Option<String>) {
@@ -403,7 +1252,14 @@ impl GameHeadlessManager {
         tokens.get(&index).cloned()
     }
 
-    pub async fn get_ws_url(&self,index:usize)->Option<String>{self.ws_urls.read().await.get(&index).cloned()}
+    pub async fn get_state(&self, index: usize) -> Option<HeadlessState> {
+        let states = self.states.read().await;
+        states.get(&index).cloned()
+    }
+
+    pub async fn get_ws_url(&self, index: usize) -> Option<String> {
+        self.ws_urls.read().await.get(&index).cloned()
+    }
 
     pub async fn get_nick(&self, index: usize) -> Option<String> {
         let nicks = self.nicks.read().await;
@@ -416,12 +1272,32 @@ impl GameHeadlessManager {
         index: usize,
         event: &serde_json::Value,
     ) {
+        if index >= 4 {
+            return;
+        }
         let t = event.get("t").and_then(|v| v.as_str()).unwrap_or("");
         let data = event.get("data").unwrap_or(event);
 
+        if let Some(session_id) = event.get("session").or_else(|| data.get("session")).and_then(|v| v.as_str()) {
+            if t == "reset" || t == "welcome" || t == "session_token" {
+                crate::rmt::purchase::register_visual_session(index, session_id);
+            }
+        }
+        if t == "disconnected" {
+            crate::rmt::purchase::clear_visual_session(index);
+        }
+        crate::rmt::purchase::observe_account_message(index, event);
+        if t == "market" {
+            let page = event.get("data").unwrap_or(event);
+            crate::rmt::purchase::observe_market_packet(index, page);
+        }
+
         if t == "session_token" {
             if let Some(token) = data.get("token").and_then(|v| v.as_str()) {
-                let nick = data.get("nick").and_then(|v| v.as_str()).map(|s| s.to_string());
+                let nick = data
+                    .get("nick")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
                 self.set_token(index, token.to_string(), nick.clone()).await;
                 let _ = app.emit(
                     "session:token",
@@ -435,6 +1311,7 @@ impl GameHeadlessManager {
             return;
         }
 
+        let settings = self.bosses.read().await.accounts[index].settings.clone();
         let mut states = self.states.write().await;
         let nick = self
             .get_nick(index)
@@ -451,6 +1328,7 @@ impl GameHeadlessManager {
             crate::hunt_session::HuntSession::release_checkpoint(index);
         }
         if parse_game_message(event, state) {
+            crate::auto_boss::apply_runtime_state(state, &settings);
             if state.start_time.is_none() {
                 state.start_time = Some(std::time::Instant::now());
             }
@@ -467,7 +1345,6 @@ impl GameHeadlessManager {
                     "state": state_val
                 }),
             );
-
         }
     }
 
@@ -484,17 +1361,32 @@ impl GameHeadlessManager {
 
     pub async fn is_running(&self, index: usize) -> bool {
         let map = self.clients.read().await;
-        map.get(&index).map(|h| !h.task.is_finished()).unwrap_or(false)
+        map.get(&index)
+            .map(|h| !h.task.is_finished())
+            .unwrap_or(false)
     }
 
     pub async fn send_message(&self, index: usize, val: serde_json::Value) -> Result<bool, String> {
+        if index >= 4 {
+            return Err("Conta inválida".into());
+        }
+        if self.bosses.read().await.accounts[index].blocks_external_boss_command(&val) {
+            return Err(
+                "Auto Boss controla os comandos dessa arena; use a configuração do Auto Boss."
+                    .into(),
+            );
+        }
         let map = self.clients.read().await;
         if let Some(handle) = map.get(&index) {
             // Local debug diagnostic: exercise the real reconnect loop without
             // changing account settings or sending a fabricated game command.
             #[cfg(debug_assertions)]
             if val["t"] == "__pio_debug_disconnect" {
-                handle.out_tx.send(Message::Close(None)).await.map_err(|e| e.to_string())?;
+                handle
+                    .out_tx
+                    .send(Message::Close(None))
+                    .await
+                    .map_err(|e| e.to_string())?;
                 return Ok(true);
             }
             let msg = Message::Text(val.to_string().into());
@@ -542,22 +1434,23 @@ impl GameHeadlessManager {
             .cloned()
             .unwrap_or_else(|| HeadlessState::new(index, nick.clone()));
 
-        if let Some(session) = &mut state.hunt_session { session.resume(); }
-        let target_hunt = config
-            .hunt
-            .clone()
-            .filter(|s| !s.is_empty())
-            .or_else(|| {
-                if !state.hunt.is_empty() && state.hunt != "centro" {
-                    Some(state.hunt.clone())
-                } else if !state.last_hunt_slug.is_empty() && state.last_hunt_slug != "centro" {
-                    Some(state.last_hunt_slug.clone())
-                } else {
-                    None
-                }
-            });
+        if let Some(session) = &mut state.hunt_session {
+            session.resume();
+        }
+        let target_hunt = config.hunt.clone().filter(|s| !s.is_empty()).or_else(|| {
+            if !state.hunt.is_empty() && state.hunt != "centro" {
+                Some(state.hunt.clone())
+            } else if !state.last_hunt_slug.is_empty() && state.last_hunt_slug != "centro" {
+                Some(state.last_hunt_slug.clone())
+            } else {
+                None
+            }
+        });
 
-        let _ = app.emit("blaster:status", json!({"index":index,"status":"connecting"}));
+        let _ = app.emit(
+            "blaster:status",
+            json!({"index":index,"status":"connecting"}),
+        );
         let socket = connect_and_handshake(
             index,
             &ws_url,
@@ -567,9 +1460,21 @@ impl GameHeadlessManager {
             target_hunt.as_deref(),
         )
         .await?;
+        {
+            let mut bosses = self.bosses.write().await;
+            if bosses.accounts[index].sync_handshake(&state) {
+                if let Err(error) = bosses.save() {
+                    eprintln!("boss checkpoint {index}: {error}");
+                }
+            }
+            crate::auto_boss::apply_runtime_state(&mut state, &bosses.accounts[index].settings);
+        }
         state.update_rates(state.start_time.map(|t| t.elapsed().as_secs()).unwrap_or(0));
         self.states.write().await.insert(index, state.clone());
-        let _ = app.emit("blaster:status", json!({"index":index,"status":"connected"}));
+        let _ = app.emit(
+            "blaster:status",
+            json!({"index":index,"status":"connected"}),
+        );
 
         let app_handle = app.clone();
         let ws_url_clone = ws_url.clone();
@@ -580,6 +1485,9 @@ impl GameHeadlessManager {
             let mut current_socket = Some(socket);
             let start_time = state.start_time.unwrap_or_else(Instant::now);
             let mut backoff_secs = 2u64;
+            // Keep the verified edition across socket reconnects. The owner
+            // check invalidates it if this slot authenticates another account.
+            let mut raid_guard = WeeklyRaidGuard::default();
 
             'reconnect_loop: loop {
                 let socket = match current_socket.take() {
@@ -597,7 +1505,8 @@ impl GameHeadlessManager {
                             _ = tokio::time::sleep(Duration::from_secs(backoff_secs)) => {}
                         }
 
-                        let manager_opt = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>();
+                        let manager_opt =
+                            app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>();
                         let token_to_use = if let Some(ref m) = manager_opt {
                             m.get_token(index).await
                         } else {
@@ -612,14 +1521,18 @@ impl GameHeadlessManager {
                         };
 
                         let nick_to_use = if let Some(ref m) = manager_opt {
-                            m.get_nick(index).await.unwrap_or_else(|| nick_clone.clone())
+                            m.get_nick(index)
+                                .await
+                                .unwrap_or_else(|| nick_clone.clone())
                         } else {
                             nick_clone.clone()
                         };
 
                         let hunt_to_resume = if !state.hunt.is_empty() && state.hunt != "centro" {
                             Some(state.hunt.clone())
-                        } else if !state.last_hunt_slug.is_empty() && state.last_hunt_slug != "centro" {
+                        } else if !state.last_hunt_slug.is_empty()
+                            && state.last_hunt_slug != "centro"
+                        {
                             Some(state.last_hunt_slug.clone())
                         } else {
                             initial_hunt.clone()
@@ -639,6 +1552,17 @@ impl GameHeadlessManager {
                                 backoff_secs = 2;
                                 state.live = true;
                                 if let Some(ref m) = manager_opt {
+                                    let mut bosses = m.bosses.write().await;
+                                    if bosses.accounts[index].sync_handshake(&state) {
+                                        if let Err(error) = bosses.save() {
+                                            eprintln!("boss checkpoint {index}: {error}");
+                                        }
+                                    }
+                                    crate::auto_boss::apply_runtime_state(
+                                        &mut state,
+                                        &bosses.accounts[index].settings,
+                                    );
+                                    drop(bosses);
                                     m.states.write().await.insert(index, state.clone());
                                 }
                                 let _ = app_handle.emit(
@@ -660,14 +1584,16 @@ impl GameHeadlessManager {
                 };
 
                 let (mut write, mut read) = socket.split();
+                let rmt_session = format!("h{index}/{}", crate::daily_pass::now_ms());
+                crate::rmt::purchase::register_session(index, &rmt_session);
+                let mut rmt_traffic=crate::rmt::traffic::Traffic::default();
                 for cmd in crate::sniper::on_connect(index) {
+                    rmt_traffic.external(&cmd,crate::daily_pass::now_ms());
                     let _ = write.send(Message::Text(cmd.to_string().into())).await;
                 }
                 let mut ping_interval = tokio::time::interval(Duration::from_secs(25));
                 let mut sec_interval = tokio::time::interval(Duration::from_secs(1));
                 let mut sniper_interval = tokio::time::interval(Duration::from_millis(100));
-                let mut raid_interval = tokio::time::interval(Duration::from_secs(60));
-                let mut raid_guard = WeeklyRaidGuard::default();
                 let mut last_activity = Instant::now();
                 let mut user_stopped = false;
 
@@ -679,14 +1605,46 @@ impl GameHeadlessManager {
                             break;
                         }
                         Some(outgoing) = out_rx.recv() => {
-                            if write.send(outgoing).await.is_err() {
-                                break;
+                            let mut message_to_send = outgoing;
+                            if let Message::Text(ref payload) = message_to_send {
+                                if let Ok(cmd) = serde_json::from_str::<serde_json::Value>(payload) {
+                                    if cmd.get("t").and_then(|v| v.as_str()) == Some("__pio_rmt_buy") {
+                                        let now = crate::daily_pass::now_ms().max(0) as u64;
+                                        if let Some(real_cmd) = crate::rmt::purchase::unwrap_socket_fence(
+                                            &cmd,
+                                            index,
+                                            &state.cid,
+                                            &rmt_session,
+                                            state.live,
+                                            now,
+                                        ) {
+                                            message_to_send = Message::Text(real_cmd.to_string().into());
+                                        } else {
+                                            let offer_id = cmd.get("command")
+                                                .and_then(|c| c.get("id"))
+                                                .and_then(|v| v.as_u64())
+                                                .unwrap_or(0);
+                                            crate::rmt::purchase::on_fence_drop(
+                                                index,
+                                                offer_id,
+                                                "Comando cancelado antes do envio pela trava de segurança",
+                                            );
+                                            continue; // Dropped by delivery fence before write
+                                        }
+                                    } else {
+                                        if !rmt_traffic.external(&cmd, crate::daily_pass::now_ms()) { continue; }
+                                        if let Some(manager) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                                            if manager.bosses.read().await.accounts[index]
+                                                .blocks_external_boss_command(&cmd)
+                                            {
+                                                eprintln!("ignored external boss command while Auto Boss owns account {}", index + 1);
+                                                continue;
+                                            }
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        _ = raid_interval.tick() => {
-                            let enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
-                                .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
-                            if enabled && write.send(Message::Text(json!({"t":"raid.info"}).to_string().into())).await.is_err() {
+                            if write.send(message_to_send).await.is_err() {
                                 break;
                             }
                         }
@@ -705,6 +1663,7 @@ impl GameHeadlessManager {
                                 .map(|d| d.as_millis() as u64)
                                 .unwrap_or(0);
                             for cmd in crate::sniper::on_tick(index, cur_now_ms, Some(&app_handle)) {
+                                if !rmt_traffic.external(&cmd,cur_now_ms as i64){continue;}
                                 if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
                                     crate::sniper::on_send_failure(index, &cmd);
                                     break;
@@ -712,6 +1671,54 @@ impl GameHeadlessManager {
                             }
                         }
                         _ = sec_interval.tick() => {
+                            let now_ms = crate::daily_pass::now_ms().max(0) as u64;
+                            for command in rmt_traffic.flush(now_ms as i64){
+                                if write.send(Message::Text(command.to_string().into())).await.is_err(){break;}
+                            }
+                            if let Ok(Some(command)) = crate::rmt::poll(&app_handle, &rmt_session, true) {
+                                if rmt_traffic.start(&command,now_ms as i64) {
+                                    if write.send(Message::Text(command.to_string().into())).await.is_err() { break; }
+                                } else {crate::rmt::postpone(&app_handle,&rmt_session);}
+                            }
+                            let raid_enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
+                                .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
+                            if raid_guard.should_request_info(&state, raid_enabled, now_ms) {
+                                let sent = write.send(Message::Text(json!({"t":"raid.info"}).to_string().into())).await.is_ok();
+                                if !sent { break; }
+                            }
+                            if let Some(manager) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                                let mut bosses = manager.bosses.write().await;
+                                let previous = bosses.accounts[index].clone();
+                                // A prior week's raidInscrito=true may remain visible until
+                                // raid.info answers for the new edition. Reserve the last
+                                // token based on the confirmed Brasília cycle instead.
+                                let reserve_weekly_token = raid_guard.reserve_bronze_for_unconfirmed_cycle(
+                                    manager.auto_raid_enabled.load(Ordering::Relaxed), now_ms
+                                );
+                                let command = bosses.accounts[index]
+                                    .next_command_with_raid_reservation(&state, reserve_weekly_token);
+                                let config_changed = previous.settings != bosses.accounts[index].settings;
+                                let persisted = !config_changed || bosses.save().is_ok();
+                                if !persisted {
+                                    // A boss entry MUST be durably reserved before reaching the server.
+                                    bosses.accounts[index] = previous;
+                                }
+                                crate::auto_boss::apply_runtime_state(&mut state, &bosses.accounts[index].settings);
+                                if persisted {
+                                    if let Some(command) = command {
+                                        if index == 0 && std::env::var_os("PIO_BOSS_TRACE").is_some() {
+                                            eprintln!("boss trace out: {}", command);
+                                        }
+                                        if write.send(Message::Text(command.to_string().into())).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                } else {
+                                    state.boss_live.status = "save_error".into();
+                                }
+                                manager.states.write().await.insert(index, state.clone());
+                                drop(bosses);
+                            }
                             if let Ok(Some(command)) = state.auto_depot.next_command(crate::auto_depot::now_ms()) {
                                 if write.send(Message::Text(command.to_string().into())).await.is_err() { break; }
                             }
@@ -756,33 +1763,86 @@ impl GameHeadlessManager {
                                 Some(Ok(Message::Text(txt))) => {
                                     last_activity = Instant::now();
                                     if let Ok(val) = serde_json::from_str::<serde_json::Value>(&txt) {
-                                        let enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
-                                            .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
-                                        if enabled && val["t"] == "raid" {
+                                        crate::rmt::purchase::observe_account_message(index, &val);
+                                        if val["t"] == "market" {
+                                            let page=val.get("data").unwrap_or(&val);
+                                            rmt_traffic.response(page);
+                                            if crate::rmt::purchase::observe_market_packet(index, page) { continue; }
+                                            if crate::rmt::receive(&app_handle,&rmt_session,page).unwrap_or(false) { continue; }
+                                            let _ = crate::rmt::observe(&app_handle,&rmt_session,page);
+                                        }
+                                        if index == 0 && std::env::var_os("PIO_BOSS_TRACE").is_some() {
+                                            let packet = val.get("data").unwrap_or(&val);
+                                            if let Some(events) = packet.get("ev").and_then(|v| v.as_array()) {
+                                                for event in events {
+                                                    if matches!(event.get("k").and_then(|v| v.as_str()), Some("curado" | "joy" | "bossEntrou" | "bossMorto" | "bossPerdeu"))
+                                                        || event.get("k").and_then(|v| v.as_str()) == Some("aviso") {
+                                                        eprintln!("boss trace event: {}", event);
+                                                    }
+                                                }
+                                            }
+                                            if val.get("t").and_then(|v| v.as_str()) == Some("erro") {
+                                                eprintln!("boss trace error: chave={:?} msg={:?}", packet.get("chave"), packet.get("msg"));
+                                            }
+                                        }
+                                        if val["t"] == "raid" {
                                             let now = crate::daily_pass::now_ms().max(0) as u64;
+                                            raid_guard.check_owner(&state);
+                                            raid_guard.observe_info_response(&val, now);
+                                            let enabled = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>()
+                                                .is_some_and(|manager| manager.auto_raid_enabled.load(Ordering::Relaxed));
                                             let tokens = state.inv_map.get("70000").and_then(|v| v.as_u64()).unwrap_or(0);
-                                            if state.inventory_known && raid_guard.should_enroll(&val, tokens, now) {
-                                                if write.send(Message::Text(json!({"t":"raid.inscrever"}).to_string().into())).await.is_err() {
-                                                    break;
+                                            if enabled && state.inventory_known && !state.cid.is_empty()
+                                                && raid_guard.should_enroll(&val, tokens, now) {
+                                                if let Some(manager) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                                                    let edition = raid_guard.attempted_edition.as_deref().unwrap_or_default();
+                                                    match manager.raid_attempts.lock().await.mark(&state.cid, edition) {
+                                                        Ok(true) => {
+                                                            let sent = write.send(Message::Text(json!({"t":"raid.inscrever"}).to_string().into())).await.is_ok();
+                                                            if !sent { break; }
+                                                        }
+                                                        Ok(false) => {},
+                                                        Err(error) => {
+                                                            // No command was sent; permit another attempt once persistence recovers.
+                                                            raid_guard.attempted_edition = None;
+                                                            eprintln!("weekly raid registration not sent: {error}");
+                                                        }
+                                                    }
                                                 }
                                             }
                                         }
                                         for cmd in crate::sniper::on_message(index, &val, Some(&app_handle)) {
+                                            if !rmt_traffic.external(&cmd,crate::daily_pass::now_ms()){continue;}
                                             if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
                                                 crate::sniper::on_send_failure(index, &cmd);
                                                 break;
                                             }
                                         }
-                                        let previous_location = (state.outland_tier, state.hunt.clone());
-                                        if parse_game_message(&val, &mut state) {
-                                            if previous_location != (state.outland_tier, state.hunt.clone()) {
-                                                if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
-                                                    if let Some(saved) = m.states.write().await.get_mut(&index) {
-                                                        saved.outland_tier = state.outland_tier;
-                                                        saved.hunt = state.hunt.clone();
-                                                    }
-                                                }
+                                        let (parsed, boss_changed) = if let Some(manager) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                                            let mut bosses = manager.bosses.write().await;
+                                            let parsed = parse_game_message(&val, &mut state);
+                                            let boss_changed = bosses.accounts[index].observe(&val, &state);
+                                            if let Some(command) = bosses.accounts[index].center_when_server_unlocked(&val, &state) {
+                                                if index == 0 && std::env::var_os("PIO_BOSS_TRACE").is_some() { eprintln!("boss trace retry: {}", command); }
+                                                if write.send(Message::Text(command.to_string().into())).await.is_err() { break; }
                                             }
+                                            if boss_changed {
+                                                if let Err(error) = bosses.save() { eprintln!("boss checkpoint {index}: {error}"); }
+                                            }
+                                            crate::auto_boss::apply_runtime_state(&mut state, &bosses.accounts[index].settings);
+                                            if parsed || boss_changed {
+                                                manager.states.write().await.insert(index, state.clone());
+                                            }
+                                            (parsed, boss_changed)
+                                        } else { (parse_game_message(&val, &mut state), false) };
+                                        while let Some(receipt) = state.boss_history_pending.first().cloned() {
+                                            if let Err(error) = crate::auto_boss::append_history(&[receipt]) {
+                                                eprintln!("boss history persistence {index}: {error}");
+                                                break;
+                                            }
+                                            state.boss_history_pending.remove(0);
+                                        }
+                                        if parsed || boss_changed {
                                             state.update_rates(start_time.elapsed().as_secs());
                                             crate::sniper::update_vip(index, state.vip_dias.is_some());
                                             let _ = app_handle.emit("blaster:update", json!({
@@ -812,16 +1872,33 @@ impl GameHeadlessManager {
                 }
 
                 crate::sniper::on_disconnect(index, Some(&app_handle));
+                crate::rmt::purchase::clear_session(index);
 
                 if user_stopped {
                     break 'reconnect_loop;
                 }
 
                 state.live = false;
+                // A broken socket cannot keep displaying the former arena as
+                // an active battle while the supervisor is reconnecting.
+                let disconnected = json!({"t":"disconnected"});
+                parse_game_message(&disconnected, &mut state);
                 if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                    let mut bosses = m.bosses.write().await;
+                    if bosses.accounts[index].observe(&disconnected, &state) {
+                        if let Err(error) = bosses.save() {
+                            eprintln!("boss checkpoint {index}: {error}");
+                        }
+                    }
+                    crate::auto_boss::apply_runtime_state(
+                        &mut state,
+                        &bosses.accounts[index].settings,
+                    );
+                    drop(bosses);
                     m.states.write().await.insert(index, state.clone());
                 }
-                let _ = app_handle.emit("blaster:update", json!({ "index": index, "state": &state }));
+                let _ =
+                    app_handle.emit("blaster:update", json!({ "index": index, "state": &state }));
                 let _ = app_handle.emit(
                     "blaster:status",
                     json!({
@@ -834,11 +1911,22 @@ impl GameHeadlessManager {
             crate::sniper::on_disconnect(index, Some(&app_handle));
             if let Some(session) = &mut state.hunt_session {
                 session.pause();
-                if let Err(error) = session.checkpoint(index) { eprintln!("hunt checkpoint {index}: {error}"); }
+                if let Err(error) = session.checkpoint(index) {
+                    eprintln!("hunt checkpoint {index}: {error}");
+                }
             }
             state.update_rates(start_time.elapsed().as_secs());
-            parse_game_message(&json!({"t":"disconnected"}), &mut state);
+            let disconnected = json!({"t":"disconnected"});
+            parse_game_message(&disconnected, &mut state);
             if let Some(m) = app_handle.try_state::<std::sync::Arc<GameHeadlessManager>>() {
+                let mut bosses = m.bosses.write().await;
+                if bosses.accounts[index].observe(&disconnected, &state) {
+                    if let Err(error) = bosses.save() {
+                        eprintln!("boss checkpoint {index}: {error}");
+                    }
+                }
+                crate::auto_boss::apply_runtime_state(&mut state, &bosses.accounts[index].settings);
+                drop(bosses);
                 m.states.write().await.insert(index, state.clone());
             }
             let _ = app_handle.emit("blaster:update", json!({ "index": index, "state": state }));
@@ -852,7 +1940,14 @@ impl GameHeadlessManager {
         });
 
         let mut map = self.clients.write().await;
-        map.insert(index, BlasterHandle { stop_tx, out_tx, task });
+        map.insert(
+            index,
+            BlasterHandle {
+                stop_tx,
+                out_tx,
+                task,
+            },
+        );
         Ok(())
     }
 }
@@ -864,7 +1959,10 @@ async fn connect_and_handshake(
     token: &str,
     state: &mut HeadlessState,
     hunt_slug: Option<&str>,
-) -> Result<tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>, String> {
+) -> Result<
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    String,
+> {
     // A failed handshake must not replace the last confirmed tier with a stale
     // welcome. Reconnect retries start from the same confirmed state.
     let original_state = state;
@@ -874,8 +1972,13 @@ async fn connect_and_handshake(
     let state = &mut candidate;
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
     let mut request = ws_url.into_client_request().map_err(|e| e.to_string())?;
-    request.headers_mut().insert("Origin", "https://pokeidle.io".parse().unwrap());
-    request.headers_mut().insert("User-Agent", crate::webview_manager::CHROME_USER_AGENT.parse().unwrap());
+    request
+        .headers_mut()
+        .insert("Origin", "https://pokeidle.io".parse().unwrap());
+    request.headers_mut().insert(
+        "User-Agent",
+        crate::webview_manager::CHROME_USER_AGENT.parse().unwrap(),
+    );
 
     let (mut socket, _) = tokio::time::timeout(
         Duration::from_secs(20),
@@ -925,29 +2028,60 @@ async fn connect_and_handshake(
     .await
     .map_err(|_| "Servidor nao confirmou a sessao headless".to_string())??;
 
-    eprintln!("outland handshake account={} expected={:?} welcome={:?} hunt={}", index + 1, expected_tier, state.outland_tier, state.hunt);
+    eprintln!(
+        "outland handshake account={} expected={:?} welcome={:?} hunt={}",
+        index + 1,
+        expected_tier,
+        state.outland_tier,
+        state.hunt
+    );
     if let Some(expected) = expected_tier {
         if state.outland_tier != Some(expected) {
-            socket.send(Message::Text(json!({"t":"outland.tier","tier":expected}).to_string().into()))
-                .await.map_err(|e| e.to_string())?;
+            socket
+                .send(Message::Text(
+                    json!({"t":"outland.tier","tier":expected})
+                        .to_string()
+                        .into(),
+                ))
+                .await
+                .map_err(|e| e.to_string())?;
             tokio::time::timeout(Duration::from_secs(10), async {
                 while let Some(message) = socket.next().await {
                     match message.map_err(|e| e.to_string())? {
                         Message::Text(text) => {
-                            let value: serde_json::Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-                            if value["t"] == "erro" { return Err("Servidor recusou restaurar a tier de Outland".to_string()); }
+                            let value: serde_json::Value =
+                                serde_json::from_str(&text).map_err(|e| e.to_string())?;
+                            if value["t"] == "erro" {
+                                return Err(
+                                    "Servidor recusou restaurar a tier de Outland".to_string()
+                                );
+                            }
                             parse_game_message(&value, state);
-                            if state.outland_tier == Some(expected) { return Ok(()); }
+                            if state.outland_tier == Some(expected) {
+                                return Ok(());
+                            }
                         }
-                        Message::Close(_) => return Err("Conexão encerrada antes de confirmar a tier de Outland".to_string()),
+                        Message::Close(_) => {
+                            return Err("Conexão encerrada antes de confirmar a tier de Outland"
+                                .to_string())
+                        }
                         _ => {}
                     }
                 }
                 Err("Conexão encerrada antes de confirmar a tier de Outland".to_string())
-            }).await.map_err(|_| "Servidor não confirmou a tier de Outland; hunt não retomada".to_string())??;
+            })
+            .await
+            .map_err(|_| {
+                "Servidor não confirmou a tier de Outland; hunt não retomada".to_string()
+            })??;
         }
     }
-    eprintln!("outland confirmed account={} tier={:?} hunt={}", index + 1, state.outland_tier, state.hunt);
+    eprintln!(
+        "outland confirmed account={} tier={:?} hunt={}",
+        index + 1,
+        state.outland_tier,
+        state.hunt
+    );
 
     let _ = socket
         .send(Message::Text(
@@ -960,11 +2094,10 @@ async fn connect_and_handshake(
     if let Some(hunt) = hunt_slug.filter(|s| !s.is_empty()) {
         socket
             .send(Message::Text(
-                json!({"t":"hunt.select","slug":hunt})
-                    .to_string()
-                    .into(),
+                json!({"t":"hunt.select","slug":hunt}).to_string().into(),
             ))
-            .await.map_err(|e| e.to_string())?;
+            .await
+            .map_err(|e| e.to_string())?;
     }
 
     *original_state = candidate;
@@ -972,32 +2105,56 @@ async fn connect_and_handshake(
 }
 
 fn server_outland_tier(player: &serde_json::Value) -> Option<u32> {
-    player.get("outlandTier").and_then(|v| v.as_u64())
-        .filter(|v| *v > 0 && *v <= 100).map(|v| v as u32)
+    player
+        .get("outlandTier")
+        .and_then(|v| v.as_u64())
+        .filter(|v| *v > 0 && *v <= 100)
+        .map(|v| v as u32)
 }
 
 fn normalize_session_token(token: String, nick: Option<String>) -> (String, Option<String>) {
-        // The game stores sessao as {nick, token, ...}, not as the token itself.
+    // The game stores sessao as {nick, token, ...}, not as the token itself.
     match serde_json::from_str::<serde_json::Value>(&token) {
-            Ok(value) if value.is_object() => (
-                value.get("token").and_then(|v| v.as_str()).unwrap_or("").to_owned(),
-                value.get("nick").and_then(|v| v.as_str()).map(str::to_owned).or(nick)
-            ),
-            _ => (token, nick),
+        Ok(value) if value.is_object() => (
+            value
+                .get("token")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_owned(),
+            value
+                .get("nick")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned)
+                .or(nick),
+        ),
+        _ => (token, nick),
     }
 }
 
 fn update_player_location(player: &serde_json::Value, state: &mut HeadlessState) -> bool {
-    let slug = player.get("huntSlug").and_then(|v| v.as_str()).filter(|s| !s.is_empty());
+    let slug = player
+        .get("huntSlug")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty());
     let center = player.get("noCentro").and_then(|v| v.as_bool());
-    if slug.is_none() && center.is_none() { return false; }
-    if let Some(slug) = slug {
-        if slug != "centro" { state.last_hunt_slug = slug.into(); }
+    if slug.is_none() && center.is_none() {
+        return false;
     }
-    if let Some(center) = center { state.in_center = Some(center); }
-    if state.in_center == Some(true) { state.hunt = "centro".into(); }
-    else if !state.last_hunt_slug.is_empty() { state.hunt = state.last_hunt_slug.clone(); }
-    else if let Some(slug) = slug { state.hunt = slug.into(); }
+    if let Some(slug) = slug {
+        if slug != "centro" {
+            state.last_hunt_slug = slug.into();
+        }
+    }
+    if let Some(center) = center {
+        state.in_center = Some(center);
+    }
+    if state.in_center == Some(true) {
+        state.hunt = "centro".into();
+    } else if !state.last_hunt_slug.is_empty() {
+        state.hunt = state.last_hunt_slug.clone();
+    } else if let Some(slug) = slug {
+        state.hunt = slug.into();
+    }
     true
 }
 
@@ -1079,9 +2236,12 @@ pub fn resolve_headless_item_name(id: Option<u64>, current_name: &str) -> String
 }
 
 fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool {
-    if let Some(session) = &mut state.hunt_session { session.observe(m); }
+    if let Some(session) = &mut state.hunt_session {
+        session.observe(m);
+    }
     state.auto_depot.observe(m);
     state.daily_pass.observe(m, crate::daily_pass::now_ms());
+    let boss_changed = crate::auto_boss::observe_headless_message(m, state);
     let t = m.get("t").and_then(|v| v.as_str()).unwrap_or("");
     let msg_type = m.get("type").and_then(|v| v.as_str()).unwrap_or("");
     let mut changed = false;
@@ -1090,19 +2250,31 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
 
     if t == "reset" || t == "disconnected" || t == "telemetry_gap" {
         state.live = false;
-        state.balls_known = false; state.inventory_known = false;
-        state.ball_map.clear(); state.inv_map.clear(); state.raw_drops.clear(); state.drops.clear(); state.ball_catalog.clear();
-        state.catch_log.clear(); state.shiny_log.clear();
-        state.automation = json!({}); state.last_ball_id = None;
-        state.twitch = None; state.kick = None;
+        state.balls_known = false;
+        state.inventory_known = false;
+        state.ball_map.clear();
+        state.inv_map.clear();
+        state.raw_drops.clear();
+        state.drops.clear();
+        state.ball_catalog.clear();
+        state.catch_log.clear();
+        state.shiny_log.clear();
+        state.automation = json!({});
+        state.last_ball_id = None;
+        state.twitch = None;
+        state.kick = None;
         return true;
     }
 
     if t == "raid" {
         // Nunca atribua inscrição sem uma edição identificada pelo servidor.
         if let Some(edition) = data.get("edicao") {
-            let id = edition.get("id").and_then(|value| value.as_str().map(str::to_owned)
-                .or_else(|| value.as_u64().map(|id| id.to_string())));
+            let id = edition.get("id").and_then(|value| {
+                value
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| value.as_u64().map(|id| id.to_string()))
+            });
             if state.raid_edicao != id {
                 state.raid_inscrito = None;
                 state.raid_verificado_em = None;
@@ -1110,11 +2282,7 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             state.raid_edicao = id.clone();
             state.raid_inscricoes_de = edition.get("inscricoesDe").and_then(|v| v.as_u64());
             if id.is_some() {
-                let confirmado = if data["acao"] == "inscreveu" || data["eu"]["inscrito"] == true {
-                    Some(true)
-                } else {
-                    data["eu"]["inscrito"].as_bool()
-                };
+                let confirmado = data["eu"]["inscrito"].as_bool();
                 if let Some(inscrito) = confirmado {
                     // Uma resposta atrasada não deve desfazer a confirmação desta edição.
                     if inscrito || state.raid_inscrito != Some(true) {
@@ -1125,7 +2293,7 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             }
             changed = true;
         }
-        return changed;
+        return changed || boss_changed;
     }
 
     if t == "welcome" || t == "estado" {
@@ -1151,34 +2319,54 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                 state.ball_catalog.clear();
                 state.last_ball_id = None;
             }
-            state.ball_map.clear(); state.inv_map.clear();
-            state.balls_known = false; state.inventory_known = false;
+            state.ball_map.clear();
+            state.inv_map.clear();
+            state.balls_known = false;
+            state.inventory_known = false;
         }
         if let Some(id) = player.get("id") {
-            state.cid = id.as_str().map(str::to_owned).or_else(||id.as_u64().map(|n|n.to_string())).unwrap_or_default();
+            state.cid = id
+                .as_str()
+                .map(str::to_owned)
+                .or_else(|| id.as_u64().map(|n| n.to_string()))
+                .unwrap_or_default();
             changed = true;
         }
         for (keys, target, known) in [
-            (["balls", "balls"], &mut state.ball_map, &mut state.balls_known),
-            (["items", "inventory"], &mut state.inv_map, &mut state.inventory_known),
+            (
+                ["balls", "balls"],
+                &mut state.ball_map,
+                &mut state.balls_known,
+            ),
+            (
+                ["items", "inventory"],
+                &mut state.inv_map,
+                &mut state.inventory_known,
+            ),
         ] {
             if let Some(stock) = keys.iter().find_map(|key| player.get(*key)) {
                 // Match idleio-core: a supplied map replaces the complete stock.
                 target.clear();
                 *known = stock.is_object() || stock.is_null();
-                if let Some(map) = stock.as_object() { target.extend(map.clone()); }
+                if let Some(map) = stock.as_object() {
+                    target.extend(map.clone());
+                }
                 changed = true;
             }
         }
         if let Some(auto) = player.get("automation") {
-            if auto.is_null() { state.automation = json!({}); }
-            else if let Some(fields) = auto.as_object() {
-                for (key, value) in fields { state.automation[key] = value.clone(); }
+            if auto.is_null() {
+                state.automation = json!({});
+            } else if let Some(fields) = auto.as_object() {
+                for (key, value) in fields {
+                    state.automation[key] = value.clone();
+                }
             }
             changed = true;
         }
         if let Some(catalog) = data.get("catalogoBolas").and_then(|v| v.as_array()) {
-            state.ball_catalog = catalog.clone(); changed = true;
+            state.ball_catalog = catalog.clone();
+            changed = true;
         }
 
         let now_ms = std::time::SystemTime::now()
@@ -1187,7 +2375,8 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             .unwrap_or(0);
         let trainer_eu = player.get("eu").unwrap_or(player);
 
-        let vip_ate_val = trainer_eu.get("vipAte")
+        let vip_ate_val = trainer_eu
+            .get("vipAte")
             .or_else(|| player.get("vipAte"))
             .or_else(|| data.get("vipAte"))
             .or_else(|| m.get("vipAte"))
@@ -1204,7 +2393,8 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             changed = true;
         }
 
-        let passe_obj = player.get("passe")
+        let passe_obj = player
+            .get("passe")
             .or_else(|| data.get("passe"))
             .or_else(|| m.get("passe"))
             .or_else(|| trainer_eu.get("passe"))
@@ -1222,7 +2412,8 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             changed = true;
         }
 
-        let boost_val = trainer_eu.get("boostXp")
+        let boost_val = trainer_eu
+            .get("boostXp")
             .or_else(|| player.get("boostXp"))
             .or_else(|| data.get("boostXp"))
             .or_else(|| trainer_eu.get("bonusXp").and_then(|b| b.get("tr")))
@@ -1243,17 +2434,44 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         }
 
         for (key, target) in [("twitch", &mut state.twitch), ("kick", &mut state.kick)] {
-            let value = player.get(key)
+            let value = player
+                .get(key)
                 .or_else(|| data.get(key))
                 .or_else(|| m.get(key))
                 .or_else(|| data.get("estado").and_then(|e| e.get(key)))
                 .or_else(|| m.get("estado").and_then(|e| e.get(key)));
             if let Some(value) = value {
-                if value.is_null() { *target = None; }
-                else if value.is_object() {
-                    let mut clean = target.clone().unwrap_or_else(||json!({}));
-                    for name in ["login","vinculado","assistindo","pctAtual","emLives","pontos","pontosPorCanal","bonusExp","bonusCatch","bonusLure","bonusTime","bonusQty","bonusExpiresAt","tempo","time","expires","lives","oficiais","offline","assistindoEm","bonus","pct"] {
-                        if let Some(field) = value.get(name) { clean[name] = field.clone(); }
+                if value.is_null() {
+                    *target = None;
+                } else if value.is_object() {
+                    let mut clean = target.clone().unwrap_or_else(|| json!({}));
+                    for name in [
+                        "login",
+                        "vinculado",
+                        "assistindo",
+                        "pctAtual",
+                        "emLives",
+                        "pontos",
+                        "pontosPorCanal",
+                        "bonusExp",
+                        "bonusCatch",
+                        "bonusLure",
+                        "bonusTime",
+                        "bonusQty",
+                        "bonusExpiresAt",
+                        "tempo",
+                        "time",
+                        "expires",
+                        "lives",
+                        "oficiais",
+                        "offline",
+                        "assistindoEm",
+                        "bonus",
+                        "pct",
+                    ] {
+                        if let Some(field) = value.get(name) {
+                            clean[name] = field.clone();
+                        }
                     }
                     *target = Some(clean);
                 }
@@ -1265,32 +2483,75 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         state.live = true;
         if let Some(est) = data.get("estado").or_else(|| m.get("estado")) {
             let trainer = est.get("eu").unwrap_or(est);
-            if let Some(nick) = trainer.get("nick").or_else(|| trainer.get("nome")).or_else(|| est.get("nick")).or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
+            if let Some(nick) = trainer
+                .get("nick")
+                .or_else(|| trainer.get("nome"))
+                .or_else(|| est.get("nick"))
+                .or_else(|| est.get("nome"))
+                .and_then(|v| v.as_str())
+            {
                 state.name = nick.to_string();
             }
-            if let Some(gold) = trainer.get("gold").or_else(|| est.get("gold")).and_then(|v| v.as_i64()) {
+            if let Some(gold) = trainer
+                .get("gold")
+                .or_else(|| est.get("gold"))
+                .and_then(|v| v.as_i64())
+            {
                 state.gold = gold;
                 if state.initial_gold.is_none() {
                     state.initial_gold = Some(gold);
                 }
             }
-            if let Some(diamonds) = trainer.get("diamonds").or_else(|| trainer.get("diamantes")).or_else(|| est.get("diamonds")).or_else(|| est.get("diamantes")).and_then(|v| v.as_i64()) {
+            if let Some(diamonds) = trainer
+                .get("diamonds")
+                .or_else(|| trainer.get("diamantes"))
+                .or_else(|| est.get("diamonds"))
+                .or_else(|| est.get("diamantes"))
+                .and_then(|v| v.as_i64())
+            {
                 state.diamonds = diamonds;
             }
-            if let Some(gemas) = trainer.get("orbs").or_else(|| trainer.get("gemas")).or_else(|| trainer.get("gems")).or_else(|| est.get("orbs")).or_else(|| est.get("gemas")).or_else(|| est.get("gems")).and_then(|v| v.as_i64()) {
+            if let Some(gemas) = trainer
+                .get("orbs")
+                .or_else(|| trainer.get("gemas"))
+                .or_else(|| trainer.get("gems"))
+                .or_else(|| est.get("orbs"))
+                .or_else(|| est.get("gemas"))
+                .or_else(|| est.get("gems"))
+                .and_then(|v| v.as_i64())
+            {
                 state.gemas = gemas;
             }
-            if let Some(lvl) = trainer.get("level").or_else(|| trainer.get("trainerLevel")).or_else(|| est.get("level")).or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
+            if let Some(lvl) = trainer
+                .get("level")
+                .or_else(|| trainer.get("trainerLevel"))
+                .or_else(|| est.get("level"))
+                .or_else(|| est.get("trainerLevel"))
+                .and_then(|v| v.as_u64())
+            {
                 state.level = lvl as u32;
             }
-            if let Some(xp) = trainer.get("xp").or_else(|| trainer.get("exp")).or_else(|| trainer.get("trainerXp")).or_else(|| est.get("xp")).or_else(|| est.get("exp")).or_else(|| est.get("trainerXp")).and_then(|v| v.as_u64()) {
+            if let Some(xp) = trainer
+                .get("xp")
+                .or_else(|| trainer.get("exp"))
+                .or_else(|| trainer.get("trainerXp"))
+                .or_else(|| est.get("xp"))
+                .or_else(|| est.get("exp"))
+                .or_else(|| est.get("trainerXp"))
+                .and_then(|v| v.as_u64())
+            {
                 state.xp = xp;
             } else if state.xp == 0 && state.level > 0 {
                 let n = (state.level.saturating_sub(1)) as u64;
                 state.xp = 50 * n * (n + 1) * (2 * n + 1) / 6 - 150 * n * (n + 1) / 2 + 200 * n;
             }
             update_player_location(est, state);
-            if let Some(act) = trainer.get("activeId").or_else(|| trainer.get("activePokemonId")).or_else(|| est.get("activeId")).or_else(|| est.get("activePokemonId")) {
+            if let Some(act) = trainer
+                .get("activeId")
+                .or_else(|| trainer.get("activePokemonId"))
+                .or_else(|| est.get("activeId"))
+                .or_else(|| est.get("activePokemonId"))
+            {
                 state.active_id = Some(act.clone());
             }
 
@@ -1302,9 +2563,17 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                 state.team = pokemons
                     .iter()
                     .map(|pk| {
-                        let is_active = state.active_id.as_ref().map(|act| act == pk.get("id").unwrap_or(&serde_json::Value::Null)).unwrap_or(false);
+                        let is_active = state
+                            .active_id
+                            .as_ref()
+                            .map(|act| act == pk.get("id").unwrap_or(&serde_json::Value::Null))
+                            .unwrap_or(false);
                         PokemonTeamMember {
                             id: pk.get("id").cloned(),
+                            slot: pk
+                                .get("slot")
+                                .and_then(|v| v.as_u64())
+                                .and_then(|n| u32::try_from(n).ok()),
                             sid: pk
                                 .get("speciesId")
                                 .or_else(|| pk.get("pokeId"))
@@ -1316,9 +2585,17 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                 .or_else(|| pk.get("name"))
                                 .and_then(|v| v.as_str())
                                 .map(|v| v.to_string()),
-                            level: pk.get("level").or_else(|| pk.get("nv")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                            level: pk
+                                .get("level")
+                                .or_else(|| pk.get("nv"))
+                                .and_then(|v| v.as_u64())
+                                .map(|v| v as u32),
                             shiny: pk.get("shiny").and_then(|v| v.as_bool()),
-                            ld: pk.get("slot").and_then(|v| v.as_u64()).map(|s| s == 0).or(Some(is_active)),
+                            ld: pk
+                                .get("slot")
+                                .and_then(|v| v.as_u64())
+                                .map(|s| s == 0)
+                                .or(Some(is_active)),
                             hp: None,
                         }
                     })
@@ -1327,10 +2604,23 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             changed = true;
         }
     } else if t == "campo" || t == "campo.init" || msg_type == "field-init" {
-        if let Some(slug) = data.get("slug").or_else(|| m.get("slug")).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
-            state.in_center = Some(data.get("centro").and_then(|v| v.as_bool()).unwrap_or(slug == "centro"));
-            if state.in_center == Some(true) { state.hunt = "centro".into(); }
-            else { state.hunt = slug.into(); state.last_hunt_slug = slug.into(); }
+        if let Some(slug) = data
+            .get("slug")
+            .or_else(|| m.get("slug"))
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
+            state.in_center = Some(
+                data.get("centro")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(slug == "centro"),
+            );
+            if state.in_center == Some(true) {
+                state.hunt = "centro".into();
+            } else {
+                state.hunt = slug.into();
+                state.last_hunt_slug = slug.into();
+            }
             changed = true;
         }
     } else if t == "batalha" {
@@ -1338,13 +2628,30 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u64)
             .unwrap_or(0);
-        if let Some(evs) = data.get("ev").or_else(|| m.get("ev")).and_then(|v| v.as_array()) {
-            for ev in evs {
-                let k = ev.get("k").or_else(|| ev.get("t")).and_then(|v| v.as_str()).unwrap_or("");
+        if let Some(evs) = data
+            .get("ev")
+            .or_else(|| m.get("ev"))
+            .and_then(|v| v.as_array())
+        {
+            for (event_index, ev) in evs.iter().enumerate() {
+                let k = ev
+                    .get("k")
+                    .or_else(|| ev.get("t"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
                 if k == "spawn" && ev.get("shiny").and_then(|v| v.as_bool()).unwrap_or(false) {
                     state.a.shiny_found += 1;
-                    let name = ev.get("nome").or_else(|| ev.get("name")).and_then(|v| v.as_str()).unwrap_or("");
-                    let sid = ev.get("speciesId").or_else(|| ev.get("pokeId")).or_else(|| ev.get("sid")).and_then(|v| v.as_u64()).unwrap_or(0);
+                    let name = ev
+                        .get("nome")
+                        .or_else(|| ev.get("name"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("");
+                    let sid = ev
+                        .get("speciesId")
+                        .or_else(|| ev.get("pokeId"))
+                        .or_else(|| ev.get("sid"))
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0);
                     state.shiny_log.push(json!({
                         "n": name,
                         "sid": sid,
@@ -1369,8 +2676,17 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                         state.xp += xp;
                     }
                     if ev.get("shiny").and_then(|v| v.as_bool()).unwrap_or(false) {
-                        let name = ev.get("nome").or_else(|| ev.get("name")).and_then(|v| v.as_str()).unwrap_or("");
-                        let sid = ev.get("speciesId").or_else(|| ev.get("pokeId")).or_else(|| ev.get("sid")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        let name = ev
+                            .get("nome")
+                            .or_else(|| ev.get("name"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let sid = ev
+                            .get("speciesId")
+                            .or_else(|| ev.get("pokeId"))
+                            .or_else(|| ev.get("sid"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
                         state.shiny_log.push(json!({
                             "n": name,
                             "sid": sid,
@@ -1381,10 +2697,18 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                             state.shiny_log.remove(0);
                         }
                     }
-                    if let Some(ouro) = ev.get("ouro").or_else(|| ev.get("gold")).and_then(|v| v.as_i64()) {
+                    if let Some(ouro) = ev
+                        .get("ouro")
+                        .or_else(|| ev.get("gold"))
+                        .and_then(|v| v.as_i64())
+                    {
                         state.session_gold += ouro;
                     }
-                    if let Some(drops) = ev.get("drops").or_else(|| ev.get("loot")).and_then(|v| v.as_array()) {
+                    if let Some(drops) = ev
+                        .get("drops")
+                        .or_else(|| ev.get("loot"))
+                        .and_then(|v| v.as_array())
+                    {
                         for drop_item in drops {
                             let item_id_num = drop_item
                                 .get("itemId")
@@ -1411,7 +2735,9 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                 let current_drop = state
                                     .raw_drops
                                     .get(&drop_key)
-                                    .and_then(|v| v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64()))
+                                    .and_then(|v| {
+                                        v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64())
+                                    })
                                     .unwrap_or(0);
                                 let drop_entry = json!({
                                     "id": item_id.as_deref().unwrap_or(""),
@@ -1427,20 +2753,18 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                     }
                                 }
                             }
-                            if let Some(id_str) = item_id {
-                                let current_inv = state
-                                    .inv_map
-                                    .get(&id_str)
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(0);
-                                state
-                                    .inv_map
-                                    .insert(id_str, serde_json::Value::from(current_inv + qty));
-                            }
+                            // This is a server-reported drop for run analytics.
+                            // Inventory remains authoritative only after
+                            // gameplay.items / inventory in an estado packet.
                         }
                     }
                     changed = true;
-                } else if k == "bossMorto" {
+                } else if k == "bossMorto"
+                    && state
+                        .boss_live
+                        .accepted_victory_indices
+                        .contains(&event_index)
+                {
                     let xp = ev
                         .get("xpTreinador")
                         .or_else(|| ev.get("xp"))
@@ -1450,7 +2774,11 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                     if xp > 0 {
                         state.xp += xp;
                     }
-                    if let Some(drops) = ev.get("drops").or_else(|| ev.get("loot")).and_then(|v| v.as_array()) {
+                    if let Some(drops) = ev
+                        .get("drops")
+                        .or_else(|| ev.get("loot"))
+                        .and_then(|v| v.as_array())
+                    {
                         for drop_item in drops {
                             let item_id = drop_item
                                 .get("itemId")
@@ -1467,7 +2795,10 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                 .or_else(|| drop_item.get("name"))
                                 .and_then(|v| v.as_str())
                                 .unwrap_or("");
-                            let name = resolve_headless_item_name(item_id.as_deref().and_then(|s| s.parse().ok()), raw_name);
+                            let name = resolve_headless_item_name(
+                                item_id.as_deref().and_then(|s| s.parse().ok()),
+                                raw_name,
+                            );
                             let drop_key = if !name.is_empty() {
                                 name.clone()
                             } else {
@@ -1477,7 +2808,9 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                 let current_drop = state
                                     .raw_drops
                                     .get(&drop_key)
-                                    .and_then(|v| v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64()))
+                                    .and_then(|v| {
+                                        v.get("qty").and_then(|q| q.as_u64()).or_else(|| v.as_u64())
+                                    })
                                     .unwrap_or(0);
                                 let drop_entry = json!({
                                     "id": item_id.as_deref().unwrap_or(""),
@@ -1493,22 +2826,16 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                                     }
                                 }
                             }
-                            if let Some(id_str) = item_id {
-                                let current_inv = state
-                                    .inv_map
-                                    .get(&id_str)
-                                    .and_then(|v| v.as_u64())
-                                    .unwrap_or(0);
-                                state
-                                    .inv_map
-                                    .insert(id_str, serde_json::Value::from(current_inv + qty));
-                            }
+                            // bossMorto is a loot receipt, not an authoritative
+                            // inventory snapshot. The server owns inventory.
                         }
                     }
                     changed = true;
                 } else if k == "bola" {
                     state.a.balls += 1;
-                    if let Some(id) = ev.get("ballId") { state.last_ball_id = Some(id.clone()); }
+                    if let Some(id) = ev.get("ballId") {
+                        state.last_ball_id = Some(id.clone());
+                    }
                     changed = true;
                 } else if k == "capturado" {
                     state.a.captures += 1;
@@ -1525,7 +2852,11 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                         .and_then(|v| v.as_str())
                         .unwrap_or("?");
                     let pk_sid = pk
-                        .and_then(|p| p.get("speciesId").or_else(|| p.get("pokeId")).or_else(|| p.get("sid")))
+                        .and_then(|p| {
+                            p.get("speciesId")
+                                .or_else(|| p.get("pokeId"))
+                                .or_else(|| p.get("sid"))
+                        })
                         .and_then(|v| v.as_u64())
                         .unwrap_or(0);
                     if is_shiny {
@@ -1544,9 +2875,22 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                         let hp = ivs.get("hp").and_then(|v| v.as_u64()).unwrap_or(0);
                         let atk = ivs.get("atk").and_then(|v| v.as_u64()).unwrap_or(0);
                         let def = ivs.get("def").and_then(|v| v.as_u64()).unwrap_or(0);
-                        let spa = ivs.get("spAtk").or_else(|| ivs.get("spa")).and_then(|v| v.as_u64()).unwrap_or(0);
-                        let spd = ivs.get("spDef").or_else(|| ivs.get("spd")).and_then(|v| v.as_u64()).unwrap_or(0);
-                        let spe = ivs.get("speed").or_else(|| ivs.get("spe")).or_else(|| ivs.get("vel")).and_then(|v| v.as_u64()).unwrap_or(0);
+                        let spa = ivs
+                            .get("spAtk")
+                            .or_else(|| ivs.get("spa"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let spd = ivs
+                            .get("spDef")
+                            .or_else(|| ivs.get("spd"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
+                        let spe = ivs
+                            .get("speed")
+                            .or_else(|| ivs.get("spe"))
+                            .or_else(|| ivs.get("vel"))
+                            .and_then(|v| v.as_u64())
+                            .unwrap_or(0);
                         hp + atk + def + spa + spd + spe
                     } else {
                         pk.and_then(|p| p.get("ivTotal").or_else(|| p.get("iv")))
@@ -1581,15 +2925,32 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
     } else if t == "estado" {
         let est = data.get("estado").unwrap_or(data);
         let trainer = est.get("eu").unwrap_or(est);
-        if let Some(active) = trainer.get("activeId").or_else(|| trainer.get("activePokemonId")).or_else(|| est.get("activeId")).or_else(|| est.get("activePokemonId")) {
+        if let Some(active) = trainer
+            .get("activeId")
+            .or_else(|| trainer.get("activePokemonId"))
+            .or_else(|| est.get("activeId"))
+            .or_else(|| est.get("activePokemonId"))
+        {
             state.active_id = Some(active.clone());
-            for member in &mut state.team { member.ld = Some(member.id.as_ref() == Some(active)); }
+            for member in &mut state.team {
+                member.ld = Some(member.id.as_ref() == Some(active));
+            }
             changed = true;
         }
-        if let Some(nick) = trainer.get("nick").or_else(|| trainer.get("nome")).or_else(|| est.get("nick")).or_else(|| est.get("nome")).and_then(|v| v.as_str()) {
+        if let Some(nick) = trainer
+            .get("nick")
+            .or_else(|| trainer.get("nome"))
+            .or_else(|| est.get("nick"))
+            .or_else(|| est.get("nome"))
+            .and_then(|v| v.as_str())
+        {
             state.name = nick.to_string();
         }
-        if let Some(gold) = trainer.get("gold").or_else(|| est.get("gold")).and_then(|v| v.as_i64()) {
+        if let Some(gold) = trainer
+            .get("gold")
+            .or_else(|| est.get("gold"))
+            .and_then(|v| v.as_i64())
+        {
             state.gold = gold;
             if let Some(init) = state.initial_gold {
                 let diff = gold - init;
@@ -1601,19 +2962,47 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
             }
             changed = true;
         }
-        if let Some(diamonds) = trainer.get("diamonds").or_else(|| trainer.get("diamantes")).or_else(|| est.get("diamonds")).or_else(|| est.get("diamantes")).and_then(|v| v.as_i64()) {
+        if let Some(diamonds) = trainer
+            .get("diamonds")
+            .or_else(|| trainer.get("diamantes"))
+            .or_else(|| est.get("diamonds"))
+            .or_else(|| est.get("diamantes"))
+            .and_then(|v| v.as_i64())
+        {
             state.diamonds = diamonds;
             changed = true;
         }
-        if let Some(gemas) = trainer.get("orbs").or_else(|| trainer.get("gemas")).or_else(|| trainer.get("gems")).or_else(|| est.get("orbs")).or_else(|| est.get("gemas")).or_else(|| est.get("gems")).and_then(|v| v.as_i64()) {
+        if let Some(gemas) = trainer
+            .get("orbs")
+            .or_else(|| trainer.get("gemas"))
+            .or_else(|| trainer.get("gems"))
+            .or_else(|| est.get("orbs"))
+            .or_else(|| est.get("gemas"))
+            .or_else(|| est.get("gems"))
+            .and_then(|v| v.as_i64())
+        {
             state.gemas = gemas;
             changed = true;
         }
-        if let Some(lvl) = trainer.get("level").or_else(|| trainer.get("trainerLevel")).or_else(|| est.get("level")).or_else(|| est.get("trainerLevel")).and_then(|v| v.as_u64()) {
+        if let Some(lvl) = trainer
+            .get("level")
+            .or_else(|| trainer.get("trainerLevel"))
+            .or_else(|| est.get("level"))
+            .or_else(|| est.get("trainerLevel"))
+            .and_then(|v| v.as_u64())
+        {
             state.level = lvl as u32;
             changed = true;
         }
-        if let Some(xp) = trainer.get("xp").or_else(|| trainer.get("exp")).or_else(|| trainer.get("trainerXp")).or_else(|| est.get("xp")).or_else(|| est.get("exp")).or_else(|| est.get("trainerXp")).and_then(|v| v.as_u64()) {
+        if let Some(xp) = trainer
+            .get("xp")
+            .or_else(|| trainer.get("exp"))
+            .or_else(|| trainer.get("trainerXp"))
+            .or_else(|| est.get("xp"))
+            .or_else(|| est.get("exp"))
+            .or_else(|| est.get("trainerXp"))
+            .and_then(|v| v.as_u64())
+        {
             state.xp = xp;
             changed = true;
         }
@@ -1624,6 +3013,10 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                 .iter()
                 .map(|pk| PokemonTeamMember {
                     id: pk.get("id").cloned(),
+                    slot: pk
+                        .get("slot")
+                        .and_then(|v| v.as_u64())
+                        .and_then(|n| u32::try_from(n).ok()),
                     sid: pk
                         .get("speciesId")
                         .or_else(|| pk.get("pokeId"))
@@ -1635,7 +3028,11 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                         .or_else(|| pk.get("name"))
                         .and_then(|v| v.as_str())
                         .map(|v| v.to_string()),
-                    level: pk.get("level").or_else(|| pk.get("nv")).and_then(|v| v.as_u64()).map(|v| v as u32),
+                    level: pk
+                        .get("level")
+                        .or_else(|| pk.get("nv"))
+                        .and_then(|v| v.as_u64())
+                        .map(|v| v as u32),
                     shiny: pk.get("shiny").and_then(|v| v.as_bool()),
                     ld: Some(state.active_id.as_ref() == pk.get("id")),
                     hp: None,
@@ -1648,10 +3045,20 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
                 if let Some(pk_obj) = pk.as_object() {
                     let id = pk_obj.get("id");
                     if let Some(member) = state.team.iter_mut().find(|m| m.id.as_ref() == id) {
+                        if pk_obj.contains_key("slot") {
+                            member.slot = pk_obj
+                                .get("slot")
+                                .and_then(|v| v.as_u64())
+                                .and_then(|n| u32::try_from(n).ok());
+                        }
                         if let Some(lvl) = pk_obj.get("level").and_then(|v| v.as_u64()) {
                             member.level = Some(lvl as u32);
                         }
-                        if let Some(sid) = pk_obj.get("speciesId").or_else(|| pk_obj.get("pokeId")).and_then(|v| v.as_u64()) {
+                        if let Some(sid) = pk_obj
+                            .get("speciesId")
+                            .or_else(|| pk_obj.get("pokeId"))
+                            .and_then(|v| v.as_u64())
+                        {
                             member.sid = Some(sid as u32);
                         }
                         changed = true;
@@ -1680,7 +3087,7 @@ fn parse_game_message(m: &serde_json::Value, state: &mut HeadlessState) -> bool 
         }
     }
 
-    changed
+    changed || boss_changed
 }
 
 #[cfg(test)]
@@ -1691,22 +3098,42 @@ mod tests {
     fn weekly_boss_status_tracks_confirmed_edition_without_guessing() {
         let mut state = HeadlessState::new(0, "Fixture".into());
         assert_eq!(state.raid_inscrito, None);
-        assert!(parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1","inscricoesDe":1000},"eu":{"inscrito":false}}), &mut state));
+        assert!(parse_game_message(
+            &json!({"t":"raid","edicao":{"id":"semana-1","inscricoesDe":1000},"eu":{"inscrito":false}}),
+            &mut state
+        ));
         assert_eq!(state.raid_edicao.as_deref(), Some("semana-1"));
         assert_eq!(state.raid_inscrito, Some(false));
         assert_eq!(state.raid_inscricoes_de, Some(1000));
         assert_eq!(serde_json::to_value(&state).unwrap()["raidInscrito"], false);
-        assert!(parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1"},"acao":"inscreveu"}), &mut state));
+        assert!(parse_game_message(
+            &json!({"t":"raid","edicao":{"id":"semana-1"},"acao":"inscreveu"}),
+            &mut state
+        ));
+        assert_eq!(state.raid_inscrito, Some(false));
+        parse_game_message(
+            &json!({"t":"raid","edicao":{"id":"semana-1"},"acao":"inscreveu","eu":{"inscrito":true}}),
+            &mut state,
+        );
         assert_eq!(state.raid_inscrito, Some(true));
         // Uma resposta tardia desta edição não desfaz a confirmação.
-        parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-1"},"eu":{"inscrito":false}}), &mut state);
+        parse_game_message(
+            &json!({"t":"raid","edicao":{"id":"semana-1"},"eu":{"inscrito":false}}),
+            &mut state,
+        );
         assert_eq!(state.raid_inscrito, Some(true));
         parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-2"}}), &mut state);
         assert_eq!(state.raid_edicao.as_deref(), Some("semana-2"));
         assert_eq!(state.raid_inscrito, None);
-        parse_game_message(&json!({"t":"raid","edicao":{"id":"semana-2"},"eu":{"inscrito":false}}), &mut state);
+        parse_game_message(
+            &json!({"t":"raid","edicao":{"id":"semana-2"},"eu":{"inscrito":false}}),
+            &mut state,
+        );
         assert_eq!(state.raid_inscrito, Some(false));
-        parse_game_message(&json!({"t":"welcome","estado":{"eu":{"nick":"Fixture"}}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"eu":{"nick":"Fixture"}}}),
+            &mut state,
+        );
         assert_eq!(state.raid_edicao, None);
         assert_eq!(state.raid_inscrito, None);
     }
@@ -1717,11 +3144,23 @@ mod tests {
         let twitch = json!({"login":"fixture","vinculado":true,"pct":15,
             "bonus":{"xp":1793818800000u64,"captura":1793822400000u64,"shiny":0},
             "oficiais":[{"login":"partner","aoVivo":true,"ativo":true}]});
-        parse_game_message(&json!({"t":"welcome","data":{"estado":{"twitch":twitch}}}), &mut state);
-        assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["captura"], 1793822400000u64);
+        parse_game_message(
+            &json!({"t":"welcome","data":{"estado":{"twitch":twitch}}}),
+            &mut state,
+        );
+        assert_eq!(
+            state.twitch.as_ref().unwrap()["bonus"]["captura"],
+            1793822400000u64
+        );
         parse_game_message(&json!({"t":"estado","data":{"gold":123}}), &mut state);
-        assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["xp"], 1793818800000u64);
-        parse_game_message(&json!({"t":"estado","data":{"twitch":{"bonus":{"xp":0,"captura":0,"shiny":0}}}}), &mut state);
+        assert_eq!(
+            state.twitch.as_ref().unwrap()["bonus"]["xp"],
+            1793818800000u64
+        );
+        parse_game_message(
+            &json!({"t":"estado","data":{"twitch":{"bonus":{"xp":0,"captura":0,"shiny":0}}}}),
+            &mut state,
+        );
         assert_eq!(state.twitch.as_ref().unwrap()["bonus"]["xp"], 0);
         parse_game_message(&json!({"t":"welcome","data":{"estado":{}}}), &mut state);
         assert!(state.twitch.is_none());
@@ -1730,13 +3169,19 @@ mod tests {
     #[test]
     fn social_snapshots_survive_deltas_and_clear_on_disconnect() {
         let mut state = HeadlessState::new(0, "Fixture".into());
-        parse_game_message(&json!({"t":"welcome","data":{"estado":{"twitch":{"login":"fixture","assistindo":true,"pctAtual":20,"token":"must-not-cross"},"kick":{"login":"fixture","pontos":123,"bonusExp":1}}}}), &mut state);
-        assert_eq!(state.twitch.as_ref().unwrap()["pctAtual"],20);
+        parse_game_message(
+            &json!({"t":"welcome","data":{"estado":{"twitch":{"login":"fixture","assistindo":true,"pctAtual":20,"token":"must-not-cross"},"kick":{"login":"fixture","pontos":123,"bonusExp":1}}}}),
+            &mut state,
+        );
+        assert_eq!(state.twitch.as_ref().unwrap()["pctAtual"], 20);
         assert!(state.twitch.as_ref().unwrap().get("token").is_none());
         parse_game_message(&json!({"t":"estado","data":{"gold":12}}), &mut state);
-        assert_eq!(state.kick.as_ref().unwrap()["pontos"],123);
-        parse_game_message(&json!({"t":"estado","data":{"twitch":{"assistindo":false,"pctAtual":0}}}), &mut state);
-        assert_eq!(state.twitch.as_ref().unwrap()["pctAtual"],0);
+        assert_eq!(state.kick.as_ref().unwrap()["pontos"], 123);
+        parse_game_message(
+            &json!({"t":"estado","data":{"twitch":{"assistindo":false,"pctAtual":0}}}),
+            &mut state,
+        );
+        assert_eq!(state.twitch.as_ref().unwrap()["pctAtual"], 0);
         parse_game_message(&json!({"t":"disconnected"}), &mut state);
         assert!(state.twitch.is_none() && state.kick.is_none());
     }
@@ -1748,11 +3193,23 @@ mod tests {
             {"id":22,"speciesId":7,"nome":"Squirtle","level":18}]});
         let mut raw = HeadlessState::new(0, "Fixture".into());
         let mut bridged = raw.clone();
-        assert!(parse_game_message(&json!({"t":"welcome","estado":player}), &mut raw));
-        assert!(parse_game_message(&json!({"t":"welcome","data":{"estado":player}}), &mut bridged));
-        assert_eq!(serde_json::to_value(&raw).unwrap(), serde_json::to_value(&bridged).unwrap());
+        assert!(parse_game_message(
+            &json!({"t":"welcome","estado":player}),
+            &mut raw
+        ));
+        assert!(parse_game_message(
+            &json!({"t":"welcome","data":{"estado":player}}),
+            &mut bridged
+        ));
+        assert_eq!(
+            serde_json::to_value(&raw).unwrap(),
+            serde_json::to_value(&bridged).unwrap()
+        );
         assert_eq!(raw.gold, 4321);
-        assert_eq!(raw.team.iter().find(|p| p.ld == Some(true)).unwrap().sid, Some(7));
+        assert_eq!(
+            raw.team.iter().find(|p| p.ld == Some(true)).unwrap().sid,
+            Some(7)
+        );
     }
 
     #[test]
@@ -1760,25 +3217,35 @@ mod tests {
         let mut state = HeadlessState::new(0, "Nailo".into());
         state.a.xp = 20_369_976;
         state.a.seconds = 2030;
-        let mut session = crate::hunt_session::HuntSession::import("Nailo", &json!({
-            "ms":1_242_987,"xpTreinador":32_782_822,"xpPokemon":32_782_822,"abates":406
-        })).unwrap();
+        let mut session = crate::hunt_session::HuntSession::import(
+            "Nailo",
+            &json!({
+                "ms":1_242_987,"xpTreinador":32_782_822,"xpPokemon":32_782_822,"abates":406
+            }),
+        )
+        .unwrap();
         session.pause();
         state.hunt_session = Some(session);
         state.update_rates(2030);
         assert_eq!(state.a.xp, 32_782_822);
         assert_eq!(state.a.seconds, 1242);
         assert!(state.a.xph.abs_diff(94_947_219) < 10);
-        parse_game_message(&json!({"t":"batalha","ev":[{
-            "k":"morte","quem":"selvagem","xp":13508,"xpTreinador":27379,"xpPokemon":27379
-        }]}), &mut state);
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{
+                "k":"morte","quem":"selvagem","xp":13508,"xpTreinador":27379,"xpPokemon":27379
+            }]}),
+            &mut state,
+        );
         state.update_rates(2031);
         assert_eq!(state.a.xp, 32_810_201);
         assert_eq!(state.a.kills, 407);
         let saved = state.hunt_session.as_ref().unwrap().snapshot();
         assert_eq!(saved["xpPokemon"], json!(32_810_201.0));
         parse_game_message(&json!({"t":"disconnected"}), &mut state);
-        parse_game_message(&json!({"t":"welcome","estado":{"nick":"Nailo"}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"nick":"Nailo"}}),
+            &mut state,
+        );
         state.update_rates(9000);
         assert_eq!(state.a.xp, 32_810_201);
         assert_eq!(state.a.seconds, 1242);
@@ -1787,9 +3254,8 @@ mod tests {
     #[test]
     fn bridged_xp_rate_matches_raw_game_and_survives_headless_handoff() {
         // Node executes gameplay_bridge.js and asserts its output is this exact fixture.
-        let bridged: serde_json::Value = serde_json::from_str(include_str!(
-            "../../../test/fixtures/gameplay-xp.json"
-        )).unwrap();
+        let bridged: serde_json::Value =
+            serde_json::from_str(include_str!("../../../test/fixtures/gameplay-xp.json")).unwrap();
         let raw = json!({"t":"batalha", "ev":bridged["data"]["ev"]});
         let mut visual = HeadlessState::new(0, "Fixture".into());
         let mut direct = visual.clone();
@@ -1804,8 +3270,14 @@ mod tests {
             assert_eq!(visual.a.xph, game_rate);
             assert_eq!(direct.a.xph, game_rate);
         }
-        // start() clones the visual accumulator; further raw events must add exactly once.
+        // start() clones the visual accumulator. A new boss entrance marks
+        // a distinct battle; only then can another bossMorto grant XP. An
+        // identical terminal receipt replayed without a new arena is ignored.
         let mut headless = visual.clone();
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{"k":"bossEntrou","key":"fixture"}]}),
+            &mut headless,
+        );
         parse_game_message(&raw, &mut headless);
         headless.update_rates(1800);
         assert_eq!(headless.a.xp, 1800);
@@ -1816,16 +3288,28 @@ mod tests {
     #[test]
     fn metrics_use_the_launcher_contract_and_active_id_deltas() {
         let mut state = HeadlessState::new(1, "Fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"activeId":1,"pokemons":[{"id":1},{"id":2}]}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"activeId":1,"pokemons":[{"id":1},{"id":2}]}}),
+            &mut state,
+        );
         parse_game_message(&json!({"t":"estado","data":{"activeId":2}}), &mut state);
-        assert_eq!(state.team.iter().find(|p| p.ld == Some(true)).unwrap().id, Some(json!(2)));
-        parse_game_message(&json!({"t":"batalha","ev":[{"k":"morte","quem":"selvagem","xp":40,"ouro":8},{"k":"bola"}]}), &mut state);
+        assert_eq!(
+            state.team.iter().find(|p| p.ld == Some(true)).unwrap().id,
+            Some(json!(2))
+        );
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{"k":"morte","quem":"selvagem","xp":40,"ouro":8},{"k":"bola"}]}),
+            &mut state,
+        );
         let value = serde_json::to_value(&state).unwrap();
         assert_eq!(value["a"]["xpg"], 40);
         assert_eq!(value["a"]["ballsUsed"], 1);
         assert!(value["sessStart"].as_u64().unwrap() > 0);
         assert_eq!(value["activeId"], 2);
-        parse_game_message(&json!({"t":"batalha","ev":[{"k":"morte","quem":"selvagem","xp":100,"xpTreinador":456,"ouro":12}]}), &mut state);
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{"k":"morte","quem":"selvagem","xp":100,"xpTreinador":456,"ouro":12}]}),
+            &mut state,
+        );
         let val2 = serde_json::to_value(&state).unwrap();
         assert_eq!(val2["a"]["xpg"], 496); // 40 + 456 (xpTreinador prioritized over base xp 100)
         parse_game_message(&json!({"t":"disconnected"}), &mut state);
@@ -1834,28 +3318,42 @@ mod tests {
 
     #[test]
     fn saved_session_json_is_never_sent_as_the_websocket_token() {
-        let (token, nick) = normalize_session_token(json!({"token":"actual-token","nick":"AuthenticatedNick","provedor":"email"}).to_string(), Some("display label".into()));
+        let (token, nick) = normalize_session_token(
+            json!({"token":"actual-token","nick":"AuthenticatedNick","provedor":"email"})
+                .to_string(),
+            Some("display label".into()),
+        );
         assert_eq!(token, "actual-token");
         assert_eq!(nick.as_deref(), Some("AuthenticatedNick"));
-        assert_eq!(normalize_session_token("raw-token".into(), None).0, "raw-token");
+        assert_eq!(
+            normalize_session_token("raw-token".into(), None).0,
+            "raw-token"
+        );
     }
 
     #[test]
     fn combat_field_updates_do_not_clear_hunt_and_center_exit_restores_target() {
         let mut state = HeadlessState::new(2, "Fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"huntSlug":"larvitar","noCentro":false}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"huntSlug":"larvitar","noCentro":false}}),
+            &mut state,
+        );
         parse_game_message(&json!({"t":"campo.init","slug":"centro"}), &mut state);
         assert_eq!(state.hunt, "centro");
         parse_game_message(&json!({"t":"estado","data":{"noCentro":false}}), &mut state);
         assert_eq!(state.hunt, "larvitar");
-        parse_game_message(&json!({"t":"campo","data":{"seq":33,"mobs":[]}}), &mut state);
+        parse_game_message(
+            &json!({"t":"campo","data":{"seq":33,"mobs":[]}}),
+            &mut state,
+        );
         parse_game_message(&json!({"t":"campo","slug":""}), &mut state);
         assert_eq!(state.hunt, "larvitar");
     }
 
     #[test]
     fn ui_websocket_url_is_not_discarded() {
-        let config: BlasterConfig = serde_json::from_value(json!({"wsUrl":"ws://127.0.0.1:9999","hunt":"vulpix"})).unwrap();
+        let config: BlasterConfig =
+            serde_json::from_value(json!({"wsUrl":"ws://127.0.0.1:9999","hunt":"vulpix"})).unwrap();
         assert_eq!(config.ws_url.as_deref(), Some("ws://127.0.0.1:9999"));
         assert_eq!(config.hunt.as_deref(), Some("vulpix"));
     }
@@ -1863,7 +3361,10 @@ mod tests {
     #[test]
     fn hunt_target_is_preserved_for_reconnect_across_field_and_disconnect_events() {
         let mut state = HeadlessState::new(0, "Fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"huntSlug":"larvitar","noCentro":false}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"huntSlug":"larvitar","noCentro":false}}),
+            &mut state,
+        );
         assert_eq!(state.hunt, "larvitar");
         assert_eq!(state.last_hunt_slug, "larvitar");
 
@@ -2043,8 +3544,14 @@ mod supply_inventory_tests {
     #[test]
     fn inventory_maps_follow_server_deltas() {
         let mut state = HeadlessState::new(0, "fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"balls":{"3":0,"1":42},"items":{"9":0}}}), &mut state);
-        parse_game_message(&json!({"t":"estado","data":{"estado":{"balls":{"3":1000,"1":42},"items":{"9":50}}}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"balls":{"3":0,"1":42},"items":{"9":0}}}),
+            &mut state,
+        );
+        parse_game_message(
+            &json!({"t":"estado","data":{"estado":{"balls":{"3":1000,"1":42},"items":{"9":50}}}}),
+            &mut state,
+        );
         let value = serde_json::to_value(&state).unwrap();
         assert_eq!(value["ballMap"]["3"], 1000);
         assert_eq!(value["ballMap"]["1"], 42);
@@ -2056,14 +3563,86 @@ mod supply_inventory_tests {
 mod stock_contract_tests {
     use super::*;
     #[test]
+    fn boss_receipt_does_not_manufacture_inventory_or_double_count_replays() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(
+            &json!({"t":"welcome","estado":{
+                "id":"trainer-1","nick":"Fixture","items":{"70000":2,"70021":0}
+            }}),
+            &mut state,
+        );
+        let entered = json!({"t":"batalha","ev":[{"k":"bossEntrou","key":"test-boss",
+            "nome":"Test Boss","slot":3}]});
+        let victory = json!({"t":"batalha","ev":[{"k":"bossMorto","key":"test-boss",
+        "nome":"Test Boss","xp":100,"drops":[
+            {"itemId":70021,"qtd":2,"nome":"Fire Shiny Stone"}
+        ]}]});
+        assert!(parse_game_message(&entered, &mut state));
+        assert!(parse_game_message(&victory, &mut state));
+        parse_game_message(&victory, &mut state);
+        assert_eq!(state.boss_drops[0].qty, 2);
+        assert_eq!(state.raw_drops["70021"]["qty"], 2);
+        assert_eq!(state.a.xp, 100);
+        assert_eq!(
+            state.inv_map["70021"], 0,
+            "bossMorto loot is not an inventory receipt"
+        );
+        assert_eq!(
+            state.inv_map["70000"], 2,
+            "boss entry must not locally debit tokens"
+        );
+        let refreshed = json!({"t":"estado","items":{"70000":1,"70021":2}});
+        parse_game_message(&refreshed, &mut state);
+        assert_eq!(
+            state.inv_map["70000"], 1,
+            "only the server snapshot changes stock"
+        );
+        assert_eq!(state.inv_map["70021"], 2);
+        parse_game_message(&entered, &mut state);
+        parse_game_message(&victory, &mut state);
+        assert_eq!(state.boss_drops[0].qty, 4);
+        assert_eq!(state.raw_drops["70021"]["qty"], 4);
+        assert_eq!(state.a.xp, 200);
+    }
+
+    #[test]
+    fn wild_bronze_token_drop_only_affects_loot_until_authoritative_inventory_arrives() {
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(
+            &json!({"t":"welcome","estado":{
+                "nick":"Fixture","items":{"70000":0}
+            }}),
+            &mut state,
+        );
+        parse_game_message(
+            &json!({"t":"batalha","ev":[
+                {"k":"morte","quem":"selvagem","drops":[{"itemId":70000,"qtd":1,"nome":"Bronze Boss Token"}]}
+            ]}),
+            &mut state,
+        );
+        assert_eq!(state.raw_drops["70000"]["qty"], 1);
+        assert_eq!(
+            state.inv_map["70000"], 0,
+            "Auto Boss/Raid may not spend inventory inferred from loot"
+        );
+        parse_game_message(&json!({"t":"estado","items":{"70000":1}}), &mut state);
+        assert_eq!(state.inv_map["70000"], 1);
+    }
+    #[test]
     fn snapshots_replace_stock_and_missing_fields_preserve_it() {
         let mut s = HeadlessState::new(0, "fixture".into());
-        parse_game_message(&json!({"t":"welcome","catalogoBolas":[{"id":5,"infinite":true}],"estado":{"balls":{"1":10,"5":1},"items":{"200":10,"205":3},"automation":{"ballIds":[5]}}}), &mut s);
+        parse_game_message(
+            &json!({"t":"welcome","catalogoBolas":[{"id":5,"infinite":true}],"estado":{"balls":{"1":10,"5":1},"items":{"200":10,"205":3},"automation":{"ballIds":[5]}}}),
+            &mut s,
+        );
         assert!(s.balls_known && s.inventory_known);
-        assert_eq!(s.ball_catalog.len(),1);
+        assert_eq!(s.ball_catalog.len(), 1);
         parse_game_message(&json!({"t":"estado","data":{"gold":4}}), &mut s);
-        assert_eq!(s.inv_map["200"],10);
-        parse_game_message(&json!({"t":"estado","data":{"balls":{"1":0},"items":{"205":2}}}), &mut s);
+        assert_eq!(s.inv_map["200"], 10);
+        parse_game_message(
+            &json!({"t":"estado","data":{"balls":{"1":0},"items":{"205":2}}}),
+            &mut s,
+        );
         assert!(!s.inv_map.contains_key("200"));
         assert!(!s.ball_map.contains_key("5"));
         parse_game_message(&json!({"t":"estado","items":null}), &mut s);
@@ -2072,12 +3651,21 @@ mod stock_contract_tests {
     #[test]
     fn consumption_waits_for_authoritative_stock_and_reset_invalidates_it() {
         let mut s = HeadlessState::new(0, "fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"balls":{"1":10},"items":{"200":4}}}), &mut s);
-        parse_game_message(&json!({"t":"batalha","ev":[{"k":"bola","ballId":1},{"k":"cura","itemId":200}]}), &mut s);
-        assert_eq!(s.ball_map["1"],10);
-        assert_eq!(s.inv_map["200"],4);
-        assert_eq!(s.last_ball_id,Some(json!(1)));
-        assert!(parse_game_message(&json!({"t":"estado","cheio":true}), &mut s));
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"balls":{"1":10},"items":{"200":4}}}),
+            &mut s,
+        );
+        parse_game_message(
+            &json!({"t":"batalha","ev":[{"k":"bola","ballId":1},{"k":"cura","itemId":200}]}),
+            &mut s,
+        );
+        assert_eq!(s.ball_map["1"], 10);
+        assert_eq!(s.inv_map["200"], 4);
+        assert_eq!(s.last_ball_id, Some(json!(1)));
+        assert!(parse_game_message(
+            &json!({"t":"estado","cheio":true}),
+            &mut s
+        ));
         assert!(!s.balls_known && !s.inventory_known);
         assert!(s.ball_map.is_empty() && s.inv_map.is_empty());
         parse_game_message(&json!({"t":"telemetry_gap"}), &mut s);
@@ -2092,12 +3680,15 @@ mod identity_tests {
     fn character_identity_comes_from_server_id_never_nickname() {
         let mut s = HeadlessState::new(0, "Nickname".into());
         assert!(s.cid.is_empty());
-        parse_game_message(&json!({"t":"welcome","estado":{"id":42,"nick":"Nickname"}}), &mut s);
-        assert_eq!(s.cid,"42");
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"id":42,"nick":"Nickname"}}),
+            &mut s,
+        );
+        assert_eq!(s.cid, "42");
         parse_game_message(&json!({"t":"estado","nick":"Renamed"}), &mut s);
-        assert_eq!(s.cid,"42");
+        assert_eq!(s.cid, "42");
         parse_game_message(&json!({"t":"estado","id":"43"}), &mut s);
-        assert_eq!(s.cid,"43");
+        assert_eq!(s.cid, "43");
         parse_game_message(&json!({"t":"welcome","estado":{"nick":"Unknown"}}), &mut s);
         assert!(s.cid.is_empty());
     }
@@ -2162,10 +3753,24 @@ mod identity_tests {
         );
 
         // Logs and drops MUST NOT be cleared by cheio: true!
-        assert_eq!(s.shiny_log.len(), 2, "shiny_log must persist across cheio: true");
-        assert_eq!(s.catch_log.len(), 1, "catch_log must persist across cheio: true");
-        assert_eq!(s.drops["109"]["qty"], 3, "drops must persist across cheio: true");
-        assert_eq!(s.drops["Rock Stone"]["qty"], 3, "drops must persist across cheio: true");
+        assert_eq!(
+            s.shiny_log.len(),
+            2,
+            "shiny_log must persist across cheio: true"
+        );
+        assert_eq!(
+            s.catch_log.len(),
+            1,
+            "catch_log must persist across cheio: true"
+        );
+        assert_eq!(
+            s.drops["109"]["qty"], 3,
+            "drops must persist across cheio: true"
+        );
+        assert_eq!(
+            s.drops["Rock Stone"]["qty"], 3,
+            "drops must persist across cheio: true"
+        );
         assert_eq!(s.vip_dias, Some(5), "vip_dias must persist");
         assert_eq!(s.passe_dias, Some(12), "passe_dias must persist");
     }
@@ -2179,7 +3784,10 @@ mod outland_tier_tests {
     fn server_tier_is_preserved_when_later_delta_omits_it() {
         let mut state = HeadlessState::new(0, "Fixture".into());
         assert_eq!(state.outland_tier, None);
-        parse_game_message(&json!({"t":"welcome","estado":{"outlandTier":2}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"outlandTier":2}}),
+            &mut state,
+        );
         assert_eq!(state.outland_tier, Some(2));
         parse_game_message(&json!({"t":"estado","data":{"gold":12}}), &mut state);
         assert_eq!(state.outland_tier, Some(2));
@@ -2197,7 +3805,10 @@ mod outland_tier_tests {
     #[test]
     fn explicit_tier_two_from_welcome_is_visible_in_serialized_state() {
         let mut state = HeadlessState::new(0, "Fixture".into());
-        parse_game_message(&json!({"t":"welcome","estado":{"outlandTier":2}}), &mut state);
+        parse_game_message(
+            &json!({"t":"welcome","estado":{"outlandTier":2}}),
+            &mut state,
+        );
         assert_eq!(serde_json::to_value(&state).unwrap()["outlandTier"], 2);
     }
 }
@@ -2205,7 +3816,11 @@ mod outland_tier_tests {
 #[cfg(test)]
 mod outland_handshake_tests {
     use super::*;
-    async fn mock_server(welcome_tier: Option<u32>, reject: bool, expected_command: bool) -> (String, tokio::task::JoinHandle<()>) {
+    async fn mock_server(
+        welcome_tier: Option<u32>,
+        reject: bool,
+        expected_command: bool,
+    ) -> (String, tokio::task::JoinHandle<()>) {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("ws://{}", listener.local_addr().unwrap());
         let task = tokio::spawn(async move {
@@ -2214,44 +3829,123 @@ mod outland_handshake_tests {
             let hello = ws.next().await.unwrap().unwrap();
             assert!(hello.to_text().unwrap().contains("hello"));
             let mut player = json!({"huntSlug":"enraged_typhlosion","noCentro":false});
-            if let Some(tier) = welcome_tier { player["outlandTier"] = json!(tier); }
-            ws.send(Message::Text(json!({"t":"welcome","estado":player}).to_string().into())).await.unwrap();
+            if let Some(tier) = welcome_tier {
+                player["outlandTier"] = json!(tier);
+            }
+            ws.send(Message::Text(
+                json!({"t":"welcome","estado":player}).to_string().into(),
+            ))
+            .await
+            .unwrap();
             if expected_command {
-                let cmd: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-                assert_eq!(cmd,json!({"t":"outland.tier","tier":2}));
+                let cmd: serde_json::Value =
+                    serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap())
+                        .unwrap();
+                assert_eq!(cmd, json!({"t":"outland.tier","tier":2}));
                 if reject {
-                    ws.send(Message::Text(json!({"t":"erro","msg":"tier unavailable"}).to_string().into())).await.unwrap();
+                    ws.send(Message::Text(
+                        json!({"t":"erro","msg":"tier unavailable"})
+                            .to_string()
+                            .into(),
+                    ))
+                    .await
+                    .unwrap();
                     return;
                 }
                 // An unrelated delta is not acknowledgement.
-                ws.send(Message::Text(json!({"t":"estado","gold":4}).to_string().into())).await.unwrap();
-                ws.send(Message::Text(json!({"t":"estado","outlandTier":2}).to_string().into())).await.unwrap();
+                ws.send(Message::Text(
+                    json!({"t":"estado","gold":4}).to_string().into(),
+                ))
+                .await
+                .unwrap();
+                ws.send(Message::Text(
+                    json!({"t":"estado","outlandTier":2}).to_string().into(),
+                ))
+                .await
+                .unwrap();
             }
-            let visibility: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-            assert_eq!(visibility["t"],"client.visibility");
-            let hunt: serde_json::Value = serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
-            assert_eq!(hunt,json!({"t":"hunt.select","slug":"enraged_typhlosion"}));
+            let visibility: serde_json::Value =
+                serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(visibility["t"], "client.visibility");
+            let hunt: serde_json::Value =
+                serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap()).unwrap();
+            assert_eq!(hunt, json!({"t":"hunt.select","slug":"enraged_typhlosion"}));
         });
-        (url,task)
+        (url, task)
     }
     #[tokio::test]
     async fn reconnect_restores_stale_or_missing_tier_before_resuming_hunt() {
         for tier in [Some(1), None, Some(2)] {
-            let (url, server) = mock_server(tier,false,tier!=Some(2)).await;
-            let mut state = HeadlessState::new(99,"Fixture".into());
+            let (url, server) = mock_server(tier, false, tier != Some(2)).await;
+            let mut state = HeadlessState::new(99, "Fixture".into());
             state.outland_tier = Some(2);
-            let socket = connect_and_handshake(99,&url,"Fixture","fixture",&mut state,Some("enraged_typhlosion")).await.unwrap();
-            assert_eq!(state.outland_tier,Some(2));
-            server.await.unwrap(); drop(socket);
+            let socket = connect_and_handshake(
+                99,
+                &url,
+                "Fixture",
+                "fixture",
+                &mut state,
+                Some("enraged_typhlosion"),
+            )
+            .await
+            .unwrap();
+            assert_eq!(state.outland_tier, Some(2));
+            server.await.unwrap();
+            drop(socket);
         }
     }
     #[tokio::test]
     async fn rejected_restore_keeps_expected_tier_for_next_retry() {
-        let (url, server) = mock_server(Some(1),true,true).await;
-        let mut state = HeadlessState::new(99,"Fixture".into());
+        let (url, server) = mock_server(Some(1), true, true).await;
+        let mut state = HeadlessState::new(99, "Fixture".into());
         state.outland_tier = Some(2);
-        assert!(connect_and_handshake(99,&url,"Fixture","fixture",&mut state,Some("enraged_typhlosion")).await.is_err());
-        assert_eq!(state.outland_tier,Some(2));
+        assert!(connect_and_handshake(
+            99,
+            &url,
+            "Fixture",
+            "fixture",
+            &mut state,
+            Some("enraged_typhlosion")
+        )
+        .await
+        .is_err());
+        assert_eq!(state.outland_tier, Some(2));
         server.await.unwrap();
+    }
+}
+
+#[cfg(test)]
+mod boss_panel_snapshot_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn boss_status_exposes_stock_before_config_and_only_current_account_team() {
+        let manager = GameHeadlessManager::default();
+        let mut state = HeadlessState::new(0, "Fixture".into());
+        parse_game_message(
+            &json!({"t":"welcome","estado":{
+                "items":{"70000":17},"activeId":202,"pokemons":[
+                    {"id":101,"speciesId":1,"slot":0,"nome":"Bulbasaur"},
+                    {"id":202,"speciesId":7,"slot":1,"nome":"Squirtle"},
+                    {"id":303,"speciesId":25,"slot":null,"nome":"Depot"}]
+            }}),
+            &mut state,
+        );
+        manager.states.write().await.insert(0, state);
+        let status = manager.boss_status(0).await.unwrap();
+        assert_eq!(status["inventoryKnown"], true);
+        assert_eq!(status["inventory"]["70000"], 17);
+        assert_eq!(status["team"].as_array().unwrap().len(), 2);
+        assert_eq!(status["activeId"], 202);
+        assert_eq!(status["enabled"], false);
+        let other = manager.boss_status(1).await.unwrap();
+        assert_eq!(other["inventoryKnown"], false);
+        assert_eq!(other["inventory"], serde_json::Value::Null);
+        assert_eq!(other["team"], json!([]));
+        manager.states.write().await.get_mut(&0).unwrap().live = false;
+        let offline = manager.boss_status(0).await.unwrap();
+        assert_eq!(offline["inventoryKnown"], false);
+        assert!(offline["inventory"].is_null());
+        assert_eq!(offline["team"], json!([]));
     }
 }

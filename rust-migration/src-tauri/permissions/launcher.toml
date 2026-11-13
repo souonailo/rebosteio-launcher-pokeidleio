@@ -2,11 +2,14 @@
 identifier = "allow-launcher"
 description = "Local main launcher commands. Never grant this to remote game pages."
 commands.allow = [
+  "rmt_open", "rmt_snapshot",
   "app_version", "creds_load", "creds_save", "window_control",
   "set_awake", "set_min_to_tray", "preset_read", "errlog_write", "errlog_open",
   "backup_save", "system_notify", "webhook_send", "userscript_fetch", "userscript_request",
   "account_clear", "proxy_apply", "autostart_get", "autostart_set",
   "blaster_start", "blaster_stop", "blaster_status", "blaster_send",
+  "blaster_boss_catalog", "blaster_boss_status", "blaster_boss_history", "blaster_boss_configure", "blaster_boss_select_pokemon", "blaster_boss_pokemon_configure",
+  "blaster_auto_raid_set",
   "sniper_get_state", "sniper_save", "sniper_clear_history", "sniper_ingest",
   "session_token_save", "session_token_get", "telemetry_report",
   "twitch_creds_load", "twitch_creds_save", "twitch_test", "twitch_sync_lives", "twitch_status_get", "twitch_chat_status_get",
