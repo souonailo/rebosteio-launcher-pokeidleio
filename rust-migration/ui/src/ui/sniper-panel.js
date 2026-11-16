@@ -961,7 +961,7 @@
     return { ok: true, config };
   }
 
-  function validateRule(rule) {
+  function validateRule(rule, previousRule, restartCount = false) {
     if (!rule || typeof rule !== 'object') {
       return { ok: false, error: 'Regra inválida ou não especificada.' };
     }
@@ -1068,9 +1068,18 @@
       maxQty = 1;
     }
 
+    const newQuota = previousRule && (
+      Boolean(previousRule.infinite) !== infinite ||
+      (!infinite && Number(previousRule.maxQty || 1) !== Math.floor(maxQty)) ||
+      previousRule.targetType !== targetType ||
+      (targetType === 'category'
+        ? previousRule.targetCategory !== targetCategory
+        : String(previousRule.targetId || previousRule.targetName) !== String(targetId || targetName))
+    );
+    // A new ID keeps previous purchases and late confirmations in the previous quota.
     const validated = {
       ...rule,
-      id: rule.id || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
+      id: (!newQuota && !restartCount && rule.id) || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7)),
       targetType,
       targetId,
       targetName,
@@ -1079,7 +1088,7 @@
       maxQty: Math.floor(maxQty),
       infinite,
       active: rule.active !== false,
-      totalBought: Number(rule.totalBought) || 0
+      totalBought: newQuota || restartCount ? 0 : Number(rule.totalBought) || 0
     };
 
     if (targetType === 'category') {
@@ -1242,6 +1251,14 @@
   /**
    * Sincroniza configuração autoritativa com o armazenamento visual (PIOSniperStorage)
    */
+  function visualRulesForAccount(account) {
+    const held = new Map();
+    for (const intent of [account.pendingIntent, ...(account.parallelIntents || []), ...(account.deferredIntents || [])]) {
+      if (intent?.ruleId) held.set(intent.ruleId, (held.get(intent.ruleId) || 0) + Number(intent.qty));
+    }
+    return (account.rules || []).map(rule => ({ ...rule, nativeReservedQty: held.get(rule.id) || 0 }));
+  }
+
   async function syncVisualWebview(idx, settings) {
     const i = Number(idx);
     const mode = getAccountMode(i);
@@ -1260,7 +1277,7 @@
       return { ok: true, skipped: true, reason: 'login_screen' };
     }
 
-    const payloadRules = settings.rules || [];
+    const payloadRules = visualRulesForAccount(settings);
     const payloadConfig = Object.assign(createDefaultConfig(), settings.config || {});
     const payloadEnabled = Boolean(settings.enabled);
 
@@ -1424,7 +1441,7 @@
     }
 
     const targetEnabled = mode === 'headless' ? false : Boolean(acc.enabled);
-    const targetRules = acc.rules || [];
+    const targetRules = visualRulesForAccount(acc);
     const targetConfig = Object.assign(createDefaultConfig(), normalizeConfigAliases(acc.config));
 
     const payloadRulesJson = JSON.stringify(targetRules);
@@ -1550,7 +1567,7 @@
     const draft = getDraftState(i);
     if (draft) {
       draft.configured = true;
-      draft.rules = (res.rules || []).map(r => ({
+      draft.rules = (res.rules || []).map(({ nativeReservedQty, ...r }) => ({
         ...r,
         excludedItemIds: Array.isArray(r.excludedItemIds) ? [...r.excludedItemIds] : [],
         id: r.id || ('r_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
@@ -1590,17 +1607,29 @@
       throw new Error(`Painel visual da Conta ${i + 1} indisponível para descarregar dados antes do Headless.`);
     }
 
+    const finiteRuleIds = acc.rules.filter(r => !r.infinite && Number(r.maxQty) > 0).map(r => r.id);
     const script = `(async () => {
       try {
         const S = window.PIOSniperStorage;
         if (!S) return { ok: false, msg: 'PIOSniperStorage indisponível' };
-        const data = await S.get(['rotom_sniper_logs', 'rotom_sniper_rules']);
+        const finiteIds = ${JSON.stringify(finiteRuleIds)};
+        const live = window.__pioPauseSniperForHeadless?.(finiteIds);
+        const pending = live ? live.pendingBuys : Object.values(JSON.parse(
+          typeof localStorage !== 'undefined' && localStorage.getItem('rotom_sniper_pending_buys') || '{}'
+        ).offers || {});
+        if (pending.some(b => finiteIds.includes(b.ruleId))) {
+          return { ok: false, msg: 'Aguardando o resultado de uma compra do sniper visual para transferir a meta ao Headless.' };
+        }
         await S.set({ rotom_sniper_enabled: false });
         window.postMessage({ source: 'ROTOM_POPUP', type: 'SET_SNIPER_ENABLED', enabled: false }, '*');
+        const data = await S.get(['rotom_sniper_logs', 'rotom_sniper_rules']);
+        const liveCounts = new Map((live?.rules || []).map(r => [r.id, r.totalBought]));
         return {
           ok: true,
           logs: data.rotom_sniper_logs || [],
-          rules: data.rotom_sniper_rules || []
+          rules: (data.rotom_sniper_rules || []).map(r => ({
+            id: r.id, totalBought: Math.max(r.totalBought || 0, liveCounts.get(r.id) || 0)
+          }))
         };
       } catch (e) {
         return { ok: false, msg: String(e && e.message || e) };
@@ -1815,22 +1844,26 @@
     const script = `(async () => {
       try {
         const S = window.PIOSniperStorage;
-        if (!S) return [];
-        const res = await S.get(['rotom_sniper_logs']);
-        return res.rotom_sniper_logs || [];
-      } catch (e) { return []; }
+        if (!S) return null;
+        const res = await S.get(['rotom_sniper_logs', 'rotom_sniper_rules']);
+        return { logs: res.rotom_sniper_logs || [], rules: res.rotom_sniper_rules || [] };
+      } catch (e) { return null; }
     })()`;
 
     try {
-      const logs = await wv.executeJavaScript(script);
-      if (Array.isArray(logs) && logs.length && root.pokeAPI?.sniperIngest) {
+      const result = await wv.executeJavaScript(script);
+      if (result && root.pokeAPI?.sniperIngest) {
+        const { logs, rules } = result;
+        const nativeRules = sniperState.accounts[i]?.rules || [];
+        const progress = rules.filter(r => nativeRules.some(n => n.id === r.id && r.totalBought > n.totalBought))
+          .map(r => ({ id: r.id, totalBought: r.totalBought }));
         const freshLogs = logs.filter(l => {
           if (!isConfirmedSuccessLog(l) && !isLotteryLossLog(l)) return false;
           const key = i + '_' + (l.id || l.timestamp || l.hora || JSON.stringify(l));
           return !ingestedLogKeys.has(key);
         });
-        if (freshLogs.length) {
-          await root.pokeAPI.sniperIngest(i, freshLogs);
+        if (freshLogs.length || progress.length) {
+          await root.pokeAPI.sniperIngest(i, freshLogs, progress);
           freshLogs.forEach(l => {
             const key = i + '_' + (l.id || l.timestamp || l.hora || JSON.stringify(l));
             ingestedLogKeys.add(key);
@@ -1879,6 +1912,9 @@
 
               const normCfg = normalizeConfigAliases(acc.config);
               sniperState.accounts[idx] = {
+                pendingIntent: acc.pendingIntent,
+                parallelIntents: acc.parallelIntents,
+                deferredIntents: acc.deferredIntents,
                 index: idx,
                 configured: Boolean(acc.configured),
                 enabled: Boolean(acc.enabled),
@@ -2466,7 +2502,7 @@
                   <th>Teto Coins</th>
                   <th>Teto Gemas</th>
                   <th>Qtd Máxima</th>
-                  <th title="Limite usado (inclui ordens pendentes ou incertas)">Limite usado</th>
+                  <th title="Unidades com compra confirmada nesta regra">Compradas</th>
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
@@ -2546,12 +2582,16 @@
             </div>
 
             <div class="sniper-form-group">
-              <label for="ruleMaxQty">Quantidade Máxima</label>
+              <label for="ruleMaxQty" title="Alterar a quantidade inicia uma nova contagem de compras">Quantidade Máxima</label>
               <input type="number" id="ruleMaxQty" class="sniper-input" min="1" step="1" value="${sniperState.ruleDraft.maxQty}" ${sniperState.ruleDraft.infinite ? 'disabled' : ''}>
               <label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:4px;cursor:pointer">
                 <input type="checkbox" id="ruleInfinite" ${sniperState.ruleDraft.infinite ? 'checked' : ''}>
                 <span>Comprar infinitamente ♾️</span>
               </label>
+              ${sniperState.editingRuleId ? `<label style="display:flex;align-items:center;gap:6px;font-size:11px;margin-top:4px;cursor:pointer">
+                <input type="checkbox" id="ruleRestartCount" ${sniperState.ruleDraft.restartCount ? 'checked' : ''}>
+                <span>Reiniciar contagem de compras</span>
+              </label>` : ''}
             </div>
 
             <!-- Exclusões de Itens na Categoria (no fim do grid, span total) -->
@@ -3231,6 +3271,9 @@
     const maxQtyInput = overlay.querySelector('#ruleMaxQty');
     const infiniteCheckbox = overlay.querySelector('#ruleInfinite');
 
+    const restartCount = overlay.querySelector('#ruleRestartCount');
+    if (restartCount) restartCount.onchange = () => { sniperState.ruleDraft.restartCount = restartCount.checked; };
+
     if (infiniteCheckbox && maxQtyInput) {
       infiniteCheckbox.onchange = () => {
         maxQtyInput.disabled = infiniteCheckbox.checked;
@@ -3475,7 +3518,7 @@
           excludedItemIds: curType === 'category' ? [...(sniperState.ruleDraft.excludedItemIds || [])] : []
         };
 
-        const validated = validateRule(rawRule);
+        const validated = validateRule(rawRule, prevRule, Boolean(restartCount?.checked));
         if (!validated.ok) {
           sniperState.lastError = validated.error;
           renderModal();
@@ -3485,13 +3528,7 @@
         if (sniperState.editingRuleId) {
           const idx = draft.rules.findIndex(r => r.id === sniperState.editingRuleId);
           if (idx >= 0) {
-            const existing = draft.rules[idx];
-            draft.rules[idx] = {
-              ...existing,
-              ...validated.rule,
-              active: existing.active !== undefined ? existing.active : validated.rule.active,
-              totalBought: Number(existing.totalBought) || 0
-            };
+            draft.rules[idx] = validated.rule;
           }
           sniperState.editingRuleId = null;
         } else {

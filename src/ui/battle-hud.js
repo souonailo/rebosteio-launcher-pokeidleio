@@ -476,8 +476,8 @@
       const outlandHunt = /^(?:brave|tribal|ancient|war|furious|enigmatic|charged|magnetic|evil|freezing|psy|heavy|milch|roll|hard|brute|enraged|dark|trickmaster|banshee|taekwondo)_/.test(hunt);
       if (!outlandHunt || state?.inCenter === true || state?.bossLive?.inArena === true) return '';
       const tier = state?.outlandTier;
-      return state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100
-        ? `Outland · tier ${tier}` : 'Outland · aguardando confirmação';
+      return state?.live === true && Number.isInteger(tier) && ((tier >= 1 && tier <= 8) || (tier >= 101 && tier <= 140))
+        ? `Outland · tier ${tier >= 101 ? tier - 100 : tier}` : 'Outland · aguardando confirmação';
     },
     updateSocial(panel, i) {
       if (!presentationVisible()) return;
@@ -997,7 +997,7 @@
         const tierHidden = !this.isBlasterActive(i) || !text;
         if (tierEl.hidden !== tierHidden) tierEl.hidden = tierHidden;
         const tier = state?.outlandTier;
-        const confirmed = state?.live === true && Number.isInteger(tier) && tier > 0 && tier <= 100;
+        const confirmed = state?.live === true && Number.isInteger(tier) && ((tier >= 1 && tier <= 8) || (tier >= 101 && tier <= 140));
         if (tierEl.textContent !== text) tierEl.textContent = text;
         setHudTitle(tierEl, !text ? '' : confirmed
           ? 'Tier de Outland confirmada pelo servidor para esta conta.'

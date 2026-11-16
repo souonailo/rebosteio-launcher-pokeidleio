@@ -7,13 +7,13 @@ test('handoff flushes unsaved official counters before freezing the socket', () 
   const storage = new Map([['nick','Nailo'], ['sessao-hunt:nailo', JSON.stringify({ms:1000,xpTreinador:10})]]);
   const order = [];
   const window = {
-    __poke: {estado: {outlandTier: 2}},
+    __poke: {estado: {outlandTier: 101}},
     dispatchEvent(event) {
       assert.equal(event.type, 'pagehide');
       order.push('save');
       storage.set('sessao-hunt:nailo', JSON.stringify({ms:1242987,xpTreinador:32782822,xpPokemon:32782822}));
     },
-    __idleioFreezeGameplay() { order.push('freeze'); }
+    __idleioFreezeGameplay() { order.push('freeze'); return 104; }
   };
   window.top = window;
   vm.runInNewContext(source, {window, Event, localStorage:{getItem:key => storage.get(key) ?? null}});
@@ -21,7 +21,7 @@ test('handoff flushes unsaved official counters before freezing the socket', () 
   assert.equal(result.saved.xpTreinador,32782822);
   assert.equal(result.saved.ms,1242987);
   assert.equal(result.nick,'Nailo');
-  assert.equal(result.outlandTier,2);
+  assert.equal(result.outlandTier,104);
   assert.deepEqual(order,['save','freeze']);
 });
 test('missing history fails without freezing gameplay', () => {

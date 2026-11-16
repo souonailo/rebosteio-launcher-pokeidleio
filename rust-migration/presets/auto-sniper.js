@@ -518,13 +518,13 @@ if (typeof window !== 'undefined') {
           safeStorageSet({ rotom_sniper_logs: updatedLogs });
         });
       } else if (event.data.type === 'SNIPER_BOUGHT') {
-        const { ruleId, offerId, qty } = event.data;
+        const { ruleId, totalBought } = event.data;
         safeStorageGet(['rotom_sniper_rules'], (res) => {
           const rules = res.rotom_sniper_rules || [];
           let changed = false;
           rules.forEach(r => {
             if (r.id === ruleId) {
-              r.totalBought = (r.totalBought || 0) + (qty || 1);
+              r.totalBought = Math.max(Number(r.totalBought) || 0, Number(totalBought) || 0);
               changed = true;
             }
           });
@@ -1120,6 +1120,12 @@ if (typeof window !== 'undefined') {
     boughtOffers: {},      // offerId -> timestamp
     scheduledOffers: {},   // offerId -> timeoutId ou array de timers
     confirmedOffers: {},   // offerId -> bool (compra confirmada)
+    pendingRuleBuys: (() => {
+      try {
+        const saved = JSON.parse(window.localStorage.getItem('rotom_sniper_pending_buys') || '{}');
+        return saved.version === 1 && saved.offers && typeof saved.offers === 'object' ? saved.offers : {};
+      } catch (e) { return {}; }
+    })(),   // offerId -> { ruleId, qty, targetName, createdAt }
     knownItems: {},        // itemId -> itemObj
     lastBuyAttempt: null   // { offerId, targetName, timestamp }
   };
@@ -1562,9 +1568,76 @@ if (typeof window !== 'undefined') {
         type: 'SNIPER_BOUGHT',
         ruleId,
         offerId,
-        qty
+        qty,
+        totalBought: Number((sniperState.rules.find(r => String(r.id) === String(ruleId)) || {}).totalBought) || 0
       }, '*');
     } catch (e) {}
+  }
+
+  function getPendingRuleQuantity(ruleId) {
+    const pending = sniperState.pendingRuleBuys || {};
+    const visualReserved = Object.values(pending).reduce((total, buy) =>
+      String(buy.ruleId) === String(ruleId) ? total + (Number(buy.qty) || 0) : total, 0);
+    const rule = sniperState.rules.find(r => String(r.id) === String(ruleId));
+    return visualReserved + (Number(rule && rule.nativeReservedQty) || 0);
+  }
+
+  function persistPendingRuleBuys() {
+    try {
+      window.localStorage.setItem('rotom_sniper_pending_buys', JSON.stringify({
+        version: 1,
+        offers: sniperState.pendingRuleBuys || {}
+      }));
+    } catch (e) {}
+  }
+
+  function confirmRuleBuy(offerId, packet = {}) {
+    const pending = sniperState.pendingRuleBuys || (sniperState.pendingRuleBuys = {});
+    const reserved = pending[offerId];
+    const order = reserved || automaticInFlightOffers.get(Number(offerId));
+    if (!order) return;
+    const description = packet.descricao || packet.description || '';
+    const descriptionQty = /^\s*(\d+)\s*[x×]/i.exec(String(description));
+    const suppliedQty = packet.qtd ?? packet.quantidade ?? packet.qty ?? (descriptionQty ? Number(descriptionQty[1]) : null);
+    const confirmedQty = suppliedQty == null || !Number.isFinite(Number(suppliedQty))
+      ? Number(order.qty) || 1
+      : Math.max(1, Math.min(Number(order.qty) || 1, Number(suppliedQty)));
+    settleWallet(offerId, confirmedQty);
+    if (!reserved) return;
+    delete pending[offerId];
+    persistPendingRuleBuys();
+    const rule = sniperState.rules.find(r => String(r.id) === String(reserved.ruleId));
+    if (rule) rule.totalBought = (Number(rule.totalBought) || 0) + confirmedQty;
+    emitSniperBought(reserved.ruleId, offerId, confirmedQty);
+  }
+
+  function releaseRuleBuy(offerId) {
+    settleWallet(offerId, 0);
+    const pending = sniperState.pendingRuleBuys || {};
+    if (!pending[offerId]) return;
+    delete pending[offerId];
+    persistPendingRuleBuys();
+  }
+
+  function releaseRuleBuys(ruleId) {
+    const pending = sniperState.pendingRuleBuys || {};
+    let changed = false;
+    for (const [offerId, buy] of Object.entries(pending)) {
+      if (String(buy.ruleId) === String(ruleId)) {
+        delete pending[offerId];
+        changed = true;
+      }
+    }
+    if (changed) persistPendingRuleBuys();
+  }
+
+  function mergeConfirmedRuleTotals(nextRules) {
+    const previousById = new Map(sniperState.rules.map(rule => [String(rule.id), rule]));
+    return nextRules.map(rule => {
+      const previous = previousById.get(String(rule.id));
+      if (!previous) return rule;
+      return { ...rule, totalBought: Math.max(Number(previous.totalBought) || 0, Number(rule.totalBought) || 0) };
+    });
   }
 
   function executeBuyOrder(offerId, buyQty, preco, moeda, targetName, ruleId, ruleDesc, seller, isRetry = false, itemId = null) {
@@ -1577,7 +1650,19 @@ if (typeof window !== 'undefined') {
       console.log(`[Rotom Sniper]: Compra pausada temporariamente para #${offerId} (${targetName}): Compra manual RMT em andamento.`);
       return;
     }
-    if (sniperState.confirmedOffers[offerId]) return;
+    if (sniperState.confirmedOffers[offerId] || automaticInFlightOffers.has(Number(offerId))) return;
+
+    if (sniperState.pendingRuleBuys && sniperState.pendingRuleBuys[offerId] && isRetry) {
+      const pendingRuleId = sniperState.pendingRuleBuys[offerId].ruleId;
+      const pendingRule = sniperState.rules.find(r => String(r.id) === String(pendingRuleId));
+      if (pendingRule && (Number(pendingRule.maxQty) > 0 || !updatePlayerVipStatus())) return;
+    }
+
+    const orderRule = ruleId ? sniperState.rules.find(r => String(r.id) === String(ruleId)) : null;
+    if (ruleId && (!orderRule || !orderRule.active)) {
+      console.log(`[Rotom Sniper]: Compra cancelada para #${offerId}: a regra associada não está mais ativa.`);
+      return;
+    }
 
     if (ruleId) {
       const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId));
@@ -1606,7 +1691,7 @@ if (typeof window !== 'undefined') {
     if (isOrderGems) {
       let allowedGemsCeiling = 0;
       if (ruleId && sniperState.rules && sniperState.rules.length > 0) {
-        const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId) || r.targetName === targetName);
+        const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId));
         if (foundRule) {
           allowedGemsCeiling = Number(foundRule.maxPriceGems !== undefined ? foundRule.maxPriceGems : (foundRule.maxPriceDiamonds || 0));
         }
@@ -1642,6 +1727,13 @@ if (typeof window !== 'undefined') {
       moedaLabel = 'Diamantes';
     }
 
+    const wallet = isOrderGems ? 'orb' : (moedaLabel === 'Coins' ? 'gold' : 'diamond');
+    if (currentBalance < 0) return;
+    let heldCost = 0;
+    for (const [id, hold] of automaticInFlightOffers) {
+      if (hold.wallet === wallet && id !== Number(offerId)) heldCost += hold.cost;
+    }
+    currentBalance = Math.max(0, Math.min(currentBalance, walletCeilings[wallet]) - heldCost);
     if (unitPrice > 0) {
       // Se o saldo for conhecido e menor que o preço unitário (não paga nem 1), cancela imediatamente!
       if (currentBalance >= 0 && currentBalance < unitPrice) {
@@ -1676,11 +1768,17 @@ if (typeof window !== 'undefined') {
     }
     buyQty = orderQty;
 
-    if (ruleId && sniperState.rules && sniperState.rules.length > 0) {
-      const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId) || r.targetName === targetName);
-      if (foundRule && !foundRule.active) {
-        console.log(`[Rotom Sniper]: Compra cancelada para #${offerId} (${targetName}): A regra está pausada.`);
-        return;
+    if (orderRule) {
+      const isVip = updatePlayerVipStatus();
+      const isInfinite = Boolean(orderRule.infinite || orderRule.maxQty <= 0 || orderRule.maxQty >= 99999);
+      const effectiveMax = isVip && isInfinite ? 0 : (isVip ? Number(orderRule.maxQty) : isInfinite ? 20 : Math.min(20, Number(orderRule.maxQty)));
+      if (effectiveMax > 0) {
+        const reserved = getPendingRuleQuantity(orderRule.id);
+        if (isRetry && sniperState.pendingRuleBuys && sniperState.pendingRuleBuys[offerId]) return;
+        const remaining = Math.max(0, effectiveMax - (Number(orderRule.totalBought) || 0) - reserved);
+        if (remaining <= 0) return;
+        buyQty = Math.min(Number(buyQty) || 1, remaining);
+        if (buyQty <= 0) return;
       }
     }
 
@@ -1715,6 +1813,7 @@ if (typeof window !== 'undefined') {
 
     const payload = {
       t: 'market.comprar',
+      sorteioUi: 1,
       id: Number(offerId),
       qtd: Number(buyQty) || 1,
       preco: Number(preco),
@@ -1725,20 +1824,13 @@ if (typeof window !== 'undefined') {
     const sent = sendRaw(payload);
 
     if (sent) {
-      automaticInFlightOffers.add(Number(offerId));
+      const overlap = automaticInFlightOffers.size > 0;
+      for (const hold of automaticInFlightOffers.values()) hold.requiresId = true;
+      automaticInFlightOffers.set(Number(offerId), { wallet, cost: buyQty * unitPrice, qty: buyQty, price: unitPrice, requiresId: overlap });
       sniperState.sentBuyOrders = sniperState.sentBuyOrders || {};
       sniperState.sentBuyOrders[offerId] = orderQty;
       if (!isRetry) {
-        // Otimização Preventiva de Saldo: decrementa preventivamente para evitar estouro em compras simultâneas apenas no primeiro disparo
         const mClean = String(moeda || 'gold').toLowerCase();
-        if ((mClean === 'gold' || mClean === 'coins' || mClean === 'coin') && sniperState.playerGold >= 0) {
-          sniperState.playerGold = Math.max(0, sniperState.playerGold - (Number(buyQty) * Number(preco)));
-          updatePlayerBalance(sniperState.playerGold, sniperState.playerDiamonds, sniperState.playerOrbs);
-        } else if ((mClean === 'orb' || mClean === 'orbs' || mClean === 'gemas' || mClean === 'gema' || mClean === 'gems' || mClean === 'pontos' || mClean === 'diamante') && sniperState.playerOrbs >= 0) {
-          sniperState.playerOrbs = Math.max(0, sniperState.playerOrbs - (Number(buyQty) * Number(preco)));
-          updatePlayerBalance(sniperState.playerGold, sniperState.playerDiamonds, sniperState.playerOrbs);
-        }
-
         const sellerStr = seller ? ` de @${seller}` : '';
         const moedaNome = (mClean === 'orb' || mClean === 'orbs' || mClean === 'gemas' || mClean === 'gema') ? 'Gemas' : 'Coins';
         const precoFmt = Number(preco).toLocaleString('pt-BR');
@@ -1764,18 +1856,13 @@ if (typeof window !== 'undefined') {
         };
 
         emitSniperLog(logEntry);
-        if (ruleId) {
-          if (!isRetry) {
-            const foundRule = sniperState.rules.find(r => String(r.id) === String(ruleId));
-            if (foundRule) {
-              foundRule.totalBought = (Number(foundRule.totalBought) || 0) + buyQty;
-            }
-          }
-          emitSniperBought(ruleId, offerId, buyQty);
+        if (ruleId && !isRetry) {
+          sniperState.pendingRuleBuys = sniperState.pendingRuleBuys || {};
+          sniperState.pendingRuleBuys[offerId] = { ruleId, qty: buyQty, targetName, wallet, price: unitPrice, createdAt: Date.now() };
+          persistPendingRuleBuys();
         }
 
-        /* PIO: registrar perda. O jogo não manda erro quando outro jogador leva o anúncio (ou ganha o sorteio):
-           sem confirmação nem recusa em 5 s após o 1º disparo, grava PERDIDO no histórico. */
+        // A ausência de resposta mantém a reserva até o resultado do anúncio.
         const perdas = sniperState.pioPerdaAgendada = sniperState.pioPerdaAgendada || {};
         if (!perdas[offerId]) {
           perdas[offerId] = Date.now();
@@ -1783,7 +1870,7 @@ if (typeof window !== 'undefined') {
             delete perdas[offerId];
             const rec = sniperState.pioRecusados || {};
             if (sniperState.confirmedOffers[offerId] || (rec[offerId] && Date.now() - rec[offerId] < 60000)) return;
-            if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === Number(offerId)) return;
+            if (!automaticInFlightOffers.has(Number(offerId))) return;
             emitSniperLog({
               id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
               timestamp: Date.now(),
@@ -1794,8 +1881,8 @@ if (typeof window !== 'undefined') {
               price: preco,
               qty: buyQty,
               currency: moeda,
-              status: 'PERDIDO',
-              details: 'Sem confirmação em 5 s após o disparo: outro comprador levou ou o sorteio foi para outro'
+              status: 'INCERTO',
+              details: 'Aguardando confirmação do jogo para este anúncio.'
             });
           }, 5000);
         }
@@ -1817,23 +1904,32 @@ if (typeof window !== 'undefined') {
 
   // Independent from lastBuyAttempt: concurrent offers may resolve out of order.
   // Only explicit server outcomes clear these IDs; elapsed time is not evidence.
-  const automaticInFlightOffers = new Set();
+  const automaticInFlightOffers = new Map(Object.entries(sniperState.pendingRuleBuys || {}).map(([id, buy]) =>
+    [Number(id), { wallet: buy.wallet, price: buy.price, qty: buy.qty, cost: buy.price * buy.qty }]));
+  const walletCeilings = { gold: Infinity, orb: Infinity, diamond: Infinity };
   window.__rotomSniperHasInFlight = (offerId) => {
     return offerId == null ? automaticInFlightOffers.size > 0 : automaticInFlightOffers.has(Number(offerId));
   };
 
-  function observeAutomaticOutcome(packet, fallbackKind) {
-    if (!packet || typeof packet !== 'object') return;
-    const id = extractExplicitOfferId(packet);
-    if (id == null || !automaticInFlightOffers.has(id)) return;
-    const kind = String(packet.k || packet.t || fallbackKind || '');
-    const purchase = kind === 'marketComprado' || kind === 'marketCompradoLote';
-    const lottery = kind === 'mktSorteio' && packet.fase === 'fim' &&
-      (packet.ok === true || packet.ok === false || packet.perdeu === true);
-    const op = String(packet.op || packet.acao || '');
-    const rejection = ['erro','aviso','recusa'].includes(kind) &&
-      (!op || op === 'market.comprar') && !isLotteryProgress(packet) && isTerminalMarketRejection(packet);
-    if (purchase || lottery || rejection) automaticInFlightOffers.delete(id);
+  function ambiguousWalletReply() {
+    return automaticInFlightOffers.size > 1 || [...automaticInFlightOffers.values()].some(hold => hold.requiresId);
+  }
+
+  function refreshWalletCeilings(state) {
+    if (Number.isFinite(state.gold)) walletCeilings.gold = state.gold;
+    if (Number.isFinite(state.orbs)) walletCeilings.orb = state.orbs;
+    if (Number.isFinite(state.diamonds)) walletCeilings.diamond = state.diamonds;
+  }
+
+  function settleWallet(offerId, confirmedQty) {
+    const id = Number(offerId);
+    const hold = automaticInFlightOffers.get(id);
+    automaticInFlightOffers.delete(id);
+    if (!hold || !hold.wallet || !confirmedQty) return;
+    const balance = hold.wallet === 'orb' ? getPlayerGems() : hold.wallet === 'gold' ? getPlayerGold() : getPlayerDiamonds();
+    if (balance >= 0) {
+      walletCeilings[hold.wallet] = Math.max(0, Math.min(balance, walletCeilings[hold.wallet]) - confirmedQty * hold.price);
+    }
   }
 
   function processMarketAnuncios(anunciosList) {
@@ -1853,6 +1949,7 @@ if (typeof window !== 'undefined') {
 
       // Evita compras duplicadas na mesma oferta se já confirmada, agendada ou comprada
       if (sniperState.confirmedOffers[offerId]) continue;
+      if (sniperState.pendingRuleBuys && sniperState.pendingRuleBuys[offerId]) continue;
       if (sniperState.scheduledOffers[offerId]) continue;
       if (sniperState.boughtOffers[offerId] && (now - sniperState.boughtOffers[offerId] < 20000)) continue;
       if (an.estado && an.estado !== 'aberto') continue;
@@ -1894,7 +1991,8 @@ if (typeof window !== 'undefined') {
       // --- A. REGRAS CUSTOMIZADAS DE ITENS CONFIGURADAS PELO JOGADOR ---
       for (let r = 0; r < activeRules.length; r++) {
         const rule = activeRules[r];
-        if (rule.maxQty > 0 && (rule.totalBought || 0) >= rule.maxQty) continue;
+        const ruleUsed = (Number(rule.totalBought) || 0) + getPendingRuleQuantity(rule.id);
+        if (rule.maxQty > 0 && ruleUsed >= rule.maxQty) continue;
 
         if (rule.targetType === 'item' || !rule.targetType) {
           let itemMatches = false;
@@ -2099,14 +2197,14 @@ if (typeof window !== 'undefined') {
           if (isVip && isInfinite) {
             buyQty = qtd; // Modo Infinito VIP: compra todo o estoque do anúncio (respeitando saldo)
           } else if (isVip && matchedRule.maxQty > 0) {
-            const rem = Math.max(0, matchedRule.maxQty - (matchedRule.totalBought || 0));
+            const rem = Math.max(0, matchedRule.maxQty - (matchedRule.totalBought || 0) - getPendingRuleQuantity(matchedRule.id));
             buyQty = Math.min(qtd, rem);
           } else {
             // Versão Basic: Máximo de 20 unidades por regra
             const effectiveRuleMax = (matchedRule.maxQty !== undefined && matchedRule.maxQty > 0)
               ? Math.min(matchedRule.maxQty, 20)
               : 20;
-            const rem = Math.max(0, effectiveRuleMax - (matchedRule.totalBought || 0));
+            const rem = Math.max(0, effectiveRuleMax - (matchedRule.totalBought || 0) - getPendingRuleQuantity(matchedRule.id));
             buyQty = Math.min(qtd, rem);
           }
         } else {
@@ -2205,7 +2303,7 @@ if (typeof window !== 'undefined') {
                 }
               }
               if (!currentRule.infinite && Number(currentRule.maxQty) > 0) {
-                const currentTotal = Number(currentRule.totalBought) || 0;
+                const currentTotal = (Number(currentRule.totalBought) || 0) + getPendingRuleQuantity(currentRule.id);
                 const maxQ = Number(currentRule.maxQty) || 0;
                 if (currentTotal >= maxQ) {
                   console.log(`[Rotom Sniper]: 🛑 Disparo cancelado para #${offerId}: quota da regra atingida (${currentTotal}/${maxQ}).`);
@@ -2319,11 +2417,28 @@ if (typeof window !== 'undefined') {
   }
 
   function handlePendingBuyReplyPacket(packet, defaultOp) {
-    observeAutomaticOutcome(packet, defaultOp);
-    if (!sniperState.lastBuyAttempt || (Date.now() - sniperState.lastBuyAttempt.timestamp >= 12000)) return;
-    const last = sniperState.lastBuyAttempt;
-    const pendingOffId = Number(last.offerId);
+    const operation = packet.op || packet.acao;
+    if (operation && operation !== 'market.comprar') return;
+    const latestAttempt = sniperState.lastBuyAttempt;
     const explicitId = extractExplicitOfferId(packet);
+    const pending = sniperState.pendingRuleBuys || {};
+    const pendingEntries = Object.entries(pending);
+    if (explicitId == null && (pendingEntries.length > 1 || ambiguousWalletReply())) return;
+    const resolvedId = explicitId == null && pendingEntries.length === 1 ? Number(pendingEntries[0][0]) : explicitId;
+    let last = resolvedId != null
+      ? ((sniperState.recentAttemptsByOffer || {})[resolvedId] || (latestAttempt && Number(latestAttempt.offerId) === resolvedId ? latestAttempt : null))
+      : latestAttempt;
+    if (explicitId != null && !last && !pending[explicitId] && latestAttempt && Number(latestAttempt.offerId) !== explicitId) {
+      if (allowAuxBuyLog(latestAttempt, `diag:reply_id:${defaultOp}:${explicitId}`)) {
+        emitSniperLog({ id: 'diag_id_' + Date.now(), timestamp: Date.now(), targetName: latestAttempt.targetName, offerId: latestAttempt.offerId, status: 'DIAGNOSTICO', details: `🔍 Resposta ${defaultOp} com ID divergente (recebido #${explicitId}, pendente #${latestAttempt.offerId})` });
+      }
+      return;
+    }
+    if (!last && resolvedId != null && pending[resolvedId]) {
+      last = { offerId: resolvedId, ...pending[resolvedId] };
+    }
+    if (!last || (explicitId == null && pendingEntries.length === 0 && Date.now() - last.timestamp >= 12000)) return;
+    const pendingOffId = Number(last.offerId);
     const chave = sanitizeDiagText(packet.chave || packet.key || packet.erro || packet.error || '', 60);
     const rawReason = sanitizeDiagText(packet.msg || packet.mensagem || packet.message || packet.m || '', 120);
     const errMsg = rawReason || chave || 'Operação recusada pelo servidor';
@@ -2343,17 +2458,14 @@ if (typeof window !== 'undefined') {
       return;
     }
 
-    if (isTerminalMarketRejection(packet)) {
+    if (!isLotteryProgress(packet) && isTerminalMarketRejection(packet)) {
       delete sniperState.boughtOffers[last.offerId];
       delete sniperState.confirmedOffers[last.offerId];
+      if (sniperState.sentBuyOrders) delete sniperState.sentBuyOrders[last.offerId];
+      clearOfferTimers(last.offerId);
       (sniperState.pioRecusados = sniperState.pioRecusados || {})[last.offerId] = Date.now();
-      if (last.ruleId && sniperState.rules) {
-        const foundRule = sniperState.rules.find(r => String(r.id) === String(last.ruleId));
-        if (foundRule) {
-          foundRule.totalBought = Math.max(0, (Number(foundRule.totalBought) || 0) - (Number(last.qty) || 1));
-        }
-      }
-      sniperState.lastBuyAttempt = null;
+      releaseRuleBuy(last.offerId);
+      if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === pendingOffId) sniperState.lastBuyAttempt = null;
       showRotomHudToast('COMPRA RECUSADA', `${last.targetName}: ${errMsg}`, 'error');
       emitSniperLog({
         id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
@@ -2396,13 +2508,25 @@ if (typeof window !== 'undefined') {
 
   function processMarketEvent(e) {
     if (!e || typeof e !== 'object') return;
-    observeAutomaticOutcome(e);
     const evKey = String(e.k || e.t || '');
 
-    if (evKey === 'marketComprado') {
+    if (evKey === 'marketComprado' || evKey === 'marketCompradoLote') {
       const desc = e.descricao || 'Item entregue na mochila/depot!';
-      const ultCompra = sniperState.lastBuyAttempt || null;
       const explicitId = extractExplicitOfferId(e);
+      if (evKey === 'marketCompradoLote' && explicitId == null) return;
+      const pendingEntries = Object.entries(sniperState.pendingRuleBuys || {});
+      if (explicitId == null && (pendingEntries.length > 1 || ambiguousWalletReply())) return;
+      const resolvedId = explicitId == null && pendingEntries.length === 1 ? Number(pendingEntries[0][0]) : explicitId;
+      const lastAttempt = sniperState.lastBuyAttempt || null;
+      const ultCompra = resolvedId != null
+        ? ((sniperState.recentAttemptsByOffer || {})[resolvedId] || (lastAttempt && Number(lastAttempt.offerId) === resolvedId ? lastAttempt : null) || (sniperState.pendingRuleBuys || {})[resolvedId] && { offerId: resolvedId, ...(sniperState.pendingRuleBuys || {})[resolvedId] })
+        : lastAttempt;
+      if (explicitId != null && !ultCompra && lastAttempt && Number(lastAttempt.offerId) !== explicitId) {
+        if (allowAuxBuyLog(lastAttempt, `diag:comprado:${explicitId}`)) {
+          emitSniperLog({ id: 'diag_' + Date.now(), timestamp: Date.now(), targetName: lastAttempt.targetName, offerId: lastAttempt.offerId, status: 'DIAGNOSTICO', details: `🔍 marketComprado com ID divergente (recebido #${explicitId}, pendente #${lastAttempt.offerId})` });
+        }
+        return;
+      }
       if (ultCompra && ultCompra.offerId) {
         const offId = Number(ultCompra.offerId);
         if (explicitId != null && explicitId !== offId) {
@@ -2419,12 +2543,12 @@ if (typeof window !== 'undefined') {
           return;
         }
         if (sniperState.confirmedOffers[offId]) {
-          sniperState.lastBuyAttempt = null;
+          if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === offId) sniperState.lastBuyAttempt = null;
           return;
         }
         sniperState.confirmedOffers[offId] = true;
         clearOfferTimers(offId);
-        sniperState.lastBuyAttempt = null;
+        if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === offId) sniperState.lastBuyAttempt = null;
       } else if (explicitId != null && sniperState.confirmedOffers[explicitId]) {
         return;
       } else if (explicitId != null) {
@@ -2433,6 +2557,8 @@ if (typeof window !== 'undefined') {
       }
       showRotomHudToast('COMPRA CONFIRMADA!', desc, 'confirmed');
       const refCompra = ultCompra || (explicitId != null && sniperState.recentAttemptsByOffer ? sniperState.recentAttemptsByOffer[explicitId] : null);
+      if (resolvedId != null) confirmRuleBuy(resolvedId, e);
+      else if (refCompra && refCompra.offerId != null) confirmRuleBuy(refCompra.offerId, e);
       const qtdDesc = /^\s*(\d+)\s*[x×]/i.exec(String(desc));
       const descClean = String(desc || '').replace(/^\s*\d+\s*[x×]\s*/i, '').trim();
       const isGenericDesc = !descClean || /entregue na mochila|entregue no depot|venceu o sorteio/i.test(descClean);
@@ -2458,43 +2584,47 @@ if (typeof window !== 'undefined') {
         details: detailParts.length ? detailParts.join(' · ') : `Confirmado pelo servidor: ${desc}`
       });
     } else if (evKey === 'mktSorteio') {
-      const ultCompra = sniperState.lastBuyAttempt || null;
+      let ultCompra = sniperState.lastBuyAttempt || null;
+      const evId = extractExplicitOfferId(e);
+      const pending = sniperState.pendingRuleBuys || {};
+      if (evId != null) {
+        ultCompra = (sniperState.recentAttemptsByOffer || {})[evId] || (ultCompra && Number(ultCompra.offerId) === evId ? ultCompra : null);
+        if (!ultCompra && pending[evId]) ultCompra = { offerId: evId, ...pending[evId] };
+      }
       if (ultCompra && ultCompra.offerId) {
         const offId = Number(ultCompra.offerId);
-        const evId = extractExplicitOfferId(e);
         if (evId != null && evId === offId) {
           const fase = sanitizeDiagText(e.fase || '', 24);
           if (fase === 'fim') {
             if ((e.perdeu === true || e.ok === false) && e.ok !== true) {
               delete sniperState.boughtOffers[offId];
               delete sniperState.confirmedOffers[offId];
+              if (sniperState.sentBuyOrders) delete sniperState.sentBuyOrders[offId];
+              clearOfferTimers(offId);
               (sniperState.pioRecusados = sniperState.pioRecusados || {})[offId] = Date.now();
-              if (ultCompra.ruleId && sniperState.rules) {
-                const foundRule = sniperState.rules.find(r => String(r.id) === String(ultCompra.ruleId));
-                if (foundRule) {
-                  foundRule.totalBought = Math.max(0, (Number(foundRule.totalBought) || 0) - (Number(ultCompra.qty) || 1));
-                }
-              }
-              sniperState.lastBuyAttempt = null;
-              const motivo = sanitizeDiagText(e.msg || 'Outro jogador venceu o sorteio de liberação', 120);
+              releaseRuleBuy(offId);
+              if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === offId) sniperState.lastBuyAttempt = null;
+              const lost = e.perdeu === true;
+              const motivo = sanitizeDiagText(e.msg || (lost ? 'Outro jogador venceu o sorteio de liberação' : 'Compra recusada'), 120);
               emitSniperLog({
-                id: 'sorteio_perdeu_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+                id: (lost ? 'sorteio_perdeu_' : 'recusado_') + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
                 timestamp: Date.now(),
                 targetName: ultCompra.targetName,
                 offerId: offId,
                 status: 'RECUSADO',
-                lotteryResult: 'loss',
-                lotteryConfirmedAt: Date.now(),
+                qty: ultCompra.qty,
+                ...(lost ? { lotteryResult: 'loss', lotteryConfirmedAt: Date.now() } : {}),
                 details: `❌ Recusado pelo servidor: ${motivo}`
               });
             } else if (e.ok === true && e.perdeu !== true) {
               if (sniperState.confirmedOffers[offId]) {
-                sniperState.lastBuyAttempt = null;
+                if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === offId) sniperState.lastBuyAttempt = null;
                 return;
               }
               sniperState.confirmedOffers[offId] = true;
+              confirmRuleBuy(offId, e);
               clearOfferTimers(offId);
-              sniperState.lastBuyAttempt = null;
+              if (sniperState.lastBuyAttempt && Number(sniperState.lastBuyAttempt.offerId) === offId) sniperState.lastBuyAttempt = null;
               const desc = sanitizeDiagText(e.descricao || ultCompra.targetName || 'Venceu o sorteio de liberação!', 120);
               const qtdDesc = /^\s*(\d+)\s*[x×]/i.exec(String(desc));
               const descClean = String(desc || '').replace(/^\s*\d+\s*[x×]\s*/i, '').trim();
@@ -2549,9 +2679,13 @@ if (typeof window !== 'undefined') {
   function handleMarketPacket(packet) {
     if (!packet || typeof packet !== 'object') return;
     const t = packet.t || '';
+    if (packet.data && typeof packet.data === 'object' &&
+        ['market', 'batalha', 'marketComprado', 'marketCompradoLote', 'mktSorteio', 'erro'].includes(t)) {
+      packet = { ...packet, ...packet.data, t };
+    }
 
     // Eventos de mercado diretos ou aninhados
-    if (packet.k === 'marketComprado' || packet.t === 'marketComprado' || packet.k === 'mktSorteio' || packet.t === 'mktSorteio') {
+    if (packet.k === 'marketComprado' || packet.t === 'marketComprado' || packet.k === 'marketCompradoLote' || packet.t === 'marketCompradoLote' || packet.k === 'mktSorteio' || packet.t === 'mktSorteio') {
       processMarketEvent(packet);
     } else if (Array.isArray(packet.ev)) {
       for (const e of packet.ev) {
@@ -2592,6 +2726,7 @@ if (typeof window !== 'undefined') {
     if (packet.servidorAgora) atualizarRelogioServidor(packet.servidorAgora);
     else if (est && est.servidorAgora) atualizarRelogioServidor(est.servidorAgora);
     if (est) {
+      refreshWalletCeilings(est);
       updatePlayerBalance(est.gold, est.diamonds, est.orbs);
       if (est.noCentro || est.huntSlug === 'centro_pokemon') {
         playerInPokemonCenter = true;
@@ -2604,7 +2739,8 @@ if (typeof window !== 'undefined') {
         farmSession.activeHuntName = formatHuntName(est.huntSlug) + tierTxt;
         getOrCreateHuntStat(farmSession.activeHuntSlug, farmSession.activeHuntName);
       }
-    } else if (typeof packet.gold === 'number') {
+    } else if ([packet.gold, packet.orbs, packet.diamonds].some(Number.isFinite)) {
+      refreshWalletCeilings(packet);
       updatePlayerBalance(packet.gold, packet.diamonds, packet.orbs);
     }
 
@@ -2720,7 +2856,8 @@ if (typeof window !== 'undefined') {
 
           for (let r = 0; r < activeRules.length; r++) {
             const rule = activeRules[r];
-            if (rule.maxQty > 0 && (rule.totalBought || 0) >= rule.maxQty) continue;
+            const ruleUsed = (Number(rule.totalBought) || 0) + getPendingRuleQuantity(rule.id);
+            if (rule.maxQty > 0 && ruleUsed >= rule.maxQty) continue;
 
             const maxGold = Number(rule.maxPriceGold || 0);
             const maxGems = Number(rule.maxPriceGems !== undefined ? rule.maxPriceGems : (rule.maxPriceDiamonds || 0));
@@ -3198,6 +3335,24 @@ if (typeof window !== 'undefined') {
     scanTimeouts.clear();
   }
 
+  window.__pioPauseSniperForHeadless = function(activeFiniteRuleIds = []) {
+    const activeIds = new Set(activeFiniteRuleIds.map(String));
+    const pendingBuys = Object.values(sniperState.pendingRuleBuys || {});
+    const blockingBuys = pendingBuys.filter(buy => activeIds.has(String(buy.ruleId)));
+    const snapshot = {
+      paused: blockingBuys.length === 0,
+      blockingBuys,
+      pendingBuys,
+      rules: sniperState.rules.map(({ id, totalBought }) => ({ id, totalBought: Number(totalBought) || 0 }))
+    };
+    if (!snapshot.paused) return snapshot;
+    sniperState.enabled = false;
+    limparScanTimeouts();
+    Object.keys(sniperState.scheduledOffers).forEach(clearOfferTimers);
+    sniperState.scheduledOffers = {};
+    return snapshot;
+  };
+
   function agendarScanQuery(fn, ms) {
     let id;
     const run = () => {
@@ -3312,7 +3467,7 @@ if (typeof window !== 'undefined') {
 
     if (event.data.type === 'INIT_SNIPER') {
       sniperState.enabled = Boolean(event.data.enabled);
-      if (Array.isArray(event.data.rules)) sniperState.rules = event.data.rules;
+      if (Array.isArray(event.data.rules)) sniperState.rules = mergeConfirmedRuleTotals(event.data.rules);
       if (event.data.globalConfig) sniperState.globalConfig = Object.assign(sniperState.globalConfig, event.data.globalConfig);
       console.log('[Rotom Sniper]: Inicializado. Ativo:', sniperState.enabled, 'Regras:', sniperState.rules.length);
     } else if (event.data.type === 'SET_SNIPER_ENABLED') {
@@ -3331,7 +3486,12 @@ if (typeof window !== 'undefined') {
         sniperState.enabled ? 'success' : 'warning'
       );
     } else if (event.data.type === 'UPDATE_SNIPER_RULES') {
-      sniperState.rules = Array.isArray(event.data.rules) ? event.data.rules : [];
+      const nextRules = Array.isArray(event.data.rules) ? event.data.rules : [];
+      const nextIds = new Set(nextRules.map(rule => String(rule.id)));
+      for (const previous of sniperState.rules) {
+        if (!nextIds.has(String(previous.id))) releaseRuleBuys(previous.id);
+      }
+      sniperState.rules = mergeConfirmedRuleTotals(nextRules);
       limparScanTimeouts();
       // Se não há regras ativas de itens, limpa agendamentos
       const activeRuleIds = new Set(sniperState.rules.filter(r => r.active).map(r => r.id));
@@ -6963,6 +7123,10 @@ queueMicrotask(() => {
       if (!editingRuleId) return;
       const rule = sniperRules.find(r => r.id === editingRuleId);
       if (rule) {
+        const previousRuleId = rule.id;
+        rule.id = `rule_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        editingRuleId = rule.id;
+        releaseSavedRuleReservations(previousRuleId);
         rule.totalBought = 0;
         if (lblEditBought) lblEditBought.textContent = '0 unidades';
         saveAndSyncRules();
@@ -7162,6 +7326,17 @@ queueMicrotask(() => {
   function saveAndSyncRules() {
     renderRules();
     sendToActiveTab({ action: 'UPDATE_SNIPER_RULES', rules: sniperRules });
+  }
+
+  function releaseSavedRuleReservations(ruleId) {
+    try {
+      const saved = JSON.parse(window.localStorage.getItem('rotom_sniper_pending_buys') || '{}');
+      if (saved.version !== 1 || !saved.offers) return;
+      for (const [offerId, buy] of Object.entries(saved.offers)) {
+        if (String(buy.ruleId) === String(ruleId)) delete saved.offers[offerId];
+      }
+      window.localStorage.setItem('rotom_sniper_pending_buys', JSON.stringify(saved));
+    } catch (e) {}
   }
 
   function saveAndSyncConfig() {

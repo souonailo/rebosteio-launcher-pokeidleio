@@ -100,6 +100,28 @@ const category = {id: 'stones', targetType: 'category', targetCategory: 'stone',
 const pokemon = (id, extra = {}) => ({id, tipo: 'pokemon', pokemonNome: 'Pikachu', preco: 100, moeda: 'gold', qtd: 1, ficha: {speciesId: 25, nome: 'Pikachu'}, ...extra});
 const presets = ['rust-migration/ui/presets/auto-sniper.js', 'rust-migration/presets/auto-sniper.js'];
 for (const preset of presets) {
+  test(preset + ': simultaneous offers share available gems and only delivered units count', () => {
+    const h = harness(preset, {}, [{...category, maxQty: 10}]);
+    h.ctx.estado.orbs = 10;
+    const offer = (id, qty) => ({id, tipo:'item', itemId:142, moeda:'orb', preco:2, qtd:qty});
+    const purchases = () => h.sent.filter(packet => packet.t === 'market.comprar');
+    h.offers([offer(700, 3), offer(701, 4)]);
+    assert.deepEqual(purchases().map(packet => packet.qtd), [3, 2]);
+    h.receive({t:'estado', orbs:10});
+    h.offers([offer(702, 1)]);
+    assert.equal(purchases().length, 2);
+    h.receive({t:'mktSorteio', id:701, fase:'fim', perdeu:true});
+    h.receive({t:'marketComprado', descricao:'3× Water Stone'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0);
+    h.offers([offer(703, 3)]);
+    assert.equal(purchases().at(-1).qtd, 2);
+    h.receive({t:'marketComprado', id:700, qtd:1});
+    h.receive({t:'marketComprado', id:700, qtd:1});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1);
+    assert.equal(h.ctx.__rotomSniperHasInFlight(703), true);
+    h.offers([offer(704, 6)]);
+    assert.equal(purchases().at(-1).qtd, 2, 'Confirmed spend and the other live order still reduce the unchanged wallet snapshot');
+  });
   test(preset + ': manual coordination distinguishes concurrent automatic offers and their ACKs', () => {
     const h=harness(preset,{},[{...category,maxQty:10}]);
     h.offers([985,986].map(id=>({id,tipo:'item',itemId:142,preco:100,moeda:'gold',qtd:1})));
@@ -231,10 +253,69 @@ for (const preset of presets) {
     h.offers([{id:802,tipo:'item',itemId:70031,itemNome:'Shiny Stone Bug',preco:100,moeda:'gold',qtd:1}]);
     assert.equal(h.sent.filter(x => x.t === 'market.comprar').length, 1, 'Shared rule budget prevents another item purchase');
   });
+  test(preset + ': quota counts server-confirmed delivery and reserves uncertain orders', () => {
+    const nativeReserved = harness(preset, {}, [{...category, maxQty:3, nativeReservedQty:2}]);
+    nativeReserved.offers([{id:900,tipo:'item',itemId:2,itemNome:'Ancient Stone',preco:100,moeda:'gold',qtd:5}]);
+    assert.equal(nativeReserved.sent.find(x=>x.t==='market.comprar').qtd,1,'Native in-flight quantity shares the same rule quota');
+
+    const h = harness(preset, {}, [{...category, maxQty:3}]);
+    h.receive({t:'market',data:{aba:'item',itemId:2,moeda:'gold',linhas:[{id:901,tipo:'item',preco:100,qtd:5}]}});
+    assert.equal(h.sent.find(x=>x.t==='market.comprar').qtd,3);
+    assert.equal(h.sent.find(x=>x.t==='market.comprar').sorteioUi,1);
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,0,'Sent quantity is not counted as purchased');
+    const pending = JSON.parse(h.ctx.localStorage.getItem('rotom_sniper_pending_buys'));
+    assert.equal(pending.offers['901'].qty,3,'Uncertain order is persisted as a reservation');
+    h.receive({t:'marketCompradoLote',descricao:'3× Ancient Stone'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,0,'An id-less batch ACK cannot be assigned to an offer');
+    h.offers([{id:902,tipo:'item',itemId:70031,itemNome:'Shiny Stone Bug',preco:100,moeda:'gold',qtd:5}]);
+    assert.equal(h.sent.some(x=>x.id===902&&x.t==='market.comprar'),false,'No second order exceeds remaining quota while first is pending');
+    h.receive({t:'batalha',data:{ev:[{k:'marketCompradoLote',id:901,descricao:'2× Ancient Stone'}]}});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,2,'Partial delivery counts the server supplied quantity');
+    h.receive({t:'marketCompradoLote',id:901,descricao:'2× Ancient Stone'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,2,'Duplicate confirmations do not count twice');
+    h.offers([{id:903,tipo:'item',itemId:70031,itemNome:'Shiny Stone Bug',preco:100,moeda:'gold',qtd:5}]);
+    assert.equal(h.sent.find(x=>x.id===903).qtd,1,'Only the last unfilled unit remains');
+    h.receive({t:'erro',id:903,op:'market.comprar',chave:'market_anuncio_comprado'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,2,'Explicit rejection does not count as a purchase');
+    assert.equal(JSON.parse(h.ctx.localStorage.getItem('rotom_sniper_pending_buys')).offers['903'],undefined,'Explicit rejection releases its reservation');
+    h.receive({t:'marketComprado',id:903,descricao:'1× Shiny Stone Bug'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,2,'A late ACK after a terminal rejection cannot count twice');
+    h.offers([{id:904,tipo:'item',itemId:70031,itemNome:'Shiny Stone Bug',preco:100,moeda:'gold',qtd:5}]);
+    assert.equal(h.sent.find(x=>x.id===904&&x.t==='market.comprar').qtd,1,'Terminal rejection frees the quota for another offer');
+  });
+  test(preset + ': headless handoff refuses pending finite buys and cancels delayed orders', () => {
+    const pending = harness(preset, {}, [{...category, maxQty:3}]);
+    pending.offers([{id:905,tipo:'item',itemId:2,itemNome:'Ancient Stone',preco:100,moeda:'gold',qtd:1}]);
+    const refused = pending.ctx.__pioPauseSniperForHeadless(['stones']);
+    assert.equal(refused.paused,false);
+    assert.equal(pending.ctx.__engine.sniperState.enabled,true,'A blocked handoff leaves the visual engine running');
+
+    const delayed = harness(preset, {}, [{...category, maxQty:3}]);
+    delayed.offers([{id:906,tipo:'item',itemId:2,itemNome:'Ancient Stone',preco:100,moeda:'gold',qtd:1,compravelEm:1_001_000}]);
+    const paused = delayed.ctx.__pioPauseSniperForHeadless(['stones']);
+    assert.equal(paused.paused,true);
+    assert.equal(delayed.ctx.__engine.sniperState.enabled,false);
+    delayed.advance(4000);
+    assert.equal(delayed.sent.some(x=>x.id===906&&x.t==='market.comprar'),false,'No delayed order fires after the pause snapshot');
+  });
+  test(preset + ': id-less ACKs and terminal errors do not resolve multiple pending buys', () => {
+    const h = harness(preset, {}, [{...category, maxQty:10}]);
+    h.offers([985,986].map(id=>({id,tipo:'item',itemId:142,preco:100,moeda:'gold',qtd:1})));
+    h.receive({t:'marketComprado',descricao:'1× Ancient Stone'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,0,'Ambiguous delivery is not attributed to either pending offer');
+    h.receive({t:'erro',chave:'market_anuncio_comprado'});
+    assert.deepEqual(Object.keys(h.ctx.__engine.sniperState.pendingRuleBuys).sort(),['985','986'],'Ambiguous terminal reply retains both reservations');
+    h.receive({t:'marketComprado',id:985,descricao:'1× Ancient Stone'});
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,1,'Explicit matching ACK counts the associated order');
+    assert.deepEqual(Object.keys(h.ctx.__engine.sniperState.pendingRuleBuys),['986']);
+  });
   test(preset + ': real storage bridge persists category consumption without double counting', () => {
     const h = harness(preset, {}, [{...category,totalBought:1}]);
     const stored = h.installStorageBridge();
     h.offers([{id:811,tipo:'item',itemId:2,itemNome:'Ancient Stone',preco:100,moeda:'gold',qtd:2}]);
+    h.advance(0);
+    assert.equal(stored.rotom_sniper_rules[0].totalBought,1,'Sending an order does not persist purchased quantity');
+    h.receive({t:'marketComprado',id:811,descricao:'2× Ancient Stone'});
     h.advance(0);
     assert.equal(stored.rotom_sniper_rules[0].totalBought,3);
     assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought,3);

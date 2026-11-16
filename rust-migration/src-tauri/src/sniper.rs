@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter};
 // 1. CONSTANTS, CONTRACTS & SCHEMAS
 // =========================================================================
 
-pub const PROTOCOL_VERSION: u32 = 1;
+pub const PROTOCOL_VERSION: u32 = 2;
 pub const MAX_HISTORY_PER_ACCOUNT: usize = 500;
 pub const MAX_RULES_PER_ACCOUNT: usize = 50;
 pub const MAX_RULE_ID_LEN: usize = 64;
@@ -359,6 +359,9 @@ pub struct PendingBuyIntent {
     pub currency: String,
     pub timestamp: u64,
     pub accounted: bool,
+    // Older sessions already released deferred wallet holds on reconnect.
+    #[serde(default)]
+    pub retain_wallet_hold: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -373,6 +376,10 @@ pub struct AccountState {
     pub logs: Vec<SniperLogEntry>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pending_intent: Option<PendingBuyIntent>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parallel_intents: Vec<PendingBuyIntent>,
+    #[serde(default)]
+    pub deferred_intents: Vec<PendingBuyIntent>,
     #[serde(default)]
     pub history_cleared_at: u64,
 }
@@ -387,8 +394,31 @@ impl AccountState {
             config: SniperConfig::default(),
             logs: Vec::new(),
             pending_intent: None,
+            parallel_intents: Vec::new(),
+            deferred_intents: Vec::new(),
             history_cleared_at: 0,
         }
+    }
+
+    fn take_pending(&mut self, offer_id: u64) -> Option<PendingBuyIntent> {
+        if self.pending_intent.as_ref().is_some_and(|intent| intent.offer_id == offer_id) {
+            return self.pending_intent.take();
+        }
+        let position = self.parallel_intents.iter().position(|intent| intent.offer_id == offer_id)?;
+        Some(self.parallel_intents.remove(position))
+    }
+
+    fn reserved_qty_for_rule(&self, rule_id: &str) -> u64 {
+        self.deferred_intents.iter().chain(&self.parallel_intents).chain(&self.pending_intent)
+            .filter(|intent| intent.rule_id.as_deref() == Some(rule_id))
+            .fold(0u64, |total, intent| total.saturating_add(intent.qty))
+    }
+
+    fn lone_timed_out_offer(&self, runtime: &AccountRuntime) -> Option<u64> {
+        let [intent] = self.deferred_intents.as_slice() else { return None };
+        (runtime.outstanding_buys.is_empty() && !runtime.is_manual_reserved()
+            && !runtime.require_reply_id.contains(&intent.offer_id)
+            && runtime.deferred_wallet_holds.contains(&intent.offer_id)).then_some(intent.offer_id)
     }
 }
 
@@ -647,6 +677,8 @@ pub struct AccountRuntime {
     pub is_vip: bool,
     pub reserved_gold: u64,
     pub reserved_orbs: u64,
+    deferred_wallet_holds: HashSet<u64>,
+    require_reply_id: HashSet<u64>,
     pub server_offset_ms: i64,
     pub last_scan_instant: Option<Instant>,
     pub scan_cycle: usize,
@@ -655,7 +687,7 @@ pub struct AccountRuntime {
     pub confirmed_offers: HashSet<u64>,
     pub scheduled_offers: HashMap<u64, ScheduledOffer>,
     pub scheduled_queries: Vec<ScheduledQuery>,
-    pub outstanding_buy: Option<OutstandingBuy>,
+    pub outstanding_buys: HashMap<u64, OutstandingBuy>,
     pub manual_reserved_until: Option<Instant>,
     pub manual_offer_id: Option<u64>,
     pub manual_locked_until_ack: bool,
@@ -670,6 +702,8 @@ impl Default for AccountRuntime {
             is_vip: false,
             reserved_gold: 0,
             reserved_orbs: 0,
+            deferred_wallet_holds: HashSet::new(),
+            require_reply_id: HashSet::new(),
             server_offset_ms: 0,
             last_scan_instant: None,
             scan_cycle: 0,
@@ -678,7 +712,7 @@ impl Default for AccountRuntime {
             confirmed_offers: HashSet::new(),
             scheduled_offers: HashMap::new(),
             scheduled_queries: Vec::new(),
-            outstanding_buy: None,
+            outstanding_buys: HashMap::new(),
             manual_reserved_until: None,
             manual_offer_id: None,
             manual_locked_until_ack: false,
@@ -687,6 +721,18 @@ impl Default for AccountRuntime {
 }
 
 impl AccountRuntime {
+    // ID-less replies are usable only for a single identifiable order.
+    fn reply_target(&self, explicit_id: Option<u64>) -> Option<u64> {
+        if let Some(id) = explicit_id {
+            if self.outstanding_buys.contains_key(&id) { return Some(id); }
+        }
+        if self.outstanding_buys.len() == 1 {
+            let id = *self.outstanding_buys.keys().next()?;
+            if explicit_id.is_some() || !self.require_reply_id.contains(&id) { return Some(id); }
+        }
+        None
+    }
+
     pub fn is_manual_reserved(&self) -> bool {
         if self.manual_locked_until_ack {
             return true;
@@ -750,8 +796,25 @@ impl AccountRuntime {
         }
     }
 
+    fn settle_deferred_wallet(&mut self, intent: &PendingBuyIntent, delivered: u64) {
+        // Only debit holds attributed to this wallet. Legacy deferred orders may have none.
+        if !self.deferred_wallet_holds.remove(&intent.offer_id) {
+            return;
+        }
+        self.release_reservation(&intent.currency, intent.qty.saturating_mul(intent.price));
+        let balance = match normalize_currency(&intent.currency) {
+            "gold" => &mut self.gold,
+            "orb" => &mut self.orbs,
+            _ => return,
+        };
+        if *balance >= 0 {
+            *balance = (*balance as u64).saturating_sub(delivered.saturating_mul(intent.price)) as i64;
+        }
+    }
+
     pub fn prune_old_records(&mut self) {
         let now = Instant::now();
+        self.require_reply_id.retain(|id| self.outstanding_buys.contains_key(id) || self.deferred_wallet_holds.contains(id));
         self.bought_offers
             .retain(|_, ts| now.duration_since(*ts) < Duration::from_secs(60));
         if self.confirmed_offers.len() > 3000 {
@@ -786,9 +849,25 @@ impl SniperEngine {
                         if s.version > PROTOCOL_VERSION {
                             return Err(format!("Unsupported future sniper configuration version {} (expected <= {})", s.version, PROTOCOL_VERSION));
                         }
+                        let loaded_version = s.version;
                         s.version = PROTOCOL_VERSION;
                         for i in 0..4 {
                             s.accounts[i].index = i;
+                            if loaded_version < 2 {
+                                if let Some(intent) = s.accounts[i].pending_intent.as_ref() {
+                                    if intent.accounted {
+                                        if let Some(rule_id) = intent.rule_id.as_deref() {
+                                            if let Some(rule) = s.accounts[i]
+                                                .rules
+                                                .iter_mut()
+                                                .find(|rule| rule.id == rule_id)
+                                            {
+                                                rule.total_bought = rule.total_bought.saturating_sub(intent.qty);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                             validate_config(&s.accounts[i].config)?;
                             if s.accounts[i].rules.len() > MAX_RULES_PER_ACCOUNT {
                                 return Err(format!(
@@ -924,8 +1003,8 @@ impl SniperEngine {
 
         // Restore pending intent into runtime if present on disk
         for i in 0..4 {
-            if let Some(ref intent) = store.accounts[i].pending_intent {
-                runtimes[i].outstanding_buy = Some(OutstandingBuy {
+            for intent in store.accounts[i].pending_intent.iter().chain(&store.accounts[i].parallel_intents) {
+                runtimes[i].outstanding_buys.insert(intent.offer_id, OutstandingBuy {
                     offer_id: intent.offer_id,
                     rule_id: intent.rule_id.clone(),
                     target_name: intent.target_name.clone(),
@@ -1377,18 +1456,33 @@ impl SniperEngine {
         rt.clear_scheduled_queries();
         rt.reserved_gold = 0;
         rt.reserved_orbs = 0;
+        rt.deferred_wallet_holds.clear();
+        rt.require_reply_id.clear();
         rt.last_scan_instant = None;
         rt.hot_until = None;
         rt.scan_cycle = 0;
 
-        // Any pending intent from previous session is already accounted on disk!
-        // Clear transient state without double-counting.
-        let _ = rt.outstanding_buy.take();
-        if self.store.accounts[index].pending_intent.is_some() {
+        // Preserve prior-session quota reservations separately from the active
+        // send. They can be matched later only by an explicit offer ID.
+        rt.outstanding_buys.clear();
+        if self.store.accounts[index].pending_intent.is_some() || !self.store.accounts[index].parallel_intents.is_empty() {
             let mut candidate = self.store.clone();
-            candidate.accounts[index].pending_intent = None;
+            let acc = &mut candidate.accounts[index];
+            for intent in acc.pending_intent.take().into_iter().chain(std::mem::take(&mut acc.parallel_intents)) {
+                if !acc.deferred_intents.iter().any(|prior| prior.offer_id == intent.offer_id) {
+                    acc.deferred_intents.push(intent);
+                }
+            }
             let _ = self.persist_store_candidate(&candidate);
             self.store = candidate;
+        }
+
+        let rt = &mut self.runtimes[index];
+        for intent in &self.store.accounts[index].deferred_intents {
+            if intent.retain_wallet_hold && rt.deferred_wallet_holds.insert(intent.offer_id) {
+                rt.reserve(&intent.currency, intent.qty.saturating_mul(intent.price));
+                rt.require_reply_id.insert(intent.offer_id);
+            }
         }
 
         if !self.store.accounts[index].enabled {
@@ -1414,11 +1508,10 @@ impl SniperEngine {
         rt.diamonds = -1;
         rt.orbs = -1;
 
-        if let Some(buy) = rt.outstanding_buy.take() {
-            rt.release_reservation(&buy.currency, buy.reserved_amount);
+        for (_, buy) in std::mem::take(&mut rt.outstanding_buys) {
+            self.runtimes[index].release_reservation(&buy.currency, buy.reserved_amount);
             let mut candidate = self.store.clone();
             let acc = &mut candidate.accounts[index];
-            // Quantity was ALREADY preconsumed in try_emit_buy! Do NOT add again!
             let entry = SniperLogEntry {
                 id: format!("disc_{}_{}", now_ms(), buy.offer_id),
                 timestamp: now_ms(),
@@ -1428,7 +1521,7 @@ impl SniperEngine {
                 currency: Some(buy.currency),
                 qty: Some(buy.qty),
                 offer_id: Some(buy.offer_id),
-                details: "Desconectado com ordem em andamento; limite consumido preventivamente por segurança.".into(),
+                details: "Desconectado com ordem em andamento; resultado pendente de confirmação.".into(),
                 account_index: Some(index),
                 extra: HashMap::new(),
             };
@@ -1451,26 +1544,11 @@ impl SniperEngine {
             return;
         }
         let rt = &mut self.runtimes[index];
-        if let Some(buy) = &rt.outstanding_buy {
-            if buy.offer_id != offer_id {
-                return;
-            }
-        } else {
-            return;
-        }
-        if let Some(buy) = rt.outstanding_buy.take() {
+        if let Some(buy) = rt.outstanding_buys.remove(&offer_id) {
             rt.release_reservation(&buy.currency, buy.reserved_amount);
-
             let mut candidate = self.store.clone();
             let acc = &mut candidate.accounts[index];
-
-            // Rollback preconsumed quantity on send failure
-            if let Some(ref rid) = buy.rule_id {
-                if let Some(r) = acc.rules.iter_mut().find(|r| &r.id == rid) {
-                    r.total_bought = r.total_bought.saturating_sub(buy.qty);
-                }
-            }
-            acc.pending_intent = None;
+            acc.take_pending(offer_id);
 
             let entry = SniperLogEntry {
                 id: format!("fail_{}_{}", now_ms(), offer_id),
@@ -1533,11 +1611,12 @@ impl SniperEngine {
         if index >= 4 || offer_id == 0 {
             return false;
         }
-        self.store.accounts.get(index)
+        self.store.accounts[index].deferred_intents.iter().any(|intent| intent.offer_id == offer_id)
+            || self.store.accounts.get(index)
             .and_then(|acc| acc.pending_intent.as_ref())
             .map_or(false, |pending| pending.offer_id == offer_id)
-            || self.runtimes[index].outstanding_buy.as_ref()
-                .map_or(false, |pending| pending.offer_id == offer_id)
+            || self.runtimes[index].outstanding_buys.contains_key(&offer_id)
+            || self.store.accounts[index].parallel_intents.iter().any(|intent| intent.offer_id == offer_id)
     }
 
     pub fn has_in_flight_buy(&self, index: usize) -> bool {
@@ -1545,11 +1624,11 @@ impl SniperEngine {
             return false;
         }
         if let Some(acc) = self.store.accounts.get(index) {
-            if acc.pending_intent.is_some() {
+            if acc.pending_intent.is_some() || !acc.parallel_intents.is_empty() {
                 return true;
             }
         }
-        self.runtimes[index].outstanding_buy.is_some()
+        !self.runtimes[index].outstanding_buys.is_empty()
     }
 
     pub fn try_emit_buy(
@@ -1591,23 +1670,28 @@ impl SniperEngine {
         if self.runtimes[index].is_manual_reserved() {
             return None;
         }
-        let total_cost = buy_qty.checked_mul(price)?;
-        let avail = self.runtimes[index].available_balance(&currency)?;
-        if avail < total_cost {
+        if self.has_in_flight_offer(index, offer_id) || self.runtimes[index].confirmed_offers.contains(&offer_id) {
             return None;
         }
+        let account = &self.store.accounts[index];
+        let mut buy_qty = buy_qty;
+        if let Some(rid) = rule_id.as_deref() {
+            let rule = account.rules.iter().find(|rule| rule.id == rid)?;
+            let remaining = rule.remaining_qty(self.runtimes[index].is_vip)
+                .saturating_sub(account.reserved_qty_for_rule(rid));
+            buy_qty = buy_qty.min(remaining);
+        }
+        let avail = self.runtimes[index].available_balance(&currency)?;
+        if account.config.auto_max_affordable && price > 0 {
+            buy_qty = buy_qty.min(avail / price);
+        }
+        let total_cost = buy_qty.checked_mul(price)?;
+        if buy_qty == 0 || avail < total_cost { return None; }
 
         let clean_seller = seller.trim().trim_start_matches('@').to_string();
         let mut candidate = self.store.clone();
         let acc = &mut candidate.accounts[index];
-
-        // Preconsume budget on rule
-        if let Some(ref rid) = rule_id {
-            let r = acc.rules.iter_mut().find(|r| &r.id == rid)?;
-            r.total_bought = r.total_bought.saturating_add(buy_qty);
-        }
-
-        acc.pending_intent = Some(PendingBuyIntent {
+        let intent = PendingBuyIntent {
             offer_id,
             rule_id: rule_id.clone(),
             target_name: target_name.clone(),
@@ -1616,8 +1700,14 @@ impl SniperEngine {
             price,
             currency: currency.clone(),
             timestamp: now_ms_val,
-            accounted: true,
-        });
+            accounted: false,
+            retain_wallet_hold: true,
+        };
+        if acc.pending_intent.is_none() {
+            acc.pending_intent = Some(intent);
+        } else {
+            acc.parallel_intents.push(intent);
+        }
 
         let mut send_extra = HashMap::new();
         if !clean_seller.is_empty() {
@@ -1650,8 +1740,12 @@ impl SniperEngine {
 
         // Commit runtime reservation & tracking
         let rt = &mut self.runtimes[index];
+        if !rt.outstanding_buys.is_empty() {
+            rt.require_reply_id.extend(rt.outstanding_buys.keys().copied());
+            rt.require_reply_id.insert(offer_id);
+        }
         rt.reserve(&currency, total_cost);
-        rt.outstanding_buy = Some(OutstandingBuy {
+        rt.outstanding_buys.insert(offer_id, OutstandingBuy {
             offer_id,
             rule_id,
             target_name,
@@ -1673,7 +1767,8 @@ impl SniperEngine {
             "id": offer_id,
             "qtd": buy_qty,
             "preco": price,
-            "moeda": currency
+            "moeda": currency,
+            "sorteioUi": 1
         }))
     }
 
@@ -1688,7 +1783,7 @@ impl SniperEngine {
         }
         let mut out_commands = Vec::new();
 
-        let acc_snapshot = self.store.accounts[index].clone();
+        let enabled = self.store.accounts[index].enabled;
 
         // 1. Drain ready scheduled queries (cadence / rotation delayed queries)
         let now_inst = Instant::now();
@@ -1702,31 +1797,21 @@ impl SniperEngine {
             }
         }
         self.runtimes[index].scheduled_queries = remaining_queries;
-        if acc_snapshot.enabled {
+        if enabled {
             out_commands.extend(ready_queries);
         } else {
             self.runtimes[index].clear_scheduled_queries();
         }
 
         // 2. Timeout on outstanding buy
-        let mut timed_out_buy = None;
-        {
-            let rt = &mut self.runtimes[index];
-            rt.prune_old_records();
-            if let Some(buy) = &mut rt.outstanding_buy {
-                if buy.state == BuyState::PendingConfirmation
-                    && buy.sent_at.elapsed() > Duration::from_secs(BUY_TIMEOUT_SECS)
-                {
-                    buy.state = BuyState::UncertainBlocked;
-                    timed_out_buy = Some(buy.clone());
-                }
-            }
-        }
-
-        if let Some(buy) = timed_out_buy {
+        self.runtimes[index].prune_old_records();
+        let expired: Vec<u64> = self.runtimes[index].outstanding_buys.values()
+            .filter(|buy| buy.state == BuyState::PendingConfirmation && buy.sent_at.elapsed() > Duration::from_secs(BUY_TIMEOUT_SECS))
+            .map(|buy| buy.offer_id).collect();
+        for offer_id in expired {
             let mut candidate = self.store.clone();
             let acc = &mut candidate.accounts[index];
-            // Quantity was ALREADY preconsumed in try_emit_buy! Do NOT add again!
+            let Some(buy) = acc.take_pending(offer_id) else { continue; };
             let entry = SniperLogEntry {
                 id: format!("timeout_{}_{}", now_ms_val, buy.offer_id),
                 timestamp: now_ms_val,
@@ -1736,17 +1821,24 @@ impl SniperEngine {
                 currency: Some(buy.currency.clone()),
                 qty: Some(buy.qty),
                 offer_id: Some(buy.offer_id),
-                details: "Tempo limite sem confirmação/recusa. Novas compras bloqueadas até resolução ou reconexão segura.".into(),
+                details: "Compra sem resposta. Quantidade e saldo reservados para este anúncio até confirmação ou recusa.".into(),
                 account_index: Some(index),
                 extra: HashMap::new(),
             };
+            acc.deferred_intents.push(buy);
             add_log_to_account(acc, entry);
-            let _ = self.persist_store_candidate(&candidate);
+            if self.persist_store_candidate(&candidate).is_err() {
+                return out_commands;
+            }
             self.store = candidate;
+            self.runtimes[index].deferred_wallet_holds.insert(offer_id);
+            self.runtimes[index].outstanding_buys.remove(&offer_id);
             if let Some(a) = app {
                 let _ = a.emit("sniper:updated", &self.store.to_snapshot());
             }
         }
+
+        let acc_snapshot = self.store.accounts[index].clone();
 
         // 3. Scheduled offers revalidation & emission (purchase intent)
         let ready_ids: Vec<u64> = {
@@ -1764,6 +1856,13 @@ impl SniperEngine {
                 if !acc_snapshot.enabled {
                     continue;
                 }
+                if acc_snapshot
+                    .deferred_intents
+                    .iter()
+                    .any(|intent| intent.offer_id == sched.offer_id)
+                {
+                    continue;
+                }
 
                 // Revalidate against rule budget and exclusions
                 let mut buy_qty = sched.buy_qty;
@@ -1775,7 +1874,9 @@ impl SniperEngine {
                         if r.target_type == "category" && !r.matches_category(sched.item_id) {
                             continue;
                         }
-                        let rem = r.remaining_qty(self.runtimes[index].is_vip);
+                        let rem = r
+                            .remaining_qty(self.runtimes[index].is_vip)
+                            .saturating_sub(acc_snapshot.reserved_qty_for_rule(rid));
                         if rem == 0 {
                             continue;
                         }
@@ -1785,7 +1886,7 @@ impl SniperEngine {
                     }
                 }
 
-                if self.runtimes[index].outstanding_buy.is_some() || self.runtimes[index].is_manual_reserved() {
+                if self.runtimes[index].is_manual_reserved() {
                     continue;
                 }
 
@@ -1911,14 +2012,18 @@ impl SniperEngine {
         self.feed_welcome(index, msg);
 
         // 2. Battle confirmation & lottery events (batalha.ev marketComprado, mktSorteio)
-        if t == "batalha" || t == "marketComprado" || t == "mktSorteio" {
+        if t == "batalha"
+            || t == "marketComprado"
+            || t == "marketCompradoLote"
+            || t == "mktSorteio"
+        {
             let events_vec: Vec<Value> = if t == "batalha" {
-                msg.get("ev")
+                msg.get("data").unwrap_or(msg).get("ev")
                     .and_then(|v| v.as_array())
                     .cloned()
                     .unwrap_or_default()
             } else {
-                vec![msg.clone()]
+                vec![msg.get("data").cloned().unwrap_or_else(|| msg.clone())]
             };
 
             for ev in events_vec {
@@ -1926,13 +2031,30 @@ impl SniperEngine {
                     .get("k")
                     .or_else(|| ev.get("t"))
                     .and_then(|v| v.as_str())
-                    .unwrap_or("");
-                if k == "marketComprado" {
+                    .unwrap_or(if t == "batalha" { "" } else { t });
+                if k == "marketComprado" || k == "marketCompradoLote" {
                     let ev_id_opt = extract_explicit_offer_id(&ev);
+                    if k == "marketCompradoLote" && ev_id_opt.is_none() {
+                        continue;
+                    }
+                    let ev_id_opt = ev_id_opt.or_else(|| self.store.accounts[index]
+                        .lone_timed_out_offer(&self.runtimes[index]));
+                    if ev_id_opt.is_none()
+                        && !self.store.accounts[index].deferred_intents.is_empty()
+                        && !self.runtimes[index].outstanding_buys.is_empty()
+                    {
+                        continue;
+                    }
+                    if let Some(ev_id) = ev_id_opt {
+                        if self.confirm_deferred_offer(index, ev_id, &ev, app) {
+                            continue;
+                        }
+                    }
                     let rt = &mut self.runtimes[index];
 
+                    let Some(target) = rt.reply_target(ev_id_opt) else { continue; };
                     // Check explicit ID if present: divergent ID must NOT confirm; keep pending and log bounded diagnostic!
-                    if let Some(buy) = rt.outstanding_buy.as_mut() {
+                    if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                         if let Some(ev_id) = ev_id_opt {
                             if ev_id != buy.offer_id {
                                 if buy.allow_aux_log(format!("diag:comprado:{}", ev_id)) {
@@ -1967,20 +2089,20 @@ impl SniperEngine {
                         .get("descricao")
                         .and_then(|v| v.as_str())
                         .unwrap_or("Item entregue no depot/mochila!");
-                    if let Some(buy) = rt.outstanding_buy.take() {
+                    if let Some(buy) = rt.outstanding_buys.remove(&target) {
+                        let confirmed_qty = confirmed_quantity(&ev, buy.qty);
+                        let confirmed_cost = confirmed_qty.saturating_mul(buy.price);
                         rt.release_reservation(&buy.currency, buy.reserved_amount);
                         // Debit cached balance unless authoritative newer wallet already applied to avoid overspending
                         match normalize_currency(&buy.currency) {
                             "gold" => {
                                 if rt.gold >= 0 {
-                                    rt.gold =
-                                        (rt.gold as u64).saturating_sub(buy.reserved_amount) as i64;
+                                    rt.gold = (rt.gold as u64).saturating_sub(confirmed_cost) as i64;
                                 }
                             }
                             "orb" => {
                                 if rt.orbs >= 0 {
-                                    rt.orbs =
-                                        (rt.orbs as u64).saturating_sub(buy.reserved_amount) as i64;
+                                    rt.orbs = (rt.orbs as u64).saturating_sub(confirmed_cost) as i64;
                                 }
                             }
                             _ => {}
@@ -1989,7 +2111,12 @@ impl SniperEngine {
 
                         let mut candidate = self.store.clone();
                         let acc = &mut candidate.accounts[index];
-                        acc.pending_intent = None;
+                        acc.take_pending(target);
+                        if let Some(ref rid) = buy.rule_id {
+                            if let Some(rule) = acc.rules.iter_mut().find(|r| &r.id == rid) {
+                                rule.total_bought = rule.total_bought.saturating_add(confirmed_qty);
+                            }
+                        }
 
                         let confirmed_at = now_ms();
                         let mut ok_extra = HashMap::new();
@@ -2022,7 +2149,7 @@ impl SniperEngine {
                             target_name: resolved_target,
                             price: Some(buy.price),
                             currency: Some(buy.currency),
-                            qty: Some(buy.qty),
+                            qty: Some(confirmed_qty),
                             offer_id: Some(buy.offer_id),
                             details: format!("✅ Confirmado pelo servidor: {}", desc),
                             account_index: Some(index),
@@ -2040,101 +2167,44 @@ impl SniperEngine {
                     let ev_id_opt = extract_explicit_offer_id(&ev);
                     let fase =
                         sanitize_text(ev.get("fase").and_then(|v| v.as_str()).unwrap_or(""), 24);
+                    if let Some(ev_id) = ev_id_opt {
+                        let perdeu = ev.get("perdeu").and_then(Value::as_bool);
+                        let ok = ev.get("ok").and_then(Value::as_bool);
+                        if fase == "fim" && ok != Some(true) && (perdeu == Some(true) || ok == Some(false)) {
+                            self.reject_lottery_order(index, ev_id, &ev, perdeu == Some(true), app);
+                            continue;
+                        }
+                        if fase == "fim" && ok == Some(true) && perdeu != Some(true)
+                            && self.confirm_deferred_offer(index, ev_id, &ev, app) {
+                            continue;
+                        }
+                    }
                     let rt = &mut self.runtimes[index];
-                    if let Some(pending_offer_id) = rt.outstanding_buy.as_ref().map(|b| b.offer_id)
+                    if let Some(target) = rt.reply_target(ev_id_opt)
                     {
                         if let Some(ev_id) = ev_id_opt {
-                            if ev_id == pending_offer_id {
+                            if ev_id == target {
                                 if fase == "fim" {
                                     let perdeu = ev.get("perdeu").and_then(|v| v.as_bool());
                                     let ok = ev.get("ok").and_then(|v| v.as_bool());
-                                    // 'fim' with a free-form message is not proof of
-                                    // defeat. Require an explicit terminal server flag.
-                                    if (perdeu == Some(true) || ok == Some(false))
-                                        && ok != Some(true)
-                                    {
-                                        // Lost lottery: terminal rejection!
-                                        let buy_taken = rt.outstanding_buy.take().unwrap();
-                                        rt.release_reservation(
-                                            &buy_taken.currency,
-                                            buy_taken.reserved_amount,
-                                        );
-                                        let mut candidate = self.store.clone();
-                                        let acc = &mut candidate.accounts[index];
-                                        if let Some(ref rid) = buy_taken.rule_id {
-                                            if let Some(r) =
-                                                acc.rules.iter_mut().find(|r| &r.id == rid)
-                                            {
-                                                r.total_bought =
-                                                    r.total_bought.saturating_sub(buy_taken.qty);
-                                            }
-                                        }
-                                        acc.pending_intent = None;
-                                        let motivo = sanitize_text(
-                                            ev.get("msg").and_then(|v| v.as_str()).unwrap_or(
-                                                "Outro jogador levou no sorteio de liberação",
-                                            ),
-                                            120,
-                                        );
-                                        let confirmed_at = now_ms();
-                                        let mut loss_extra = HashMap::new();
-                                        let evidence = if perdeu == Some(true) {
-                                            "mktSorteio.fim.perdeu"
-                                        } else {
-                                            "mktSorteio.fim.okFalse"
-                                        };
-                                        add_verified_lottery_metadata(
-                                            &mut loss_extra,
-                                            "loss",
-                                            evidence,
-                                            confirmed_at,
-                                        );
-                                        let entry = SniperLogEntry {
-                                            id: format!(
-                                                "sorteio_perdeu_{}_{}",
-                                                confirmed_at, buy_taken.offer_id
-                                            ),
-                                            timestamp: confirmed_at,
-                                            status: "RECUSADO".into(),
-                                            target_name: buy_taken.target_name,
-                                            price: Some(buy_taken.price),
-                                            currency: Some(buy_taken.currency),
-                                            qty: Some(buy_taken.qty),
-                                            offer_id: Some(buy_taken.offer_id),
-                                            details: format!(
-                                                "❌ Recusado pelo servidor: {}",
-                                                motivo
-                                            ),
-                                            account_index: Some(index),
-                                            extra: loss_extra,
-                                        };
-                                        add_log_to_account(acc, entry);
-                                        let _ = self.persist_store_candidate(&candidate);
-                                        self.store = candidate;
-                                        if let Some(a) = app {
-                                            let _ =
-                                                a.emit("sniper:updated", &self.store.to_snapshot());
-                                        }
-                                    } else if ok == Some(true) && perdeu != Some(true) {
+                                    if ok == Some(true) && perdeu != Some(true) {
                                         // Won lottery: confirm once (subsequent marketComprado for same offer_id sees outstanding_buy=None)
-                                        let buy_taken = rt.outstanding_buy.take().unwrap();
+                                        let buy_taken = rt.outstanding_buys.remove(&target).unwrap();
                                         rt.release_reservation(
                                             &buy_taken.currency,
                                             buy_taken.reserved_amount,
                                         );
+                                        let confirmed_qty = confirmed_quantity(&ev, buy_taken.qty);
+                                        let confirmed_cost = confirmed_qty.saturating_mul(buy_taken.price);
                                         match normalize_currency(&buy_taken.currency) {
                                             "gold" => {
                                                 if rt.gold >= 0 {
-                                                    rt.gold = (rt.gold as u64)
-                                                        .saturating_sub(buy_taken.reserved_amount)
-                                                        as i64;
+                                                    rt.gold = (rt.gold as u64).saturating_sub(confirmed_cost) as i64;
                                                 }
                                             }
                                             "orb" => {
                                                 if rt.orbs >= 0 {
-                                                    rt.orbs = (rt.orbs as u64)
-                                                        .saturating_sub(buy_taken.reserved_amount)
-                                                        as i64;
+                                                    rt.orbs = (rt.orbs as u64).saturating_sub(confirmed_cost) as i64;
                                                 }
                                             }
                                             _ => {}
@@ -2142,7 +2212,12 @@ impl SniperEngine {
                                         rt.confirmed_offers.insert(buy_taken.offer_id);
                                         let mut candidate = self.store.clone();
                                         let acc = &mut candidate.accounts[index];
-                                        acc.pending_intent = None;
+                                        acc.take_pending(target);
+                                        if let Some(ref rid) = buy_taken.rule_id {
+                                            if let Some(rule) = acc.rules.iter_mut().find(|r| &r.id == rid) {
+                                                rule.total_bought = rule.total_bought.saturating_add(confirmed_qty);
+                                            }
+                                        }
                                         let desc = ev
                                             .get("descricao")
                                             .and_then(|v| v.as_str())
@@ -2173,7 +2248,7 @@ impl SniperEngine {
                                             target_name: resolved_target,
                                             price: Some(buy_taken.price),
                                             currency: Some(buy_taken.currency),
-                                            qty: Some(buy_taken.qty),
+                                            qty: Some(confirmed_qty),
                                             offer_id: Some(buy_taken.offer_id),
                                             details: format!(
                                                 "✅ Confirmado pelo servidor: {}",
@@ -2190,7 +2265,7 @@ impl SniperEngine {
                                                 a.emit("sniper:updated", &self.store.to_snapshot());
                                         }
                                     }
-                                } else if let Some(buy) = rt.outstanding_buy.as_mut() {
+                                } else if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                                     // Progress ("entrou" or "lista"): keep pending, deduplicate & cap disk logs
                                     if fase == "entrou" || fase == "lista" {
                                         buy.lottery_observed = true;
@@ -2227,7 +2302,7 @@ impl SniperEngine {
                                         }
                                     }
                                 }
-                            } else if let Some(buy) = rt.outstanding_buy.as_mut() {
+                            } else if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                                 // Unassociated mktSorteio: bounded diagnostic log
                                 if buy.allow_aux_log(format!("diag:sorteio:{}", ev_id)) {
                                     let entry = SniperLogEntry {
@@ -2259,19 +2334,24 @@ impl SniperEngine {
                     self.handle_pending_buy_reply(index, &ev, "aviso", app);
                 }
             }
-            if t == "marketComprado" || t == "mktSorteio" || t == "batalha" {
+            if t == "marketComprado"
+                || t == "marketCompradoLote"
+                || t == "mktSorteio"
+                || t == "batalha"
+            {
                 return out_commands;
             }
         }
 
         // 3. Error rejection and diagnostic logging while buy is pending
         if t == "erro" {
-            self.handle_pending_buy_reply(index, msg, "erro", app);
+            self.handle_pending_buy_reply(index, msg.get("data").unwrap_or(msg), "erro", app);
             return out_commands;
         }
 
         // 4. Market packet handling
         if t == "market" {
+            let msg = msg.get("data").filter(|body| body.is_object()).unwrap_or(msg);
             let aba = msg.get("aba").and_then(|v| v.as_str()).unwrap_or("");
             if aba.starts_with("historico") || aba == "historico" {
                 return out_commands;
@@ -2439,6 +2519,13 @@ impl SniperEngine {
 
             for row in raw_rows {
                 if let Some(offer) = parse_offer(&row) {
+                    if acc_snapshot
+                        .deferred_intents
+                        .iter()
+                        .any(|intent| intent.offer_id == offer.id)
+                    {
+                        continue;
+                    }
                     let (decision, is_cooldown, delay_ms) = {
                         let rt = &self.runtimes[index];
                         if rt.confirmed_offers.contains(&offer.id)
@@ -2495,7 +2582,7 @@ impl SniperEngine {
                                 item_id: offer.item_id,
                             },
                         );
-                    } else if self.runtimes[index].outstanding_buy.is_none() && !self.runtimes[index].is_manual_reserved() {
+                    } else if !self.runtimes[index].is_manual_reserved() {
                         // Immediate buy with persistent pre-consumption
                         if let Some(cmd) = self.try_emit_buy_with_seller(
                             index,
@@ -2512,7 +2599,6 @@ impl SniperEngine {
                                 let _ = a.emit("sniper:updated", &self.store.to_snapshot());
                             }
                             out_commands.push(cmd);
-                            break;
                         }
                     }
                 }
@@ -2524,6 +2610,114 @@ impl SniperEngine {
 }
 
 impl SniperEngine {
+    fn reject_lottery_order(&mut self, index: usize, offer_id: u64, event: &Value, lost: bool, app: Option<&AppHandle>) {
+        let mut candidate = self.store.clone();
+        let acc = &mut candidate.accounts[index];
+        let pending = acc.take_pending(offer_id);
+        let active = pending.is_some();
+        let intent = if let Some(intent) = pending {
+            intent
+        } else if let Some(pos) = acc.deferred_intents.iter().position(|intent| intent.offer_id == offer_id) {
+            acc.deferred_intents.remove(pos)
+        } else {
+            return;
+        };
+        let timestamp = now_ms();
+        let mut extra = HashMap::new();
+        if lost {
+            add_verified_lottery_metadata(&mut extra, "loss", "mktSorteio.fim.perdeu", timestamp);
+        }
+        let fallback = if lost { "Outro jogador venceu o sorteio" } else { "Compra recusada" };
+        let reason = sanitize_text(event.get("msg").and_then(Value::as_str).unwrap_or(fallback), 120);
+        add_log_to_account(acc, SniperLogEntry {
+            id: format!("rec_{}_{}", timestamp, offer_id),
+            timestamp,
+            status: "RECUSADO".into(),
+            target_name: intent.target_name.clone(),
+            price: Some(intent.price),
+            currency: Some(intent.currency.clone()),
+            qty: Some(intent.qty),
+            offer_id: Some(offer_id),
+            details: format!("❌ Recusado pelo servidor: {}", reason),
+            account_index: Some(index),
+            extra,
+        });
+        if self.persist_store_candidate(&candidate).is_err() {
+            return;
+        }
+        self.store = candidate;
+        let rt = &mut self.runtimes[index];
+        if active {
+            rt.outstanding_buys.remove(&offer_id);
+            rt.release_reservation(&intent.currency, intent.qty.saturating_mul(intent.price));
+        } else {
+            rt.settle_deferred_wallet(&intent, 0);
+        }
+        if let Some(app) = app {
+            let _ = app.emit("sniper:updated", &self.store.to_snapshot());
+        }
+    }
+
+    fn confirm_deferred_offer(
+        &mut self,
+        index: usize,
+        offer_id: u64,
+        event: &Value,
+        app: Option<&AppHandle>,
+    ) -> bool {
+        let Some(position) = self.store.accounts[index]
+            .deferred_intents
+            .iter()
+            .position(|intent| intent.offer_id == offer_id)
+        else {
+            return false;
+        };
+
+        let mut candidate = self.store.clone();
+        let acc = &mut candidate.accounts[index];
+        let intent = acc.deferred_intents.remove(position);
+        let qty = confirmed_quantity(event, intent.qty);
+        self.runtimes[index].settle_deferred_wallet(&intent, qty);
+        self.runtimes[index].confirmed_offers.insert(offer_id);
+        if let Some(rule_id) = intent.rule_id.as_deref() {
+            if let Some(rule) = acc.rules.iter_mut().find(|rule| rule.id == rule_id) {
+                rule.total_bought = rule.total_bought.saturating_add(qty);
+            }
+        }
+        let timestamp = now_ms();
+        let details = event
+            .get("descricao")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Compra confirmada pelo servidor.");
+        let mut extra = HashMap::new();
+        if event.get("sorteio").and_then(Value::as_bool) == Some(true) ||
+            event.get("fase").and_then(Value::as_str) == Some("fim") {
+            add_verified_lottery_metadata(&mut extra, "win", "confirmação tardia do sorteio", timestamp);
+        }
+        add_log_to_account(
+            acc,
+            SniperLogEntry {
+                id: format!("ok_deferred_{}_{}", timestamp, offer_id),
+                timestamp,
+                status: "CONFIRMADO".into(),
+                target_name: intent.target_name,
+                price: Some(intent.price),
+                currency: Some(intent.currency),
+                qty: Some(qty),
+                offer_id: Some(offer_id),
+                details: format!("✅ Confirmação tardia pelo servidor: {}", details),
+                account_index: Some(index),
+                extra,
+            },
+        );
+        let _ = self.persist_store_candidate(&candidate);
+        self.store = candidate;
+        if let Some(app) = app {
+            let _ = app.emit("sniper:updated", &self.store.to_snapshot());
+        }
+        true
+    }
+
     fn handle_pending_buy_reply(
         &mut self,
         index: usize,
@@ -2536,16 +2730,73 @@ impl SniperEngine {
         // The server may include op=market.comprar on a lottery progress
         // notice. It must not be mistaken for a terminal rejection.
         let is_terminal = !is_prog && is_terminal_market_rejection(pkt);
+        let explicit_id = explicit_id.or_else(|| {
+            if is_terminal {
+                self.store.accounts[index].lone_timed_out_offer(&self.runtimes[index])
+            } else {
+                None
+            }
+        });
+        if explicit_id.is_none()
+            && !self.store.accounts[index].deferred_intents.is_empty()
+            && !self.runtimes[index].outstanding_buys.is_empty()
+        {
+            return;
+        }
+        if let Some(offer_id) = explicit_id {
+            if let Some(position) = self.store.accounts[index]
+                .deferred_intents
+                .iter()
+                .position(|intent| intent.offer_id == offer_id)
+            {
+                if is_terminal {
+                    let mut candidate = self.store.clone();
+                    let intent = candidate.accounts[index].deferred_intents.remove(position);
+                    self.runtimes[index].settle_deferred_wallet(&intent, 0);
+                    let timestamp = now_ms();
+                    let reason = sanitize_text(
+                        get_str_field(pkt, &["msg", "mensagem", "message", "m", "chave", "key", "erro", "error"]),
+                        120,
+                    );
+                    add_log_to_account(
+                        &mut candidate.accounts[index],
+                        SniperLogEntry {
+                            id: format!("rec_deferred_{}_{}", timestamp, offer_id),
+                            timestamp,
+                            status: "RECUSADO".into(),
+                            target_name: intent.target_name,
+                            price: Some(intent.price),
+                            currency: Some(intent.currency),
+                            qty: Some(intent.qty),
+                            offer_id: Some(offer_id),
+                            details: if reason.is_empty() {
+                                "❌ Ordem incerta recusada pelo servidor após reconexão.".into()
+                            } else {
+                                format!("❌ Ordem incerta recusada pelo servidor: {}", reason)
+                            },
+                            account_index: Some(index),
+                            extra: HashMap::new(),
+                        },
+                    );
+                    let _ = self.persist_store_candidate(&candidate);
+                    self.store = candidate;
+                    if let Some(app) = app {
+                        let _ = app.emit("sniper:updated", &self.store.to_snapshot());
+                    }
+                }
+                return;
+            }
+        }
         let rt = &mut self.runtimes[index];
 
-        let Some(pending_offer_id) = rt.outstanding_buy.as_ref().map(|b| b.offer_id) else {
+        let Some(target) = rt.reply_target(explicit_id) else {
             return;
         };
 
         // Explicit offer ID correlation: never release pending buy if packet references a different offer!
         if let Some(ev_id) = explicit_id {
-            if ev_id != pending_offer_id {
-                if let Some(buy) = rt.outstanding_buy.as_mut() {
+            if ev_id != target {
+                if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                     if buy.allow_aux_log(format!("diag:reply_id:{}:{}", default_op, ev_id)) {
                         let chave = sanitize_text(
                             get_str_field(pkt, &["chave", "key", "erro", "error"]),
@@ -2582,18 +2833,13 @@ impl SniperEngine {
         }
 
         if is_terminal {
-            if let Some(buy) = rt.outstanding_buy.take() {
+            if let Some(buy) = rt.outstanding_buys.remove(&target) {
                 rt.release_reservation(&buy.currency, buy.reserved_amount);
 
                 let mut candidate = self.store.clone();
                 let acc = &mut candidate.accounts[index];
 
-                if let Some(ref rid) = buy.rule_id {
-                    if let Some(r) = acc.rules.iter_mut().find(|r| &r.id == rid) {
-                        r.total_bought = r.total_bought.saturating_sub(buy.qty);
-                    }
-                }
-                acc.pending_intent = None;
+                acc.take_pending(target);
 
                 let raw_reason = get_str_field(
                     pkt,
@@ -2641,7 +2887,7 @@ impl SniperEngine {
                 }
             }
         } else if is_prog {
-            if let Some(buy) = rt.outstanding_buy.as_mut() {
+            if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                 buy.lottery_observed = true;
                 let chave = sanitize_text(
                     get_str_field(pkt, &["chave", "key", "erro", "error", "msg", "mensagem"]),
@@ -2677,7 +2923,7 @@ impl SniperEngine {
             }
         } else if default_op == "erro" {
             // Unrecognized error while pending: MUST NOT release budget or unblock pending intents!
-            if let Some(buy) = rt.outstanding_buy.as_mut() {
+            if let Some(buy) = rt.outstanding_buys.get_mut(&target) {
                 let chave =
                     sanitize_text(get_str_field(pkt, &["chave", "key", "erro", "error"]), 60);
                 let raw_err = sanitize_text(
@@ -3321,34 +3567,31 @@ fn is_generic_category_label(label: &str) -> bool {
         || norm.starts_with("fragmentos de mega")
 }
 
-fn strip_leading_qty_prefix(raw: &str) -> &str {
-    let trimmed = raw.trim();
-    let digits_end = trimmed
-        .char_indices()
-        .take_while(|(_, c)| c.is_ascii_digit())
-        .last()
-        .map(|(idx, c)| idx + c.len_utf8())
-        .unwrap_or(0);
-    if digits_end == 0 {
-        return trimmed;
+fn purchase_description(description: &str) -> (Option<u64>, &str) {
+    let description = description.trim();
+    let digits = description.bytes().take_while(u8::is_ascii_digit).count();
+    let Some(item) = description[digits..].trim_start().strip_prefix(['x', 'X', '×']) else {
+        return (None, description);
+    };
+    if digits == 0 || !item.starts_with(char::is_whitespace) {
+        return (None, description);
     }
-    let after_digits = trimmed[digits_end..].trim_start();
-    if let Some(rest) = after_digits
-        .strip_prefix('x')
-        .or_else(|| after_digits.strip_prefix('X'))
-        .or_else(|| after_digits.strip_prefix('×'))
-    {
-        // Ensure 'x' is a multiplier separator (followed by whitespace), not part of a word
-        if rest.starts_with(char::is_whitespace) {
-            return rest.trim();
-        }
-    }
-    trimmed
+    (description[..digits].parse().ok(), item.trim())
+}
+
+fn confirmed_quantity(event: &Value, requested_qty: u64) -> u64 {
+    ["qtd", "quantidade", "qty"]
+        .iter()
+        .find_map(|key| event.get(*key)?.as_u64().filter(|qty| *qty > 0))
+        .or_else(|| purchase_description(event.get("descricao")?.as_str()?).0)
+        .filter(|qty| *qty > 0)
+        .unwrap_or(requested_qty)
+        .min(requested_qty)
 }
 
 fn resolve_confirmed_target_name(recorded_target: &str, server_desc: &str) -> String {
     let rec = recorded_target.trim();
-    let cleaned_desc = strip_leading_qty_prefix(server_desc).trim();
+    let (_, cleaned_desc) = purchase_description(server_desc);
     let desc_lower = cleaned_desc.to_lowercase();
     let is_generic_desc = cleaned_desc.is_empty()
         || desc_lower.contains("entregue na mochila")
@@ -3472,7 +3715,9 @@ pub fn evaluate_offer(
             };
 
             if price_ok {
-                let remaining = rule.remaining_qty(runtime.is_vip);
+                let remaining = rule
+                    .remaining_qty(runtime.is_vip)
+                    .saturating_sub(account.reserved_qty_for_rule(&rule.id));
                 if remaining == 0 {
                     continue;
                 }
@@ -3902,15 +4147,16 @@ mod tests {
         let cmds = engine.on_message(0, &market_pkt, None);
         assert_eq!(cmds.len(), 1);
         assert_eq!(cmds[0]["t"], "market.comprar");
+        assert_eq!(cmds[0]["sorteioUi"], 1);
         assert_eq!(cmds[0]["id"], 9001);
         assert_eq!(cmds[0]["qtd"], 2);
         assert_eq!(cmds[0]["preco"], 35000);
 
         // Verify balance reserved and single outstanding order set
         assert_eq!(engine.runtimes[0].reserved_gold, 70000);
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
-        // Preconsumed quantity on rule
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 2);
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
+        // Emission reserves the order without recording a completed purchase.
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         let _ = std::fs::remove_file(path);
     }
@@ -3946,31 +4192,35 @@ mod tests {
             0,
             &json!({
                 "t": "market",
-                "linhas": [{"id": 1001, "itemId": 2, "preco": 20000, "qtd": 1, "moeda": "gold"}]
+                "linhas": [{"id": 1001, "itemId": 2, "preco": 20000, "qtd": 5, "moeda": "gold"}]
             }),
             None,
         );
 
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
 
         // Send battle confirmation
         let battle_pkt = json!({
             "t": "batalha",
-            "ev": [{"k": "marketComprado", "descricao": "Ancient Stone entregue ao depot"}]
+            "ev": [{"k": "marketComprado", "id": 1001, "descricao": "2× Ancient Stone entregue ao depot"}]
         });
         let _ = engine.on_message(0, &battle_pkt, None);
 
-        // Counter already preconsumed to 1, reservation released, confirmation does not double count
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        // The server confirmation records the purchased quantity exactly once.
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 2);
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
-        assert!(engine.runtimes[0].outstanding_buy.is_none());
-        // Cached balance debited by 20000 (100000 - 20000 = 80000)
-        assert_eq!(engine.runtimes[0].gold, 80000);
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
+        // Cached balance debited for the two units the server delivered.
+        assert_eq!(engine.runtimes[0].gold, 60000);
+        assert_eq!(
+            engine.store.accounts[0].logs.iter().find(|log| log.offer_id == Some(1001) && log.status == "CONFIRMADO").unwrap().qty,
+            Some(2)
+        );
 
         // Second battle packet does NOT double count or double debit
         let _ = engine.on_message(0, &battle_pkt, None);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
-        assert_eq!(engine.runtimes[0].gold, 80000);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 2);
+        assert_eq!(engine.runtimes[0].gold, 60000);
 
         let _ = std::fs::remove_file(path);
     }
@@ -4012,7 +4262,7 @@ mod tests {
             None,
         );
 
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
 
         // 1. Confirm buy: packet has NO wallet fields
         let battle_confirm = json!({
@@ -4075,13 +4325,13 @@ mod tests {
         );
 
         assert_eq!(engine.runtimes[0].reserved_gold, 20000);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
 
         // 1. Unrelated shop / auto-supply errors: MUST NOT release pending market buy!
         let _ = engine.on_message(0, &json!({ "t": "erro", "chave": "saldo_insuficiente", "msg": "Saldo insuficiente para comprar pokebolas" }), None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Generic saldo_insuficiente mistakenly released buy!"
         );
 
@@ -4091,21 +4341,68 @@ mod tests {
             None,
         );
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Shop estoque error mistakenly released buy!"
         );
 
         assert_eq!(engine.runtimes[0].reserved_gold, 20000);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
-        // 2. Explicitly market-correlated error arrives: rolls back preconsumed quantity and reservation!
+        // 2. Explicitly market-correlated error releases the reservation without counting a purchase.
         let _ = engine.on_message(0, &json!({ "t": "erro", "chave": "anuncio_expirado", "msg": "Anúncio expirado ou cancelado" }), None);
 
-        assert!(engine.runtimes[0].outstanding_buy.is_none());
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
         assert_eq!(engine.store.accounts[0].logs[0].status, "RECUSADO");
 
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn overlapping_draws_reserve_gems_and_quota_by_offer() {
+        let (mut engine, path) = temp_test_engine();
+        let account = &mut engine.store.accounts[0];
+        account.enabled = true;
+        account.rules.push(serde_json::from_value(json!({
+            "id":"token", "targetType":"item", "targetId":70000, "targetName":"Bronze Boss Token",
+            "maxPriceGold":0, "maxPriceGems":2, "maxQty":90, "infinite":false,
+            "active":true, "totalBought":64, "excludedItemIds":[]
+        })).unwrap());
+        engine.runtimes[0].is_vip = true;
+        engine.runtimes[0].orbs = 48;
+        let offer = |id, qty| json!({"id":id,"itemId":70000,"qtd":qty,"preco":2,"moeda":"orb"});
+        let orders = engine.on_message(0, &json!({"t":"market","linhas":[offer(101,10),offer(102,24)]}), None);
+        assert_eq!(orders.iter().map(|cmd| cmd["qtd"].as_u64().unwrap()).collect::<Vec<_>>(), vec![10,14]);
+        assert_eq!(engine.runtimes[0].available_balance("orb"), Some(0));
+        let mut reloaded = SniperEngine::new(Some(path.clone())).unwrap();
+        assert_eq!(reloaded.runtimes[0].outstanding_buys.len(), 2);
+        reloaded.on_connect(0);
+        reloaded.runtimes[0].orbs = 48;
+        assert_eq!(reloaded.runtimes[0].available_balance("orb"), Some(0));
+        reloaded.on_message(0, &json!({"t":"mktSorteio","id":102,"fase":"fim","perdeu":true}), None);
+        assert_eq!(reloaded.runtimes[0].available_balance("orb"), Some(28));
+        engine.on_message(0, &json!({"t":"marketComprado","qtd":10}), None);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 64);
+        engine.on_message(0, &json!({"t":"mktSorteio","id":102,"fase":"fim","perdeu":true}), None);
+        engine.on_message(0, &json!({"t":"marketComprado","qtd":14}), None);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 64);
+        assert_eq!(engine.runtimes[0].available_balance("orb"), Some(28));
+        engine.runtimes[0].orbs = 200;
+        let mut scheduled = offer(103,24);
+        scheduled["compravelEm"] = json!(now_ms()+10000);
+        engine.on_message(0, &json!({"t":"market","linhas":[scheduled]}), None);
+        engine.runtimes[0].scheduled_offers.get_mut(&103).unwrap().release_at = Instant::now();
+        let cmds = engine.on_tick(0, now_ms(), None);
+        assert!(cmds.iter().any(|cmd| cmd["id"] == 103 && cmd["qtd"] == 16));
+        engine.on_send_failure(0, cmds.iter().find(|cmd| cmd["id"] == 103).unwrap());
+        assert!(engine.has_in_flight_offer(0,101));
+        assert!(!engine.has_in_flight_offer(0,103));
+        let win = json!({"t":"marketComprado","id":101,"qtd":6});
+        engine.on_message(0, &win, None);
+        engine.on_message(0, &win, None);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 70);
+        assert_eq!(engine.runtimes[0].reserved_orbs, 0);
         let _ = std::fs::remove_file(path);
     }
 
@@ -4146,43 +4443,171 @@ mod tests {
         );
 
         // Force timeout in runtime
-        if let Some(buy) = &mut engine.runtimes[0].outstanding_buy {
+        if let Some(buy) = engine.runtimes[0].outstanding_buys.values_mut().next() {
             buy.sent_at = Instant::now() - Duration::from_secs(15);
         }
 
         let _ = engine.on_tick(0, now_ms(), None);
-        assert_eq!(
-            engine.runtimes[0].outstanding_buy.as_ref().unwrap().state,
-            BuyState::UncertainBlocked
-        );
-        // Budget consumed conservatively on emission, retained on timeout
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
+        assert!(engine.has_in_flight_offer(0, 3003));
+        assert_eq!(engine.runtimes[0].available_balance("gold"), Some(40000));
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+
+        let next = engine.on_message(0, &json!({"t":"market","linhas":[
+            {"id":3003,"itemId":28,"preco":10000,"qtd":1,"moeda":"gold"},
+            {"id":3004,"itemId":28,"preco":5000,"qtd":15,"moeda":"gold"}
+        ]}), None);
+        assert_eq!(next.len(), 1);
+        assert_eq!(next[0]["id"], 3004);
+        assert_eq!(next[0]["qtd"], 4);
+        engine.on_message(0, &json!({"t":"batalha","data":{"ev":[{"k":"marketComprado","id":3003,"descricao":"Crystal Stone entregue!"}]}}), None);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.runtimes[0].gold, 40000);
+        assert_eq!(engine.runtimes[0].available_balance("gold"), Some(20000));
+        assert_eq!(engine.runtimes[0].outstanding_buys.values().next().unwrap().offer_id, 3004);
+        engine.runtimes[0].outstanding_buys.values_mut().next().unwrap().sent_at =
+            Instant::now() - Duration::from_secs(BUY_TIMEOUT_SECS + 1);
+        engine.on_tick(0, now_ms(), None);
+        engine.on_message(0, &json!({"t":"erro","data":{"chave":"market.sorteioPerdeu"}}), None);
+        assert!(engine.store.accounts[0].deferred_intents.is_empty());
+        assert_eq!(engine.runtimes[0].available_balance("gold"), Some(40000));
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
 
-        // Subsequent offer is blocked
-        let blocked_cmds = engine.on_message(
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_ninety_unit_quota_counts_confirmed_partial_fills_only() {
+        let (mut engine, path) = temp_test_engine();
+        engine.save_settings(
+            vec![0],
+            SniperSettingsInput {
+                enabled: true,
+                rules: vec![Rule {
+                    id: "r_ninety".into(),
+                    target_type: "item".into(),
+                    target_category: None,
+                    target_id: Some(json!(2)),
+                    target_name: "Ancient Stone".into(),
+                    max_price_gold: 0,
+                    max_price_gems: 3,
+                    max_qty: 90,
+                    infinite: false,
+                    active: true,
+                    total_bought: 0,
+                    excluded_item_ids: Vec::new(),
+                    extra: HashMap::new(),
+                }],
+                config: SniperConfig::default(),
+            },
+        ).unwrap();
+        engine.ingest_logs(0, vec![], Some(vec![RuleProgress {
+            id: "r_ninety".into(), total_bought: 88,
+        }])).unwrap();
+        engine.runtimes[0].orbs = 1000;
+        engine.runtimes[0].is_vip = true;
+
+        let first_attempt = engine.on_message(
             0,
-            &json!({
-                "t": "market",
-                "linhas": [{"id": 3004, "itemId": 28, "preco": 5000, "qtd": 1, "moeda": "gold"}]
-            }),
+            &json!({"t":"market","data":{"linhas":[{"id":81001,"itemId":2,"preco":3,"qtd":10,"moeda":"orb"}]}}),
             None,
         );
-        assert!(blocked_cmds.is_empty());
+        assert_eq!(first_attempt.len(), 1);
+        assert_eq!(first_attempt[0]["qtd"], 2);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 88);
 
-        // Late confirmation arrives and reconciles without double-counting
-        let _ = engine.on_message(
+        engine.on_send_failure(0, &json!({"t":"market.comprar","id":81001}));
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 88);
+        assert!(engine.store.accounts[0].pending_intent.is_none());
+
+        let partial_attempt = engine.on_message(
             0,
-            &json!({
-                "t": "batalha",
-                "ev": [{"k": "marketComprado", "descricao": "Crystal Stone entregue!"}]
-            }),
+            &json!({"t":"market","linhas":[{"id":81002,"itemId":2,"preco":3,"qtd":10,"moeda":"orb"}]}),
             None,
         );
+        assert_eq!(partial_attempt[0]["qtd"], 2);
+        engine.on_message(
+            0,
+            &json!({"t":"marketCompradoLote","data":{"id":81002,"descricao":"1× Ancient Stone"}}),
+            None,
+        );
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 89);
+        engine.on_message(
+            0,
+            &json!({"t":"marketCompradoLote","data":{"id":81002,"descricao":"1× Ancient Stone"}}),
+            None,
+        );
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 89);
 
-        assert!(engine.runtimes[0].outstanding_buy.is_none());
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1); // Not 2!
-        assert_eq!(engine.runtimes[0].gold, 40000); // 50000 - 10000
+        let final_attempt = engine.on_message(
+            0,
+            &json!({"t":"market","linhas":[{"id":81003,"itemId":2,"preco":3,"qtd":10,"moeda":"orb"}]}),
+            None,
+        );
+        assert_eq!(final_attempt[0]["qtd"], 1);
+        engine.on_message(
+            0,
+            &json!({"t":"marketCompradoLote","data":{"id":81003,"qtd":1}}),
+            None,
+        );
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 90);
 
+        let after_limit = engine.on_message(
+            0,
+            &json!({"t":"market","linhas":[{"id":81004,"itemId":2,"preco":3,"qtd":10,"moeda":"orb"}]}),
+            None,
+        );
+        assert!(after_limit.is_empty());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn test_v1_pending_count_migrates_once_and_survives_reconnect() {
+        let (_, path) = temp_test_engine();
+        let mut store = SniperStore::default();
+        store.version = 1;
+        let account = &mut store.accounts[0];
+        account.enabled = true;
+        account.rules.push(Rule {
+            id: "r_legacy".into(),
+            target_type: "item".into(),
+            target_category: None,
+            target_id: Some(json!(2)),
+            target_name: "Ancient Stone".into(),
+            max_price_gold: 100,
+            max_price_gems: 0,
+            max_qty: 90,
+            infinite: false,
+            active: true,
+            total_bought: 5,
+            excluded_item_ids: Vec::new(),
+            extra: HashMap::new(),
+        });
+        account.pending_intent = Some(PendingBuyIntent {
+            offer_id: 82001,
+            rule_id: Some("r_legacy".into()),
+            target_name: "Ancient Stone".into(),
+            seller: String::new(),
+            qty: 2,
+            price: 100,
+            currency: "gold".into(),
+            timestamp: now_ms(),
+            accounted: true,
+            retain_wallet_hold: false,
+        });
+        std::fs::write(&path, serde_json::to_vec(&store).unwrap()).unwrap();
+
+        let mut engine = SniperEngine::new(Some(path.clone())).unwrap();
+        assert_eq!(engine.store.version, 2);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 3);
+        let _ = engine.on_connect(0);
+        assert_eq!(engine.store.accounts[0].deferred_intents.len(), 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 3);
+
+        drop(engine);
+        let engine = SniperEngine::new(Some(path.clone())).unwrap();
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 3);
+        assert_eq!(engine.store.accounts[0].deferred_intents.len(), 1);
         let _ = std::fs::remove_file(path);
     }
 
@@ -4233,17 +4658,17 @@ mod tests {
                 None,
             );
             assert_eq!(cmds.len(), 1);
-            // Intent persisted, preconsumed
-            assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+            // The pending intent persists while completed quantity remains zero.
+            assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
             // Drop engine without receiving confirmation!
         }
 
         // Reopen same file in a brand new engine
         let mut engine2 = SniperEngine::new(Some(path.clone())).expect("reopen failed");
-        assert_eq!(engine2.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine2.store.accounts[0].rules[0].total_bought, 0);
         engine2.runtimes[0].gold = 100000;
 
-        // Try another buy offer -> maxQty 1 is already exhausted!
+        // The persisted in-flight offer blocks duplicates until its result arrives.
         let second_cmds = engine2.on_message(
             0,
             &json!({
@@ -4355,24 +4780,65 @@ mod tests {
             }),
             None,
         );
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         // 2. Timeout
-        if let Some(buy) = &mut engine.runtimes[0].outstanding_buy {
+        if let Some(buy) = engine.runtimes[0].outstanding_buys.values_mut().next() {
             buy.sent_at = Instant::now() - Duration::from_secs(15);
         }
         let _ = engine.on_tick(0, now_ms(), None);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         // 3. Disconnect: clears wallet to unknown (-1)
         engine.on_disconnect(0, None);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
         assert_eq!(engine.runtimes[0].gold, -1);
         assert_eq!(engine.runtimes[0].available_balance("gold"), None);
 
         // 4. Reconnect
         let _ = engine.on_connect(0);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+        assert_eq!(engine.store.accounts[0].deferred_intents.len(), 1);
+
+        let mut edited_rule = engine.store.accounts[0].rules[0].clone();
+        edited_rule.id = "r_once_edited".into();
+        edited_rule.max_qty = 5;
+        engine
+            .save_settings(
+                vec![0],
+                SniperSettingsInput {
+                    enabled: true,
+                    rules: vec![edited_rule],
+                    config: SniperConfig::default(),
+                },
+            )
+            .unwrap();
+
+        engine.runtimes[0].gold = 100000;
+        let next = engine.on_message(
+            0,
+            &json!({
+                "t": "market",
+                "linhas": [{"id": 10000, "itemId": 2, "preco": 10000, "qtd": 5, "moeda": "gold"}]
+            }),
+            None,
+        );
+        assert_eq!(next.len(), 1);
+        assert_eq!(next[0]["qtd"], 5);
+
+        // A delayed acknowledgement counts only when it explicitly matches the
+        // earlier offer, and does not resolve the new in-flight order.
+        engine.on_message(
+            0,
+            &json!({"t": "marketComprado", "id": 9999, "descricao": "Ancient Stone entregue"}),
+            None,
+        );
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+        assert!(engine.store.accounts[0].deferred_intents.is_empty());
+        assert_eq!(
+            engine.runtimes[0].outstanding_buys.values().next().map(|buy| buy.offer_id),
+            Some(10000)
+        );
 
         let _ = std::fs::remove_file(path);
     }
@@ -5225,11 +5691,15 @@ mod tests {
             now_ms(),
         );
         assert!(buy1.is_some());
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
+        engine.on_message(
+            0,
+            &json!({"t": "marketComprado", "id": 201, "descricao": "Ancient Stone entregue"}),
+            None,
+        );
 
         // Clear outstanding buy to allow next
-        engine.runtimes[0].outstanding_buy = None;
-        engine.store.accounts[0].pending_intent = None;
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
 
         // Buy 1 Cocoon Stone (ID 23)
         let buy2 = engine.try_emit_buy(
@@ -5243,6 +5713,12 @@ mod tests {
             now_ms(),
         );
         assert!(buy2.is_some());
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        engine.on_message(
+            0,
+            &json!({"t": "marketComprado", "id": 202, "descricao": "Cocoon Stone entregue"}),
+            None,
+        );
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 2);
 
         // Now total_bought == 2 == max_qty. Next evaluation of ANY stone must be skipped
@@ -6238,7 +6714,7 @@ mod tests {
         assert_eq!(cmds.len(), 1);
         assert_eq!(cmds[0]["t"], "market.comprar");
         assert_eq!(cmds[0]["id"], 611691);
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(engine.runtimes[0].reserved_gold, 2);
 
         // 2. Unrecognized error arrives: MUST NOT release budget or unblock pending intent!
@@ -6249,7 +6725,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &unrec_error, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Unrecognized error released pending buy!"
         );
         assert_eq!(
@@ -6278,7 +6754,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &sorteio_prog, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Lottery progress error released pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 2);
@@ -6300,7 +6776,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &divergent_confirm, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Divergent marketComprado confirmed pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 2);
@@ -6313,7 +6789,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &sorteio_perdeu, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_none(),
+            engine.runtimes[0].outstanding_buys.is_empty(),
             "Terminal refusal failed to release outstanding buy!"
         );
         assert_eq!(
@@ -6421,7 +6897,7 @@ mod tests {
         assert_eq!(cmds2[0]["preco"], 2);
 
         // 3. Line with explicit conflicting currency (moeda: "gold" on line vs "orb" on envelope) -> fail-closed
-        engine.runtimes[0].outstanding_buy = None;
+        engine.runtimes[0].outstanding_buys.clear();
         let pkt_conflict_currency = json!({
             "t": "market",
             "aba": "item",
@@ -6518,7 +6994,7 @@ mod tests {
             }),
             None,
         );
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
 
         // 1. Progress event: batalha.ev with k: "aviso", msg: "market.sorteio"
@@ -6531,7 +7007,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &aviso_prog, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Aviso progress released pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
@@ -6550,7 +7026,7 @@ mod tests {
         });
         let _ = engine.on_message(0, &aviso_terminal, None);
         assert!(
-            engine.runtimes[0].outstanding_buy.is_none(),
+            engine.runtimes[0].outstanding_buys.is_empty(),
             "Aviso terminal failed to release pending buy!"
         );
         assert_eq!(
@@ -6605,23 +7081,23 @@ mod tests {
             }),
             None,
         );
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         // 1. Send failure on market.itens (scan command): MUST NOT release pending buy!
         engine.on_send_failure(0, &json!({ "t": "market.itens" }));
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Scan failure prematurely released pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         // 2. Send failure on market.comprar with divergent ID: MUST NOT release pending buy!
         engine.on_send_failure(0, &json!({ "t": "market.comprar", "id": 9999 }));
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Divergent buy failure prematurely released pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 5);
@@ -6629,7 +7105,7 @@ mod tests {
         // 3. Send failure on matching market.comprar (id 8881): RELEASES pending buy and rolls back quota!
         engine.on_send_failure(0, &json!({ "t": "market.comprar", "id": 8881 }));
         assert!(
-            engine.runtimes[0].outstanding_buy.is_none(),
+            engine.runtimes[0].outstanding_buys.is_empty(),
             "Matching buy failure failed to release pending buy!"
         );
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
@@ -6736,7 +7212,7 @@ mod tests {
             }),
             None,
         );
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
 
         // 1. Terminal error with divergent explicit offer ID must NOT release pending buy
         let _ = engine.on_message(
@@ -6749,10 +7225,10 @@ mod tests {
             None,
         );
         assert!(
-            engine.runtimes[0].outstanding_buy.is_some(),
+            !engine.runtimes[0].outstanding_buys.is_empty(),
             "Divergent error ID prematurely released pending buy!"
         );
-        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 1);
+        assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
 
         // 2. Repeated mktSorteio 'lista' ticks + flood of unknown errors must cap aux logs at 5
         for _ in 0..16 {
@@ -6802,7 +7278,7 @@ mod tests {
             "t": "batalha",
             "ev": [{"k": "marketComprado", "id": 9101, "sorteio": true, "descricao": "1x Water Stone"}]
         }), None);
-        assert!(engine.runtimes[0].outstanding_buy.is_none());
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(
             engine.runtimes[0].gold, 990,
             "Balance must be debited once (1000 - 10 = 990)"
@@ -6885,7 +7361,7 @@ mod tests {
             json!({"t":"mktSorteio","id":99001,"fase":"fim","ok":true,"perdeu":true}),
         ] {
             engine.on_message(0, &event, None);
-            assert!(engine.runtimes[0].outstanding_buy.is_some());
+            assert!(!engine.runtimes[0].outstanding_buys.is_empty());
             assert!(!engine.store.accounts[0]
                 .logs
                 .iter()
@@ -6895,12 +7371,12 @@ mod tests {
         engine.on_message(
             0,
             &json!({
-                "t":"mktSorteio","id":99001,"fase":"fim","ok":false,
+                "t":"mktSorteio","id":99001,"fase":"fim","ok":false,"perdeu":true,
                 "msg":"Outro jogador levou no sorteio"
             }),
             None,
         );
-        assert!(engine.runtimes[0].outstanding_buy.is_none());
+        assert!(engine.runtimes[0].outstanding_buys.is_empty());
         assert_eq!(engine.store.accounts[0].rules[0].total_bought, 0);
         assert_eq!(engine.runtimes[0].reserved_gold, 0);
         let loss = engine.store.accounts[0]
@@ -6913,13 +7389,33 @@ mod tests {
         assert_eq!(loss.status, "RECUSADO");
         assert_eq!(
             loss.extra.get("lotteryEvidence"),
-            Some(&json!("mktSorteio.fim.okFalse"))
+            Some(&json!("mktSorteio.fim.perdeu"))
         );
         assert_eq!(
             loss.extra.get("lotteryConfirmedAt"),
             Some(&json!(loss.timestamp))
         );
         assert!(!loss.extra.contains_key("lotteryWonAt"));
+
+        // A late refusal with ok=false can be a balance or eligibility error.
+        // Only the server's perdeu flag identifies a lost draw.
+        for (offer, lost) in [(99002, false), (99003, true)] {
+            let sent = engine.on_message(0, &json!({"t":"market","linhas":[
+                {"id":offer,"itemId":142,"preco":10,"qtd":1,"moeda":"gold"}
+            ]}), None);
+            assert_eq!(sent[0]["sorteioUi"], 1);
+            engine.runtimes[0].outstanding_buys.values_mut().next().unwrap().sent_at =
+                Instant::now() - Duration::from_secs(BUY_TIMEOUT_SECS + 1);
+            engine.on_tick(0, now_ms(), None);
+            engine.on_message(0, &json!({"t":"batalha","ev":[
+                {"k":"mktSorteio","id":offer,"fase":"fim","ok":false,"perdeu":lost}
+            ]}), None);
+            let result = &engine.store.accounts[0].logs[0];
+            assert_eq!(result.offer_id, Some(offer));
+            assert_eq!(result.status, "RECUSADO");
+            assert_eq!(result.extra.get("lotteryResult").is_some(), lost);
+            assert!(engine.store.accounts[0].deferred_intents.is_empty());
+        }
 
         let _ = std::fs::remove_file(path);
     }
@@ -6984,7 +7480,7 @@ mod tests {
             }),
             None,
         );
-        assert!(engine.runtimes[0].outstanding_buy.is_some());
+        assert!(!engine.runtimes[0].outstanding_buys.is_empty());
         engine.on_message(
             0,
             &json!({
@@ -7400,7 +7896,7 @@ mod tests {
         assert_eq!(engine.store.accounts[0].enabled, initial_enabled, "Enabled must remain true");
 
         // Clear emitted buy state for next step
-        engine.runtimes[0].outstanding_buy = None;
+        engine.runtimes[0].outstanding_buys.clear();
         assert!(engine.has_in_flight_offer(0, 1234), "Persisted intent also protects the same offer");
         assert!(!engine.has_in_flight_offer(0, 7777));
         let pending_before = serde_json::to_value(&engine.store.accounts[0].pending_intent).unwrap();
@@ -7413,7 +7909,7 @@ mod tests {
         engine.store.accounts[0].pending_intent = None;
 
         // 6. In-flight buy coordination: outstanding_buy
-        engine.runtimes[0].outstanding_buy = Some(OutstandingBuy {
+        engine.runtimes[0].outstanding_buys.insert(5555, OutstandingBuy {
             offer_id: 5555,
             rule_id: None,
             target_name: "Item InFlight".to_string(),
@@ -7438,7 +7934,7 @@ mod tests {
         assert!(engine.reserve_manual(0, 7777, Duration::from_secs(30)).is_ok());
         assert!(engine.has_in_flight_offer(0, 5555));
         assert!(engine.runtimes[0].is_manual_reserved());
-        assert_eq!(engine.runtimes[0].outstanding_buy.as_ref().unwrap().reserved_amount, 1000);
+        assert_eq!(engine.runtimes[0].outstanding_buys.values().next().unwrap().reserved_amount, 1000);
         engine.release_manual(0, Some(7777));
         assert!(engine.has_in_flight_offer(0, 5555), "Manual completion must preserve the other automatic order");
 
@@ -7449,7 +7945,7 @@ mod tests {
         engine.release_manual(0, Some(7777));
 
         // Once in-flight buy is resolved (cleared), manual reservation succeeds
-        engine.runtimes[0].outstanding_buy = None;
+        engine.runtimes[0].outstanding_buys.clear();
         assert!(!engine.has_in_flight_buy(0));
 
         let ok_reserve = engine.reserve_manual(0, 7777, Duration::from_millis(5000));

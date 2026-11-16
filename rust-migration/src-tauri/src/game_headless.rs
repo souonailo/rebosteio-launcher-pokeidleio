@@ -1662,10 +1662,12 @@ impl GameHeadlessManager {
                                 .duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| d.as_millis() as u64)
                                 .unwrap_or(0);
-                            for cmd in crate::sniper::on_tick(index, cur_now_ms, Some(&app_handle)) {
+                            let mut commands = crate::sniper::on_tick(index, cur_now_ms, Some(&app_handle)).into_iter();
+                            while let Some(cmd) = commands.next() {
                                 if !rmt_traffic.external(&cmd,cur_now_ms as i64){continue;}
                                 if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
                                     crate::sniper::on_send_failure(index, &cmd);
+                                    for unsent in commands { crate::sniper::on_send_failure(index, &unsent); }
                                     break;
                                 }
                             }
@@ -1811,10 +1813,12 @@ impl GameHeadlessManager {
                                                 }
                                             }
                                         }
-                                        for cmd in crate::sniper::on_message(index, &val, Some(&app_handle)) {
+                                        let mut commands = crate::sniper::on_message(index, &val, Some(&app_handle)).into_iter();
+                                        while let Some(cmd) = commands.next() {
                                             if !rmt_traffic.external(&cmd,crate::daily_pass::now_ms()){continue;}
                                             if write.send(Message::Text(cmd.to_string().into())).await.is_err() {
                                                 crate::sniper::on_send_failure(index, &cmd);
+                                                for unsent in commands { crate::sniper::on_send_failure(index, &unsent); }
                                                 break;
                                             }
                                         }
@@ -2108,8 +2112,12 @@ fn server_outland_tier(player: &serde_json::Value) -> Option<u32> {
     player
         .get("outlandTier")
         .and_then(|v| v.as_u64())
-        .filter(|v| *v > 0 && *v <= 100)
-        .map(|v| v as u32)
+        .and_then(|id| match id {
+            // The game maps legacy IDs by their original level requirement.
+            1..=8 => Some([101, 104, 108, 114, 118, 123, 127, 130][id as usize - 1]),
+            101..=140 => Some(id as u32),
+            _ => None,
+        })
 }
 
 fn normalize_session_token(token: String, nick: Option<String>) -> (String, Option<String>) {
@@ -3781,6 +3789,16 @@ mod outland_tier_tests {
     use super::*;
 
     #[test]
+    fn recognizes_current_tiers_and_rejects_unknown_ids() {
+        for id in 101..=140 {
+            assert_eq!(server_outland_tier(&json!({"outlandTier":id})), Some(id));
+        }
+        for id in [0, 9, 100, 141] {
+            assert_eq!(server_outland_tier(&json!({"outlandTier":id})), None);
+        }
+    }
+
+    #[test]
     fn server_tier_is_preserved_when_later_delta_omits_it() {
         let mut state = HeadlessState::new(0, "Fixture".into());
         assert_eq!(state.outland_tier, None);
@@ -3788,9 +3806,9 @@ mod outland_tier_tests {
             &json!({"t":"welcome","estado":{"outlandTier":2}}),
             &mut state,
         );
-        assert_eq!(state.outland_tier, Some(2));
+        assert_eq!(state.outland_tier, Some(104));
         parse_game_message(&json!({"t":"estado","data":{"gold":12}}), &mut state);
-        assert_eq!(state.outland_tier, Some(2));
+        assert_eq!(state.outland_tier, Some(104));
     }
 
     #[test]
@@ -3799,7 +3817,7 @@ mod outland_tier_tests {
         parse_game_message(&json!({"t":"welcome","estado":{}}), &mut state);
         assert_eq!(state.outland_tier, None);
         parse_game_message(&json!({"t":"estado","outlandTier":3}), &mut state);
-        assert_eq!(state.outland_tier, Some(3));
+        assert_eq!(state.outland_tier, Some(108));
     }
 
     #[test]
@@ -3809,7 +3827,7 @@ mod outland_tier_tests {
             &json!({"t":"welcome","estado":{"outlandTier":2}}),
             &mut state,
         );
-        assert_eq!(serde_json::to_value(&state).unwrap()["outlandTier"], 2);
+        assert_eq!(serde_json::to_value(&state).unwrap()["outlandTier"], 104);
     }
 }
 
@@ -3841,7 +3859,7 @@ mod outland_handshake_tests {
                 let cmd: serde_json::Value =
                     serde_json::from_str(ws.next().await.unwrap().unwrap().to_text().unwrap())
                         .unwrap();
-                assert_eq!(cmd, json!({"t":"outland.tier","tier":2}));
+                assert_eq!(cmd, json!({"t":"outland.tier","tier":104}));
                 if reject {
                     ws.send(Message::Text(
                         json!({"t":"erro","msg":"tier unavailable"})
@@ -3859,7 +3877,7 @@ mod outland_handshake_tests {
                 .await
                 .unwrap();
                 ws.send(Message::Text(
-                    json!({"t":"estado","outlandTier":2}).to_string().into(),
+                    json!({"t":"estado","outlandTier":104}).to_string().into(),
                 ))
                 .await
                 .unwrap();
@@ -3875,10 +3893,10 @@ mod outland_handshake_tests {
     }
     #[tokio::test]
     async fn reconnect_restores_stale_or_missing_tier_before_resuming_hunt() {
-        for tier in [Some(1), None, Some(2)] {
-            let (url, server) = mock_server(tier, false, tier != Some(2)).await;
+        for tier in [Some(101), None, Some(104), Some(2)] {
+            let (url, server) = mock_server(tier, false, !matches!(tier, Some(104 | 2))).await;
             let mut state = HeadlessState::new(99, "Fixture".into());
-            state.outland_tier = Some(2);
+            state.outland_tier = Some(104);
             let socket = connect_and_handshake(
                 99,
                 &url,
@@ -3889,7 +3907,7 @@ mod outland_handshake_tests {
             )
             .await
             .unwrap();
-            assert_eq!(state.outland_tier, Some(2));
+            assert_eq!(state.outland_tier, Some(104));
             server.await.unwrap();
             drop(socket);
         }
@@ -3898,7 +3916,7 @@ mod outland_handshake_tests {
     async fn rejected_restore_keeps_expected_tier_for_next_retry() {
         let (url, server) = mock_server(Some(1), true, true).await;
         let mut state = HeadlessState::new(99, "Fixture".into());
-        state.outland_tier = Some(2);
+        state.outland_tier = Some(104);
         assert!(connect_and_handshake(
             99,
             &url,
@@ -3909,7 +3927,7 @@ mod outland_handshake_tests {
         )
         .await
         .is_err());
-        assert_eq!(state.outland_tier, Some(2));
+        assert_eq!(state.outland_tier, Some(104));
         server.await.unwrap();
     }
 }

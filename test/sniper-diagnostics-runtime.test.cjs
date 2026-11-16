@@ -134,14 +134,15 @@ for (const preset of presets) {
     h.offers([{id: 1005, tipo: 'item', itemId: 53, itemNome: 'Fire Stone', preco: 100, moeda: 'gold', qtd: 1}]);
     assert.equal(h.sent.filter(x => x.t === 'market.comprar').length, 1);
     assert.ok(h.ctx.__engine.sniperState.boughtOffers[1005]);
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1);
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Order send does not count as a confirmed purchase');
 
     // Server sends unrecognized error packet while pending
     h.receive({t: 'erro', erro: 'market.algoDesconhecido', cod: 999});
 
     // Budget and pending state must NOT be released
     assert.ok(h.ctx.__engine.sniperState.boughtOffers[1005], 'Pending buy must not be cleared on unrecognized error');
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1, 'Rule quota must remain allocated on unrecognized error');
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Unconfirmed order does not increment purchased quantity');
+    assert.equal(h.ctx.__engine.sniperState.pendingRuleBuys[1005].qty, 1, 'Unrecognized error retains its reservation');
 
     // Diagnostic log must be emitted
     const diags = h.logs().filter(l => l.status === 'DIAGNOSTICO');
@@ -154,13 +155,14 @@ for (const preset of presets) {
     const h = harness(preset, {}, [rule]);
     h.offers([{id: 1006, tipo: 'item', itemId: 53, itemNome: 'Fire Stone', preco: 100, moeda: 'gold', qtd: 1}]);
     assert.ok(h.ctx.__engine.sniperState.boughtOffers[1006]);
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1);
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Order send does not count as a confirmed purchase');
 
     // Server sends terminal lottery failure
     h.receive({t: 'erro', erro: 'market.sorteioPerdeu'});
 
     assert.equal(h.ctx.__engine.sniperState.boughtOffers[1006], undefined, 'Pending buy cleared on terminal failure');
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Quota restored on terminal failure');
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Rejected order does not count as purchased');
+    assert.equal(h.ctx.__engine.sniperState.pendingRuleBuys[1006], undefined, 'Terminal failure releases the reservation');
 
     const refused = h.logs().filter(l => l.status === 'RECUSADO');
     assert.ok(refused.length >= 1, 'Refused log emitted for market.sorteioPerdeu');
@@ -176,7 +178,8 @@ for (const preset of presets) {
     // Progress 1: market.sorteio
     h.receive({t: 'erro', erro: 'market.sorteio'});
     assert.ok(h.ctx.__engine.sniperState.boughtOffers[1007], 'Pending buy stays active on market.sorteio');
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1, 'Quota remains held on market.sorteio');
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Progress does not confirm purchased quantity');
+    assert.equal(h.ctx.__engine.sniperState.pendingRuleBuys[1007].qty, 1, 'Progress retains the reservation');
 
     // Progress 2: market.sorteioEspera
     h.receive({t: 'erro', erro: 'market.sorteioEspera'});
@@ -231,6 +234,12 @@ for (const preset of presets) {
     assert.ok(lost);
     assert.equal(lost.lotteryResult, 'loss');
     assert.equal(typeof lost.lotteryConfirmedAt, 'number');
+    h.offers([{id: 1019, tipo: 'item', itemId: 53, itemNome: 'Fire Stone', preco: 100, moeda: 'gold', qtd: 1}]);
+    h.receive({t: 'e', k: 'mktSorteio', id: 1019, fase: 'fim', ok: false, msg: 'Saldo insuficiente'});
+    const refused = h.logs().find(l => l.offerId === 1019 && l.status === 'RECUSADO');
+    assert.ok(refused);
+    assert.equal(refused.lotteryResult, undefined);
+    assert.doesNotMatch(refused.id, /^sorteio_perdeu_/);
   });
 
   test(`${preset}: bounded diagnostic/progress logs, divergent error ID protection, single CONFIRMADO on lottery win, and fail-closed missing currency`, () => {
@@ -249,7 +258,7 @@ for (const preset of presets) {
     // 3. Terminal rejection carrying a DIFFERENT explicit offer ID must NOT release pending buy
     h.receive({t: 'erro', id: 9999, chave: 'market.sorteioPerdeu'});
     assert.ok(h.ctx.__engine.sniperState.boughtOffers[1012], 'Divergent offer ID on terminal error must keep pending buy');
-    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 1);
+    assert.equal(h.ctx.__engine.sniperState.rules[0].totalBought, 0, 'Sent quantity is not yet confirmed');
 
     // 4. Flood of repeated mktSorteio 'lista' ticks and distinct unrecognized errors stays capped at <= 5 aux logs
     for (let i = 0; i < 16; i++) {

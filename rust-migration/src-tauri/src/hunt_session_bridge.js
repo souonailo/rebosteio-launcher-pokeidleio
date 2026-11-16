@@ -9,8 +9,7 @@
     window.dispatchEvent(new Event('pagehide'));
     const saved = JSON.parse(localStorage.getItem(`sessao-hunt:${nick.toLowerCase()}`));
     if (!saved || !Number.isFinite(Number(saved.ms))) throw new Error('Histórico de hunt indisponível');
-    window.__idleioFreezeGameplay?.();
-    const tier = window.__poke?.estado?.outlandTier;
-    return { nick, saved, ...(Number.isInteger(tier) && tier > 0 && tier <= 100 ? { outlandTier: tier } : {}) };
+    const tier = window.__idleioFreezeGameplay?.();
+    return { nick, saved, ...(Number.isInteger(tier) && ((tier >= 1 && tier <= 8) || (tier >= 101 && tier <= 140)) ? { outlandTier: tier } : {}) };
   };
 })();

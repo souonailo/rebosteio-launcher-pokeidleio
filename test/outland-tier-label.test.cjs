@@ -15,7 +15,10 @@ for (const base of ['.', 'rust-migration/ui']) {
     assert.equal(label({hunt:'enraged_typhlosion',bossLive:{inArena:true},live:true,outlandTier:2}), '');
     assert.equal(label({hunt:'enraged_typhlosion',live:true,outlandTier:2}), 'Outland · tier 2');
     assert.equal(label({hunt:'enraged_typhlosion',live:false,outlandTier:2}), 'Outland · aguardando confirmação');
-    for (const tier of [undefined,null,0,'2',101,2.5]) {
+    for (const tier of [101,104,140]) {
+      assert.equal(label({hunt:'enraged_typhlosion',live:true,outlandTier:tier}), 'Outland · tier ' + (tier - 100));
+    }
+    for (const tier of [undefined,null,0,'2',100,141,2.5]) {
       assert.equal(label({hunt:'enraged_typhlosion',live:true,outlandTier:tier}), 'Outland · aguardando confirmação');
     }
     assert.equal(label({hunt:'Brave Blastoise',live:true,outlandTier:3}), 'Outland · tier 3');

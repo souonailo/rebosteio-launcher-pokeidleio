@@ -1,3 +1,43 @@
+## 2.0.138
+
+- Atualiza as 40 tiers de Outland no seletor de hunts e no HUD. A passagem da Webview para o headless e a reconexão reconhecem os IDs atuais enviados pelo jogo.
+
+## 2.0.137
+
+- Cada conta pode disputar vários anúncios simultaneamente. O sniper reserva saldo e quantidade por anúncio e soma ao limite apenas as unidades confirmadas pelo jogo.
+
+## 2.0.136
+
+- Sniper visual e Headless pedem o resultado do sorteio pelo ID do anúncio, como o jogo. O histórico diferencia derrota de recusa e registra o resultado identificado mesmo após o prazo inicial.
+
+## 2.0.135
+
+- O sniper visual e o nativo também reconhecem listagens e confirmações de compra quando o jogo envia o conteúdo dentro de `data`.
+
+- No Headless, uma compra do sniper que fica sem resposta reserva apenas seu anúncio, sua quantidade e seu saldo. O sniper continua avaliando as outras ofertas dentro da meta.
+
+## 2.0.134
+
+- O sniper inicia uma nova contagem ao alterar a quantidade máxima ou sair do modo infinito. A coluna Compradas acompanha as unidades confirmadas e o editor permite reiniciar uma meta já salva.
+
+## 2.0.133
+
+- Amplia a conferência do perfil ofensivo para todas as 1.420 formas do índice do market, usando as fichas do jogo para formas regionais e alternativas e a ficha específica da Mega Glimmora. Shinies usam os mesmos atributos base da respectiva espécie.
+
+## 2.0.132
+
+- Identifica o perfil físico, especial ou equilibrado de cada anúncio pelo Ataque e Ataque Especial base da forma exata do Pokémon, inclusive Megas X/Y/Z.
+
+## 2.0.131
+
+- Exibe a distribuição dos seis IVs disponíveis na ficha de cada anúncio de Pokémon no analisador do market.
+
+## 2.0.130
+
+- Corrige o atalho de nova instância para usar o executável distribuído na raiz, inclusive após a limpeza de target feita pelo build de release.
+- Encaminha os argumentos de instância ao aplicativo no lançamento por código-fonte, separados dos argumentos do Cargo.
+- Testes de regressão executam o atalho em diretórios isolados e conferem executável, pasta de trabalho e argumentos.
+
 ## 2.0.129
 
 - Modo infinito com boss fixo usa o automático nativo do jogo para lotes de duas ou mais entradas e rearma quando novos tokens chegam; uma entrada, distribuição entre bosses e reserva da raid continuam sob controle individual.

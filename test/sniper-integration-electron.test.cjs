@@ -73,6 +73,28 @@ app.whenReady().then(async () => {
   })()`);
   assert.equal(await read('PioSniperPanel.getState().drafts[0].rules[0].active'), false);
   assert.equal(await read('PioSniperPanel.getState().drafts[0].rules[0].maxPriceGold'), 27000);
+  // Reconfigure a previously unlimited rule through the editor used by the launcher.
+  const changed = await read(`(() => {
+    const rule = PioSniperPanel.getState().drafts[0].rules[0];
+    Object.assign(rule, {infinite:true, maxQty:0, totalBought:315, maxPriceGems:1});
+    document.querySelector('[data-action="edit-rule"]').click();
+    document.querySelector('#ruleInfinite').click();
+    document.querySelector('#ruleMaxQty').value='90';
+    document.querySelector('#ruleMaxPriceGems').value='3';
+    document.querySelector('#sniperSaveRuleBtn').click();
+    return PioSniperPanel.getState().drafts[0].rules[0];
+  })()`);
+  assert.notEqual(changed.id, 'shared');
+  assert.deepEqual([changed.totalBought, changed.maxQty, changed.maxPriceGems], [0,90,3]);
+  const restarted = await read(`(() => {
+    PioSniperPanel.getState().drafts[0].rules[0].totalBought=315;
+    document.querySelector('[data-action="edit-rule"]').click();
+    document.querySelector('#ruleRestartCount').click();
+    document.querySelector('#sniperSaveRuleBtn').click();
+    return PioSniperPanel.getState().drafts[0].rules[0];
+  })()`);
+  assert.notEqual(restarted.id, changed.id);
+  assert.deepEqual([restarted.totalBought, restarted.maxQty, restarted.maxPriceGems], [0,90,3]);
   // Run the actual injected storage scripts in an isolated game-like context.
   await read(`(() => {
     window.__originalSniperHost=__PIO_SNIPER_INTEGRATION__;

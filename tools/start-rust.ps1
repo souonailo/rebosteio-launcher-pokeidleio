@@ -127,7 +127,7 @@ try {
     Set-Location (Join-Path $root 'rust-migration')
     Write-Host 'Abrindo Rust pelo codigo-fonte. A primeira compilacao pode demorar.'
     Write-Host 'A interface usa os arquivos locais; o .bat nao gera pacotes de distribuicao.'
-    Invoke-Checked 'cargo.exe' (@('tauri', 'dev', '--no-watch', '--', '--locked') + $args)
+    Invoke-Checked 'cargo.exe' (@('tauri', 'dev', '--no-watch', '--', '--locked', '--') + $args)
 } catch {
     Write-Host $_.Exception.Message -ForegroundColor Red
     exit 1

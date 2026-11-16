@@ -4,6 +4,7 @@
   window.__idleioGameplayBridge = true;
   const NativeWebSocket = window.WebSocket;
   let latestSocket, latestOrigSend, activeSession, pending = [], pendingBytes = 0, inFlight = false, timer;
+  let confirmedOutlandTier;
   let awaitingSnapshot = false, handedOff = false;
   let raidTokensKnown = false, raidTokens = 0, raidRequestAt = 0;
   let raidCharacter = null, raidAttemptEdition = null, raidConfirmedEdition = null, raidConfirmedUntil = 0;
@@ -66,6 +67,7 @@
     handedOff = true;
     pending = []; pendingBytes = 0;
     latestSocket?.close();
+    return confirmedOutlandTier;
   };
   // Invoked only by the native executor. Never changes inventory or gold locally.
   window.__idleioSupplySend = (session, command) => {
@@ -81,7 +83,7 @@
       (command.t === 'market.item' && gameId(command.itemId)) ||
       (command.t === 'market.anuncio' && (gameId(command.id) || Number.isSafeInteger(command.id))) ||
       (command.t === 'market.comprar' && (gameId(command.id) || typeof command.id === 'object') && Number.isSafeInteger(command.qtd) && command.qtd > 0 && Number.isSafeInteger(command.preco) && command.preco > 0 && ['gold','orb'].includes(command.moeda)) ||
-      (command.t === 'outland.tier' && Number.isInteger(command.tier) && command.tier > 0 && command.tier <= 100) ||
+      (command.t === 'outland.tier' && Number.isInteger(command.tier) && ((command.tier >= 1 && command.tier <= 8) || (command.tier >= 101 && command.tier <= 140))) ||
       (command.t === 'hunt.select' && typeof command.slug === 'string') ||
       (command.t === 'pokemon.evoluir' && gameId(command.pokemonId) && Number.isSafeInteger(command.alvoId)) ||
       (command.t === 'market.criar' && command.tipo === 'item' && gameId(command.itemId) && Number.isSafeInteger(command.qtd) && command.qtd > 0 && Number.isSafeInteger(command.preco) && command.preco > 0 && ['gold','orb'].includes(command.moeda)) ||
@@ -388,6 +390,7 @@
       try { url = new URL(args[0], window.location.href); } catch { return socket; }
       if (url.hostname !== 'pokeidle.io') return socket;
       latestSocket = socket;
+      confirmedOutlandTier = undefined;
       raidTokensKnown = false; raidTokens = 0; raidRequestAt = 0;
       const session = crypto.randomUUID();
       const origSend = socket.send;
@@ -424,6 +427,12 @@
         try {
           const raw = JSON.parse(message.data), t = raw.t ?? raw.type, data = raw.data ?? raw;
           if (t === 'market' && analyzer?.message(raw)) { message.stopImmediatePropagation(); return; }
+          if (t === 'welcome' || t === 'estado') {
+            const playerState = data.estado ?? data;
+            if (t === 'welcome' || Object.hasOwn(playerState, 'outlandTier')) {
+              confirmedOutlandTier = playerState.outlandTier;
+            }
+          }
           if (t === 'welcome') analyzer?.start();
           diagRecord('in', raw);
           if (window.__idleioRmtManualOffer && isTerminalMarketAck(raw, window.__idleioRmtManualOffer)) {

@@ -225,6 +225,22 @@ test('edição de regra pausada preserva active:false e mantém restrições exi
   assert.deepEqual(draft.rules[0].extraFilter, { shinyOnly: true }, 'Restrições extras devem ser mantidas');
 });
 
+test('nova meta começa em zero, preço isolado mantém progresso e reinício explícito abre outra contagem', () => {
+  const old = { id: 'bronze', targetType: 'item', targetId: 70000, targetName: 'Bronze Boss Token',
+    maxPriceGems: 1, maxQty: 0, infinite: true, active: true, totalBought: 315 };
+  const next = SniperPanel.validateRule({ ...old, maxQty: 90, infinite: false, maxPriceGems: 3 }, old).rule;
+  assert.notEqual(next.id, old.id);
+  assert.equal(next.totalBought, 0);
+  assert.equal(next.maxQty, 90);
+  const partial = { ...next, totalBought: 35 };
+  const priceEdit = SniperPanel.validateRule({ ...partial, maxPriceGems: 2 }, partial).rule;
+  assert.equal(priceEdit.id, next.id);
+  assert.equal(priceEdit.totalBought, 35);
+  const restarted = SniperPanel.validateRule(partial, partial, true).rule;
+  assert.notEqual(restarted.id, next.id);
+  assert.equal(restarted.totalBought, 0);
+});
+
 test('sincronização periódica do backend não zera totalBought existente', async () => {
   const mockSnapshot = {
     accounts: [
@@ -297,6 +313,8 @@ test('syncVisualWebview executa script gerado contra armazenamento mockado real 
 
   const settings = {
     enabled: true,
+    pendingIntent: {ruleId: 'r_same', qty: 2},
+    deferredIntents: [{ruleId: 'r_same', qty: 1}, {ruleId: 'old_rule', qty: 90}],
     rules: [{ id: 'r_same', targetType: 'item', targetName: 'Metal Stone', targetId: 87, maxPriceGold: 2000, totalBought: 3 }],
     config: { scanIntervalMs: 40000, fastScanIntervalMs: 2500 }
   };
@@ -304,6 +322,7 @@ test('syncVisualWebview executa script gerado contra armazenamento mockado real 
   const res = await SniperPanel.syncVisualWebview(0, settings);
   assert.equal(res.ok, true);
   assert.equal(actualStorage.rotom_sniper_rules[0].totalBought, 7, 'Deve mesclar max(native 3, visual 7) no armazenamento real');
+  assert.equal(actualStorage.rotom_sniper_rules[0].nativeReservedQty, 3);
   assert.equal(actualStorage.rotom_sniper_enabled, true, 'Deve persistir enabled no armazenamento real');
   assert.equal(actualStorage.rotom_sniper_config.scanIntervalMs, 40000, 'Deve persistir config no armazenamento real');
   assert.ok(postedMessages.some(m => m.type === 'SET_SNIPER_ENABLED' && m.enabled === true));
@@ -626,6 +645,39 @@ test('flush(index) envia progress [{id, totalBought}] e logs antes do blaster e 
   assert.equal(disabledInVisual, true, 'Deve ter desativado o motor visual para não competir com blaster');
 });
 
+test('transição ao Headless respeita ordens visuais pendentes e lê o total confirmado em memória', async () => {
+  const rules = [{id: 'bronze', maxQty: 90, totalBought: 5}];
+  let held = [{ruleId: 'bronze', qty: 1}];
+  let enabled = true;
+  let progress;
+  globalThis.pokeAPI = {
+    sniperGetState: async () => ({accounts: [{index: 0, enabled: true, configured: true, rules, config: {}}]}),
+    sniperIngest: async (i, logs, counts) => { progress = counts; }
+  };
+  const guest = {
+    __pioPauseSniperForHeadless(ids) {
+      assert.deepEqual(ids, ['bronze']);
+      return {pendingBuys: held, rules: [{id: 'bronze', totalBought: 6}]};
+    },
+    PIOSniperStorage: {
+      get: async () => ({rotom_sniper_rules: rules}),
+      set: async data => { enabled = data.rotom_sniper_enabled; }
+    },
+    postMessage() {}
+  };
+  globalThis.__PIO_SNIPER_INTEGRATION__ = {
+    getWebview: () => ({executeJavaScript: code => new Function('window', 'return ' + code)(guest)}),
+    isAccountOff: () => false
+  };
+  globalThis.PioBattleHud = {isBlasterActive: () => false};
+  await assert.rejects(SniperPanel.flush(0), /Aguardando o resultado/);
+  assert.equal(enabled, true);
+  held = [];
+  await SniperPanel.flush(0);
+  assert.equal(enabled, false);
+  assert.deepEqual(progress, [{id:'bronze', totalBought:6}]);
+});
+
 test('flush(index) pula contas não configuradas sem erro', async () => {
   globalThis.pokeAPI = {
     sniperGetState: async () => ({
@@ -757,10 +809,10 @@ test('index.html expõe __PIO_SNIPER_INTEGRATION__ e hooks de ciclo de vida', ()
   assert.ok(html.includes('id="sniperBtn"'), 'Deve conter o botão de abertura');
 });
 
-test('títulos de seção e colunas atendem ao contrato visual (Configuração para as 4 contas, Limite usado)', () => {
+test('títulos de seção e colunas atendem ao contrato visual (Configuração para as 4 contas, Compradas)', () => {
   const panelJs = fs.readFileSync('rust-migration/ui/src/ui/sniper-panel.js', 'utf8');
   assert.ok(panelJs.includes('Configuração para as 4 contas'), 'Título da seção universal deve ser "Configuração para as 4 contas"');
-  assert.ok(panelJs.includes('Limite usado (inclui ordens pendentes ou incertas)'), 'Coluna deve ter título explicativo de limite usado');
+  assert.ok(panelJs.includes('Unidades com compra confirmada nesta regra'), 'Coluna deve ter título explicativo de limite usado');
 });
 
 // ---------------------------------------------------------------------------
