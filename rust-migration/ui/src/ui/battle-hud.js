@@ -231,6 +231,15 @@
       names: ['shiny stone', 'fragmento de shiny stone', 'pedra shiny', 'shiny stone fragment'],
       icon: 'src/ui/assets/markitems/shiny_stone.png',
       remoteFallback: 'https://pokeidle.io/img/itens/shiny-stone.png'
+    },
+    {
+      key: 'sacrifice_bone',
+      name: 'Osso',
+      title: 'Osso do Sacrifício',
+      ids: [70018],
+      names: ['osso do sacrifício', 'osso do sacrificio', 'sacrifice bone'],
+      icon: 'src/ui/assets/markitems/sacrifice_bone.png',
+      remoteFallback: 'https://pokeidle.io/img/itens/rare-bone.png'
     }
   ];
 

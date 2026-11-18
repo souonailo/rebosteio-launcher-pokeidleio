@@ -2772,7 +2772,7 @@ checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
 name = "pio-nailo-rust"
-version = "2.0.138"
+version = "2.0.139"
 dependencies = [
  "base64 0.22.1",
  "futures-util",

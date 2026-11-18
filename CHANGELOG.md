@@ -1,3 +1,7 @@
+## 2.0.139
+
+- Adiciona o Osso do Sacrifício aos itens rastreados do HUD, com ícone local, estoque atual e drops da sessão. Os cinco cartões permanecem na mesma linha.
+
 ## 2.0.138
 
 - Atualiza as 40 tiers de Outland no seletor de hunts e no HUD. A passagem da Webview para o headless e a reconexão reconhecem os IDs atuais enviados pelo jogo.
