@@ -1,3 +1,11 @@
+## 2.0.141
+
+- Kick usa o saldo acumulado em canais sem bônus de uma hora para resgatar bônus disponíveis de 3, 5 ou 10 horas. Esses canais continuam fora das lives assistidas enquanto faltar a recompensa de uma hora.
+
+## 2.0.140
+
+- Kick reconhece EXP de uma hora por 200 ou 300 pontos e exige catálogo com bônus de uma hora disponível para assistir a um canal.
+
 ## 2.0.139
 
 - Adiciona o Osso do Sacrifício aos itens rastreados do HUD, com ícone local, estoque atual e drops da sessão. Os cinco cartões permanecem na mesma linha.

@@ -18,7 +18,15 @@
     if (balance.catalogStatus !== 'verified' || !Array.isArray(balance.rewards)) {
       return { known: false, affordable: [], missing: null, label: 'Disponibilidade não confirmada', className: 'progress' };
     }
-    const available = choices.filter(r => balance.rewards.some(actual => actual.key === r.key && actual.cost === r.cost && actual.available === true));
+    const available = choices.flatMap(r => {
+      const offers = balance.rewards.filter(actual => {
+        const hours = actual.hours ?? 1;
+        return actual.key === r.key && actual.available === true && [1, 3, 5, 10].includes(hours) &&
+          (actual.cost === r.cost * hours || (r.key === 'exp' && actual.cost === 200 * hours));
+      }).sort((a, b) => a.cost - b.cost);
+      const offer = offers[0];
+      return offer ? [{ ...r, cost: offer.cost, label: offer.hours > 1 ? `${r.label} (${offer.hours}h)` : r.label }] : [];
+    });
     if (!available.length) return { known: true, affordable: [], missing: null, label: 'Buff indisponível na Kick', className: 'progress' };
     const affordable = available.filter(r => balance.points >= r.cost);
     const missing = Math.max(0, Math.min(...available.map(r => r.cost)) - balance.points);

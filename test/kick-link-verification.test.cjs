@@ -16,6 +16,7 @@ const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pio-kick-link-'));
 app.setPath('userData', profile);
 app.disableHardwareAcceleration();
 
+ipcMain.on('instance:id', event => { event.returnValue = 1; });
 ipcMain.on('app:version', e => { e.returnValue = 'test'; });
 
 let win;

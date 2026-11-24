@@ -287,6 +287,7 @@ class KickAccountClient {
       }
 
       const wsUrl = `wss://websockets.kick.com/viewer/v1/connect?token=${encodeURIComponent(wsToken)}`;
+      if (!this.enabled || !this.targetChannels.has(channelSlug) || this.connections.has(channelSlug)) return;
       const ws = new WS(wsUrl);
 
       ws.onopen = () => {
@@ -429,6 +430,7 @@ class KickPresenceManager {
     this.liveChannels = [];
     this.statusCallback = null;
     this.transport = null;
+    this.pointAccounts = [];
     this.monitoredChannels = new Set(Object.keys(DEFAULT_PARTNER_CHANNELS));
     this.liveMonitorTimer = null;
     this.isCheckingLives = false;
@@ -569,9 +571,26 @@ class KickPresenceManager {
     }
   }
 
+  setPointAccounts(accounts) {
+    this.pointAccounts = accounts;
+    if (this.masterEnabled) this.accounts.forEach(acc => acc.setTargetChannels(this.watchTargets(acc)));
+  }
+
+  watchTargets(acc) {
+    const account = this.pointAccounts[acc.index];
+    if (account?.status !== 'authenticated' || account.username !== acc.username) return [];
+    const now = Date.now();
+    return this.liveChannels.filter(slug => {
+      const balance = account.balances?.[slug];
+      const age = now - balance?.checkedAt;
+      return balance?.status === 'verified' && balance.catalogStatus === 'verified' &&
+        age >= 0 && age < 120000 && balance.rewards?.some(reward => reward.hours === 1 && reward.available === true);
+    });
+  }
+
   startAll() {
     this.accounts.forEach(acc => {
-      acc.setTargetChannels(this.liveChannels);
+      acc.setTargetChannels(this.watchTargets(acc));
       acc.connect();
     });
     this.startLiveMonitor();
@@ -697,7 +716,7 @@ class KickPresenceManager {
       this.liveChannels = activeLives;
       if (this.masterEnabled) {
         this.accounts.forEach(acc => {
-          acc.setTargetChannels(this.liveChannels);
+          acc.setTargetChannels(this.watchTargets(acc));
         });
       }
 
@@ -718,7 +737,7 @@ class KickPresenceManager {
     this.liveChannels = list;
     if (this.masterEnabled) {
       this.accounts.forEach(acc => {
-        acc.setTargetChannels(this.liveChannels);
+        acc.setTargetChannels(this.watchTargets(acc));
       });
     }
     this.broadcastStatus();

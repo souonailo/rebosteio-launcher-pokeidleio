@@ -19,6 +19,7 @@ app.on('web-contents-created', (_event, contents) => {
   if (contents.getType() === 'webview') coalesceScriptLoading(contents);
 });
 const fakeAccounts = Array.from({ length: 4 }, (_, i) => ({ name: 'Conta ' + (i + 1), email: 'test' + i, senha: 'test' }));
+ipcMain.on('instance:id', event => { event.returnValue = 1; });
 ipcMain.on('app:version', event => { event.returnValue = 'test'; });
 ipcMain.handle('creds:load', () => fakeAccounts);
 ipcMain.handle('creds:save', () => true);
@@ -28,9 +29,10 @@ ipcMain.handle('kick:status:get', () => ({accounts:[],liveChannels:[]}));
 ipcMain.handle('kick:sync-lives', () => true);
 ipcMain.handle('kick:points:get', () => ({accounts:[]}));
 ipcMain.handle('kick:points:channels', () => true);
-let openedSession = null;
+let refreshedAccount = null;
+ipcMain.handle('kick:points:refresh', (_event, index) => { refreshedAccount = index; return { accounts: [] }; });
 ipcMain.handle('kick:creds:save', () => true);
-ipcMain.handle('kick:session:open', (_event,index,slug) => { openedSession={index,slug};return {ok:true}; });
+ipcMain.handle('kick:session:open', (_event,index,slug) => { return {ok:true}; });
 ipcMain.handle('twitch:status:get', () => ({}));
 ipcMain.handle('errlog:write', (_event, origin, message) => errors.push(origin + ': ' + message));
 for (const name of ['awake:set', 'mintray:set', 'notify', 'backup:save', 'proxy:apply', 'auth:cancel-login']) ipcMain.handle(name, () => true);
@@ -85,6 +87,7 @@ app.whenReady().then(async () => {
  state=await snapshot();assert.equal(state.live,'2');assert.equal(state.all,'3');assert.equal(state.off,'1');
  await feed(0,{lives:['biscoitao','not_an_official'],offline:['matta']});state=await snapshot();assert.equal(state.live,'2');assert.equal(state.all,'3');
 
+ await feed(0, fixture);
  await read("kickBonusConfig.accounts[0].username='viewer0';kickBonusConfig.accounts[0].channelPoints={biscoitao:999999};renderKickBonusUI()");
  const pointsText=()=>read("document.querySelector('#kickStreamersList .kick-points-tag').textContent.trim()");
  assert.equal(await pointsText(),'Saldo indisponível','legacy/manual points cannot be displayed as real');
@@ -100,7 +103,7 @@ app.whenReady().then(async () => {
  await publish({accounts:[{status:'authenticated',username:'wrongviewer',balances:{biscoitao:{status:'verified',points:999,checkedAt:Date.now()}}}]});
  assert.equal(await pointsText(),'Saldo indisponível','wrong identity must never display balance');
  await read("document.querySelector('.kick-open-channel').click()");await pause(80);
- assert.deepEqual(openedSession,{index:0,slug:'biscoitao'});
+ assert.equal(refreshedAccount, 0);
  await feed(0,fixture);
  await publish({accounts:[{status:'authenticated',username:'viewer0',balances:{biscoitao:{status:'verified',points:321,checkedAt:Date.now()},matta:{status:'verified',points:0,checkedAt:Date.now()}}}]});
  for(const theme of ['pkmn-gengar','pure-white']) {

@@ -48,6 +48,14 @@ assert.equal(manager.masterEnabled, false);
 manager.syncLives(['#Biscoitao', 'matta']);
 assert.deepEqual(manager.liveChannels, ['biscoitao', 'matta']);
 
+// Only a fresh verified one-hour reward admits a live, even at zero points.
+manager.accounts[0].username = 'viewer';
+manager.setPointAccounts([{ username: 'viewer', status: 'authenticated', balances: {
+  biscoitao: { status: 'verified', catalogStatus: 'verified', checkedAt: Date.now(), points: 0, rewards: [{ hours: 1, available: true }] },
+  matta: { status: 'verified', catalogStatus: 'verified', checkedAt: Date.now(), points: 5000, rewards: [{ hours: 5, available: true }] }
+} }]);
+assert.deepEqual(manager.watchTargets(manager.accounts[0]), ['biscoitao']);
+
 // Status snapshot
 const status = manager.getStatus();
 assert.equal(status.masterEnabled, false);

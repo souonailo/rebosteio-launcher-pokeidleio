@@ -3265,9 +3265,9 @@
           <div style="display:flex;align-items:center;gap:8px;">
             <label for="kickAutoClaimPriority" style="font-size:12px;color:var(--color-text-secondary);">Buff da conta selecionada:</label>
             <select id="kickAutoClaimPriority" style="background:var(--color-bg-elevated);color:var(--color-text-primary);border:1px solid var(--border-subtle);border-radius:6px;padding:4px 8px;font-size:12px;">
-              <option value="exp">+15% EXP (300 pts)</option>
-              <option value="catch">+15% Capture (500 pts)</option>
-              <option value="lure">+15% Lure (1000 pts)</option>
+              <option value="exp">+15% EXP</option>
+              <option value="catch">+15% Capture</option>
+              <option value="lure">+15% Lure</option>
               <option value="all">Qualquer buff</option>
             </select>
           </div>
@@ -3285,7 +3285,7 @@
               ⚠️ <b>Atenção:</b> O vínculo é permanente para 1 treinador. Entre na Kick com a conta certa.
             </div>
             <p><b>2. Preencha seu usuário:</b> Ao vincular no jogo, o launcher reconhece automaticamente seu usuário Kick.</p>
-            <p><b>3. Pontos e Resgate:</b> Cada 300 pts viram 1h de EXP. Resgatar 3x dá 3h contínuas de bônus!</p>
+            <p><b>3. Pontos e Resgate:</b> O saldo de cada canal pode pagar bônus de 1, 3, 5 ou 10 horas, inclusive com a live offline. Para assistir, o canal precisa oferecer um bônus ativo de 1 hora.</p>
             <p><b>4. Saldo real:</b> Entre na Kick pela conta selecionada. O saldo é consultado a cada minuto. As conexões ficam ativas em segundo plano, sem abrir o vídeo. Somente o saldo retornado pela Kick confirma os pontos.</p>
           </div>
         </aside>
@@ -5286,7 +5286,7 @@
           bal.sort((x, y) => y[1].points - x[1].points);
           const [slug, v] = bal[0];
           const prio = (typeof kickBonusConfig !== 'undefined' && kickAccountPriority(0)) || undefined;
-          const sel = window.KickRewardStatus ? window.KickRewardStatus.selected(prio) : [];
+          const sel = window.KickRewardStatus ? window.KickRewardStatus.forBalance(v, prio).affordable : [];
           const buffs = sel.filter(r => r.cost > 0).map(r => Math.floor(v.points / r.cost) + '× ' + r.label);
           const idade = v.checkedAt ? Date.now() - v.checkedAt : 0;
           txt = 'Kick ' + v.points.toLocaleString('pt-BR') + ' pts' + (buffs.length ? ' · ' + buffs[0] : '');
@@ -9592,7 +9592,7 @@
       if (summary && summary.textContent !== text) summary.textContent = text;
       if (details) details.textContent = ready.length
         ? ready.map(r => `@${r.channel.login}: ${r.status.label}`).join(' · ')
-        : `${kickBonusConfig.masterEnabled ? 'Atualização a cada 60 s.' : 'Ative a integração para atualizar automaticamente.'} ${KickRewardStatus.selected(kickAccountPriority(kickSelectedAccount)).map(r => `${r.label}: ${r.cost.toLocaleString('pt-BR')} pts`).join(' / ')}.`;
+        : `${kickBonusConfig.masterEnabled ? 'Atualização a cada 60 s.' : 'Ative a integração para atualizar automaticamente.'} ${KickRewardStatus.selected(kickAccountPriority(kickSelectedAccount)).map(r => `${r.label}`).join(' / ')}.`;
     }
 
     function renderKickStreamersList() {

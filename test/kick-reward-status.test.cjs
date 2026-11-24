@@ -28,3 +28,9 @@ test('unavailable and unverified catalogs cannot advertise redeemable buffs', ()
   assert.equal(forBalance({...balance(9000),rewards:[]},'exp',now).affordable.length,0);
   assert.equal(forBalance({...balance(9000),rewards:[{key:'exp',cost:301,available:true}]},'exp',now).affordable.length,0);
 });
+
+test('a verified 200-point one-hour EXP reward uses its catalog price', () => {
+  const discounted = { ...balance(199), rewards: [{ key: 'exp', cost: 200, available: true }] };
+  assert.equal(forBalance(discounted, 'exp', now).missing, 1);
+  assert.equal(forBalance({ ...discounted, points: 400 }, 'exp', now).label, '2× EXP');
+});

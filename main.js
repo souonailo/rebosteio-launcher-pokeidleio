@@ -84,6 +84,7 @@ function getKickPointsManager() {
         } catch {}
       },
       onChange: st => {
+        kickPresenceManager.setPointAccounts(st.accounts);
         for (const window of BrowserWindow.getAllWindows()) {
           if (!window.isDestroyed() && window.webContents.getURL().startsWith('file://')) {
             window.webContents.send('kick:points:update', st);

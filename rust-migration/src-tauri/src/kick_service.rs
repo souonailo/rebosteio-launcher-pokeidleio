@@ -85,7 +85,6 @@ fn favoritos() -> &'static [String] {
 static FAV_AO_VIVO: [std::sync::atomic::AtomicBool; 4] = [const { std::sync::atomic::AtomicBool::new(false) }; 4];
 static FAV_ULTIMO_FORCE: [std::sync::atomic::AtomicU64; 4] = [const { std::sync::atomic::AtomicU64::new(0) }; 4];
 fn agora_s() -> u64 { std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0) }
-fn com_favoritos(mut alvo: BTreeSet<String>) -> BTreeSet<String> { for f in favoritos() { alvo.insert(f.clone()); } alvo }
 
 pub struct KickServiceManager {
     config: RwLock<Value>,
@@ -239,7 +238,7 @@ impl KickServiceManager {
         let config = self.config.read().await.clone();
         let accounts = self.accounts.read().await.clone();
         for index in 0..4 {
-            let keep = com_favoritos(crate::kick_connections::targets(&lives[index]));
+            let keep = crate::kick_connections::targets(&lives[index]);
             let desired = if enabled(&config,index) && accounts[index]["status"] == "authenticated" { keep.clone() } else { BTreeSet::new() };
             self.connections.retain(index,&desired).await;
         }
@@ -423,35 +422,6 @@ impl KickServiceManager {
             state["loginConfirmadoAusente"] = json!(false);
             state["status"] = json!("authenticated");
             state["error"] = json!("");
-            let desired = com_favoritos(crate::kick_connections::targets(&self.lives.read().await[index]));
-            // Favoritos primeiro, para nunca ficarem fora do limite de conexões.
-            let mut ordem: Vec<String> = favoritos().iter().filter(|f| desired.contains(*f)).cloned().collect();
-            ordem.extend(desired.iter().filter(|s| !favoritos().contains(*s)).cloned());
-            let mut native_lives = Vec::new();
-            for slug in &ordem {
-                let raw = match crate::kick_browser::request(&window,&token,&format!("/api/v2/channels/{slug}")).await {
-                    Ok(raw)=>raw,
-                    Err(error) if error.0=="login_required" || error.0=="rate_limited"=>return Err(error),
-                    Err(_)=>continue,
-                };
-                let data = raw.get("data").unwrap_or(&raw);
-                if favoritos().contains(slug) {
-                    FAV_AO_VIVO[index].store(data["livestream"]["is_live"] == true, Ordering::Relaxed);
-                }
-                if data["livestream"]["is_live"] == false { continue; }
-                if let (Some(channel),Some(stream),Some(chatroom)) = (data["id"].as_u64(),data["livestream"]["id"].as_u64(),data["chatroom"]["id"].as_u64()) {
-                    if channel==0 || stream==0 || chatroom==0 {continue;}
-                    native_lives.push(crate::kick_connections::Live { slug:slug.clone(),channel,stream,chatroom });
-                }
-            }
-            // Serialize against disable/account swaps, so an obsolete query cannot reconnect.
-            {
-                let _commit = self.configure_lock.lock().await;
-                if generation != self.revision.load(Ordering::SeqCst) { return Ok(()); }
-                if enabled(&*self.config.read().await,index) {
-                    self.connections.sync(index,token.clone(),user["id"].as_u64().ok_or(("error".into(),"Identidade Kick inválida".into()))?,native_lives).await.map_err(|e|("error".into(),e))?;
-                }
-            }
             let mut balances = serde_json::Map::new();
             for slug in &channels {
                 let value = match crate::kick_browser::request(
@@ -492,6 +462,38 @@ impl KickServiceManager {
                     }
                 }
                 balances.insert(slug.clone(), value);
+            }
+            let desired = crate::kick_connections::targets(&self.lives.read().await[index]);
+            // Favoritos primeiro, para nunca ficarem fora do limite de conexões.
+            let mut ordem: Vec<String> = favoritos().iter().filter(|f| desired.contains(*f)).cloned().collect();
+            ordem.extend(desired.iter().filter(|s| !favoritos().contains(*s)).cloned());
+            let mut native_lives = Vec::new();
+            for slug in &ordem {
+                if !balances.get(slug).is_some_and(crate::kick_rewards::has_watch_reward) {
+                    continue;
+                }
+                let raw = match crate::kick_browser::request(&window,&token,&format!("/api/v2/channels/{slug}")).await {
+                    Ok(raw)=>raw,
+                    Err(error) if error.0=="login_required" || error.0=="rate_limited"=>return Err(error),
+                    Err(_)=>continue,
+                };
+                let data = raw.get("data").unwrap_or(&raw);
+                if favoritos().contains(slug) {
+                    FAV_AO_VIVO[index].store(data["livestream"]["is_live"] == true, Ordering::Relaxed);
+                }
+                if data["livestream"]["is_live"] == false { continue; }
+                if let (Some(channel),Some(stream),Some(chatroom)) = (data["id"].as_u64(),data["livestream"]["id"].as_u64(),data["chatroom"]["id"].as_u64()) {
+                    if channel==0 || stream==0 || chatroom==0 {continue;}
+                    native_lives.push(crate::kick_connections::Live { slug:slug.clone(),channel,stream,chatroom });
+                }
+            }
+            // Serialize against disable/account swaps, so an obsolete query cannot reconnect.
+            {
+                let _commit = self.configure_lock.lock().await;
+                if generation != self.revision.load(Ordering::SeqCst) { return Ok(()); }
+                if enabled(&*self.config.read().await,index) {
+                    self.connections.sync(index,token.clone(),user["id"].as_u64().ok_or(("error".into(),"Identidade Kick inválida".into()))?,native_lives).await.map_err(|e|("error".into(),e))?;
+                }
             }
             state["balances"] = Value::Object(balances);
             self.auto_redeem(&window,&token,index,generation,&config,&mut state).await;
@@ -598,11 +600,11 @@ impl KickServiceManager {
         state["redemption"] = json!({"status":"waiting_points","message":"Automático ativo: aguardando saldo e recompensa disponíveis."});
         let priority = config["accounts"][index]["claimPriority"].as_str()
             .or_else(|| config["claimPriority"].as_str()).unwrap_or("exp");
-        let candidate = state["balances"].as_object().into_iter().flatten().find_map(|(slug, b)| {
+        let candidate = state["balances"].as_object().into_iter().flatten().filter_map(|(slug, b)| {
             let r = crate::kick_rewards::eligible(b, priority, now())?;
             let pts = b.get("points")?.as_u64()?;
             Some((slug.clone(), r.clone(), pts))
-        });
+        }).min_by_key(|(slug, _, _)| crate::kick_rewards::has_watch_reward(&state["balances"][slug]));
         let Some((slug, reward, before)) = candidate else { return; };
         // Hold configuration through submission: disabling or switching accounts cannot race a spend.
         let _configuration = self.configure_lock.lock().await;
@@ -637,11 +639,8 @@ impl KickServiceManager {
                             receipt["status"] = json!("confirmed");
                             receipt["message"] = json!(format!("Resgate confirmado na Kick: {} em @{slug}. O jogo confirma a aplicação do buff.", reward_key));
                             let current_now = now();
-                            let new_expires_at = if prev_exp > current_now {
-                                prev_exp + 3_600_000
-                            } else {
-                                current_now + 3_600_000
-                            };
+                            let hours = reward["hours"].as_u64().unwrap_or(1);
+                            let new_expires_at = prev_exp.max(current_now) + hours * 3_600_000;
                             receipt["expiresAt"] = json!(new_expires_at);
                             state["activeRedemption"] = receipt.clone();
                         }

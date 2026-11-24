@@ -7,6 +7,7 @@ const { app, BrowserWindow, ipcMain, session } = require('electron');
 const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'pio-kick-save-'));
 app.setPath('userData', profile);
 app.disableHardwareAcceleration();
+ipcMain.on('instance:id', event => { event.returnValue = 1; });
 ipcMain.on('app:version', e => { e.returnValue = 'test'; });
 app.whenReady().then(async () => {
   session.defaultSession.webRequest.onBeforeRequest(
@@ -23,7 +24,7 @@ app.whenReady().then(async () => {
   } });
   await win.loadURL('about:blank');
   const config = { masterEnabled: true, accounts: Array.from({ length: 4 }, (_, i) => ({
-    username: 'testaccount' + i, token: '', enabled: i !== 2,
+    username: 'testaccount' + i, token: '', enabled: i !== 2, claimPriority: 'exp',
     channelPoints: { biscoitao: 100 + i }
   })) };
   assert.equal(await win.webContents.executeJavaScript(
